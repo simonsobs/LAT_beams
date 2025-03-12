@@ -57,7 +57,7 @@ def gauss_smooth_1d(dat, fwhm):
         -0.5 * (np.arange(dat.shape[-1]) * np.sqrt(8 * np.log(2)) / fwhm) ** 2
     )
     tot = smooth_kern[0] + smooth_kern[-1] + 2 * np.sum(smooth_kern[1:-1])
-    smooth_kern = smooth_kern.at[:].multiply(1.0 / tot)
+    smooth_kern /= tot
     smooth_kern = dct_i(smooth_kern)
     dat_smooth = dct_i(dat)
     dat_smooth = dat_smooth*smooth_kern
@@ -71,7 +71,7 @@ def compute_noise(aman, dat, fwhm=20):
     if aman.signal.shape != dat.shape:
         raise ValueError("data shape does not match aman.signal")
 
-    u, *_ = np.linalg.svd(dat, True)
+    u, *_ = np.linalg.svd(dat, False)
     v = u.T
     dat_rot = np.dot(v, dat)
     dat_ft = dct_i(dat_rot)
@@ -82,8 +82,8 @@ def compute_noise(aman, dat, fwhm=20):
     if "noise" in aman:
         aman.move("noise", None)
     noise = AxisManager(aman.dets, aman.samps)
-    noise.wrap("v", v, [(0, "dets"), (1, "dets")])
-    noise.wrap("filt_spectrum", dat_ft, [(0, "dets"), (1, None)])
+    noise.wrap("v", v.astype(dat.dtype), [(0, "dets"), (1, "dets")])
+    noise.wrap("filt_spectrum", dat_ft.astype(dat.dtype), [(0, "dets")])
     aman.wrap("noise", noise)
 
     return aman
@@ -102,7 +102,7 @@ def apply_noise(aman, dat):
     dat_filt = dct_i(
         dat_rft*aman.noise.filt_spectrum[:, : dat_rft.shape[1]], False
     )
-    dat_filt = np.dot(self.v.T, dat_filt)
+    dat_filt = np.dot(aman.noise.v.T, dat_filt)
     dat_filt[:, 0] *= 0.5
     dat_filt[:, -1] *= 0.5
-    return dat_filt
+    return dat_filt.astype(dat.dtype)
