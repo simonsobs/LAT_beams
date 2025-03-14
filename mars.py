@@ -9,7 +9,7 @@ from sotodlib.coords import planets as cp
 from scipy.ndimage import gaussian_filter
 from matplotlib.colors import SymLogNorm
 from lat_beams.fitting import pointing_quickfit
-plt.rcParams['image.cmap'] = 'RdGy_r'
+plt.rcParams['image.cmap'] = 'PRGn'
 
 
 def radial_profile(data, center):
@@ -126,7 +126,7 @@ rlen = len(rprof)
 rprof = np.hstack([np.flip(rprof), rprof])
 plt.close()
 fig, axd = plt.subplot_mosaic([['A', 'A', 'A'], ['A', 'A', 'A'], ['A', 'A', 'A'], ['B', 'B', 'B']], layout='constrained', figsize=(7,10))
-size = 100
+size = 30
 axd['A'].imshow(smoothed[cent[0]-size:cent[0]+size, cent[1]-size:cent[1]+size], origin="lower")
 axd['A'].set_xticks([])
 axd['A'].set_yticks([])
