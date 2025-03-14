@@ -24,7 +24,7 @@ def radial_profile(data, center):
 
 ds = 5
 
-plot_dir = '/so/home/saianeesh/plots/first_light_unfocused/mars/mv28'
+plot_dir = '/so/home/saianeesh/plots/first_light_unfocused/scratch/mars/mv28'
 ctx = Context('/so/metadata/lat/contexts/smurf_detcal.yaml')
 obslist = ctx.obsdb.query('type=="obs" and mars', tags=['mars=1'])
 meta = ctx.get_meta('obs_1740190513_lati1_111')
