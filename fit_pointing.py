@@ -71,7 +71,7 @@ if ctx.obsdb is None:
 if args.obs_id is not None:
     obslist = [ctx.obsdb.get(args.obs_id)]
 else:
-    obslist = ctx.obsdb.query(f'type=="obs" and subtype=="cal" and {source} and start_time > {cfg.start_time} and stop_time < {cfg.stop_time}', tags=[f'{source}=1'])
+    obslist = ctx.obsdb.query(f'type=="obs" and subtype=="cal" and {source} and start_time > {cfg["start_time"]} and stop_time < {cfg["stop_time"]}', tags=[f'{source}=1'])
 
 # Output metadata setup
 h5_path = os.path.join(data_dir, "tod_fits.h5")
@@ -94,8 +94,9 @@ nominal = h5py.File(nominal_path)
 res = cfg.get("res", (2/300.)*np.pi/180.)
 mask = cfg.get("mask", {'shape': 'circle', 'xyr': (0,0, .75)})
 
-for obs in obslist:
-    print(f"Fitting {obs['obs_id']}")
+print(f"{len(obslist)} observations to fit")
+for i, obs in enumerate(obslist):
+    print(f"Fitting {obs['obs_id']} ({i+1}/{len(obslist)})")
 
     obs = ctx.obsdb.get(obs['obs_id'], tags=True)
     wafers = [t[3:] for t in obs['tags'] if t[:2] == obs['tube_slot']]
@@ -153,12 +154,22 @@ for obs in obslist:
             fp.wrap("gamma", np.zeros(1) + np.nanmean(np.array(nominal[ufm]["gamma"][:])), [(0, "dets")])
             aman_dummy.wrap("focal_plane", fp)
             source_flags = cp.compute_source_flags(tod=aman_dummy, P=None, mask=mask, center_on='mars', res=res*10, max_pix=4e8, wrap=None)
-            start = source_flags.ranges[0].ranges()[0][0]
-            stop = source_flags.ranges[0].ranges()[-1][-1]
+            if len(source_flags.ranges[0].ranges()) == 0:
+                if not args.no_fit:
+                    print("\t\tNo samples flagged! Skipping...")
+                print("\t\tNo samples flagged! But running in no_fit mode so will continue with all samples")
+                start = 0
+                stop = int(aman.samps.count)
+            else:
+                start = source_flags.ranges[0].ranges()[0][0]
+                stop = source_flags.ranges[0].ranges()[-1][-1]
             if stop - start < min_samps:
-                print(f"\t\tOnly {stop-start} flagged samples... skipping")
-                continue
-            print(f"\t\t{stop - start} samps flagged in the source range")
+                if not aegs.no_fit:
+                    print(f"\t\tOnly {stop-start} flagged samples... skipping")
+                    continue
+                print(f"\t\tOnly {stop-start} flagged samples! But running in no_fit mode so will continue")
+            else:
+                print(f"\t\t{stop - start} samps flagged in the source range")
             aman = aman.restrict("samps", (start, stop))
             sig_filt = sig_filt[:, start:stop]
 
