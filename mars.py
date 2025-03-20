@@ -9,6 +9,7 @@ from sotodlib.coords import planets as cp
 from scipy.ndimage import gaussian_filter
 from matplotlib.colors import SymLogNorm
 from lat_beams.fitting import pointing_quickfit
+from so3g.proj import RangesMatrix
 plt.rcParams['image.cmap'] = 'PRGn'
 
 
@@ -22,12 +23,19 @@ def radial_profile(data, center):
     radialprofile = tbin / nr
     return radialprofile
 
+ws_cent = np.array([-0.023696372, -0.021090211])
+ot_cent = np.array((-0.026882106, -0.015573051)) 
 ds = 5
 
 plot_dir = '/so/home/saianeesh/plots/first_light_unfocused/scratch/mars/mv28'
+data_dir = '/so/home/saianeesh/data/first_light_unfocused/scratch/mars/mv28'
+os.makedirs(plot_dir, exist_ok=True)
+os.makedirs(data_dir, exist_ok=True)
+
 ctx = Context('/so/metadata/lat/contexts/smurf_detcal.yaml')
 obslist = ctx.obsdb.query('type=="obs" and mars', tags=['mars=1'])
-meta = ctx.get_meta('obs_1740190513_lati1_111')
+obs_id = 'obs_1740190513_lati1_111'
+meta = ctx.get_meta(obs_id)
 meta.restrict("dets", meta.det_info.stream_id == "ufm_mv28")
 meta.restrict("dets", meta.det_cal.bg > -1)
 meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
@@ -99,7 +107,7 @@ x = 0; y = 0;
 mask = {'shape': 'circle', 'xyr': (x,y, .1)}
 source_flags = cp.compute_source_flags(tod=aman, P=None, mask=mask, center_on='mars', res=res, max_pix=4e8, wrap=None)
 print(f"{np.sum(source_flags.get_stats()['samples'])*np.mean(np.diff(aman.timestamps))} detector seconds on source")
-out = cp.make_map(aman, center_on='mars', res=res, cuts=cuts, source_flags=source_flags, comps="T")
+out = cp.make_map(aman, center_on='mars', res=res, cuts=cuts, source_flags=source_flags, comps="T", filename=os.path.join(data_dir, '{obs_id}_{map}.fits'), info={'obs_id':obs_id})
 smoothed = gaussian_filter(out["solved"][0], sigma=1)
 
 cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
@@ -134,3 +142,35 @@ axd['B'].plot(rprof[rlen-size:rlen+size])
 axd['B'].set_xticks([])
 axd['B'].set_yticks([])
 plt.savefig(os.path.join(plot_dir, f"map_smooth.png"), bbox_inches='tight')
+
+
+xi_off = np.mean(aman.focal_plane.xi) - ws_cent[0]
+eta_off = np.mean(aman.focal_plane.xi) - ws_cent[1]
+ot_cent -= np.array([xi_off, eta_off])
+dist = np.sqrt((ot_cent[0] - aman.focal_plane.xi)**2 + (ot_cent[1] - aman.focal_plane.eta)**2)
+msk = dist > np.deg2rad(.5)
+msk = np.repeat(msk, int(aman.samps.count)).reshape(len(msk), -1)
+ranges = RangesMatrix.from_mask(msk)
+splits = {"Within .5 deg" : ranges, "Outside .5 deg" : ~ranges} 
+out = cp.make_map(aman, center_on='mars', res=res, cuts=cuts, data_splits=splits, source_flags=source_flags, comps="T")
+
+for split in out["splits"].keys():
+    dat = out["splits"][split]
+    title = split.lower().replace(" ", "_")
+    plt.close()
+    plt.title(split)
+    plt.imshow(dat["solved"][0])
+    plt.xlim((cent[1]-50, cent[1]+50))
+    plt.ylim((cent[0]-50, cent[0]+50))
+    plt.colorbar()
+    plt.grid()
+    plt.savefig(os.path.join(plot_dir, f"map_{title}.png"))
+    
+    plt.close()
+    plt.title(split)
+    plt.imshow(dat["solved"][0], norm=SymLogNorm(1e-6))
+    plt.xlim((cent[1]-50, cent[1]+50))
+    plt.ylim((cent[0]-50, cent[0]+50))
+    plt.colorbar()
+    plt.grid()
+    plt.savefig(os.path.join(plot_dir, f"map_{title}_log10.png"))
