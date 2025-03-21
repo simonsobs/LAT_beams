@@ -87,7 +87,7 @@ if ctx.obsdb is None:
 if args.obs_ids is not None:
     obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
 else:
-    obslist = ctx.obsdb.query(f'type=="obs" and subtype=="cal" and {source} and start_time > {cfg["start_time"]} and stop_time < {cfg["stop_time"]}', tags=[f'{source}=1'])
+    obslist = ctx.obsdb.query(f"type=='obs' and subtype=='cal' and {source} and start_time > {cfg['start_time']} and stop_time < {cfg['stop_time']}", tags=[f'{source}=1'])
 
 # Output metadata setup
 h5_path = os.path.join(data_dir, "tod_fits.h5")
@@ -107,7 +107,7 @@ if myrank == 0:
 outdt = [("dets:readout_id", None), ("xi", np.float32), ("eta", np.float32), ("gamma", np.float32), ("fwhm", np.float32), ("amp", np.float32)]
 
 # Load nominal pointing
-nominal_path = cfg.get("nominal", "/so/home/saianeesh/data/pointing/lat/nominal/focal_plane.h5")
+nominal_path = os.path.expanduser(cfg.get("nominal", "~/data/pointing/lat/nominal/focal_plane.h5"))
 nominal = h5py.File(nominal_path)
 
 # Get settings for source mask
@@ -322,42 +322,60 @@ for i, obs in enumerate(obslist):
             continue
         if rsets is None or db is None or h5_file is None:
             continue
+        # If we have no results lets make an empty one so we know to skip in the future
+        fake_res = False
         if len(rsets) == 0:
-            continue
+            fake_res = True
+            rsets = [[metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))]]
         rsets = reduce(lambda q,p: p+q, rsets)
         if len(rsets) == 0:
-            continue
+            fake_res = True
+            rsets = [metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))]
         rset = reduce(lambda q,p: p+q, rsets)
         if len(rset) == 0:
-            continue
+            fake_res = True
+            rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
         
         # Kill bad fits
-        focal_plane = rset.to_axismanager(axis_key="dets:readout_id")
-        msk =  np.array(focal_plane.amp) > 0
-        med_xi = np.median(np.array(focal_plane.xi[msk]))
-        med_eta = np.median(np.array(focal_plane.eta[msk]))
-        msk *= np.sqrt((np.array(focal_plane.xi) - med_xi)**2 + np.abs(np.array(focal_plane.eta) - med_eta)**2) < np.deg2rad(.22) 
-        msk *= np.array(focal_plane.amp) < n_med*np.median(np.array(focal_plane.amp[msk]))
-        msk *= np.array(focal_plane.amp) > np.median(np.array(focal_plane.amp[msk])/n_med)
-        msk *= np.array(focal_plane.fwhm) < n_med*np.median(np.array(focal_plane.fwhm[msk]))
-        msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])/n_med)
-        focal_plane.restrict("dets", msk)
-        rset = rset.subset(rows = msk)
-        # Plot
-        # TODO: Split by band?
-        plt.close()
-        plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=.25)
-        plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp.png"))
-        plt.close()
-        plt.hist(np.array(focal_plane.amp), bins=30, alpha=.25)
-        plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_amp.png"))
-        plt.close()
-        plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=.25)
-        plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_fwhm.png"))
+        if not fake_res:
+            focal_plane = rset.to_axismanager(axis_key="dets:readout_id")
+            msk =  np.array(focal_plane.amp) > 0
+            med_xi = np.median(np.array(focal_plane.xi[msk]))
+            med_eta = np.median(np.array(focal_plane.eta[msk]))
+            msk *= np.sqrt((np.array(focal_plane.xi) - med_xi)**2 + np.abs(np.array(focal_plane.eta) - med_eta)**2) < np.deg2rad(.22) 
+            msk *= np.array(focal_plane.amp) < n_med*np.median(np.array(focal_plane.amp[msk]))
+            msk *= np.array(focal_plane.amp) > np.median(np.array(focal_plane.amp[msk])/n_med)
+            msk *= np.array(focal_plane.fwhm) < n_med*np.median(np.array(focal_plane.fwhm[msk]))
+            msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])/n_med)
+            focal_plane.restrict("dets", msk)
+            rset = rset.subset(rows = msk)
+            # Plot
+            # TODO: Split by band?
+            plt.close()
+            plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=.25)
+            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp.png"))
+            plt.close()
+            plt.hist(np.array(focal_plane.amp), bins=30, alpha=.25)
+            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_amp.png"))
+            plt.close()
+            plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=.25)
+            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_fwhm.png"))
+            if len(rset) == 0:
+                fake_res = True
+                rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
         # Save to database
+        if fake_res:
+            print_once("\tNo valid fits! Writing a fake entry!")
+        else:
+            print_once(f"\tSaving {len(rset)} fits.")
         write_dataset(rset, h5_file, f"{obs['obs_id']}/{ufm}", True)
         db.add_entry(params={"obs:obs_id" : obs['obs_id'], "dets:stream_id": ufm, "dataset": f"{obs['obs_id']}/{ufm}"}, filename="tod_fits.h5", replace=True)
         h5_file.flush()
+    # Just to be safe
+    if i%5 == 0 and i > 0 and h5_file is not None:
+        print_once("Reloading h5 file to be safe!")
+        h5_file.close()
+        h5_file = h5py.File(h5_path, 'a')
 
 
 if h5_file is not None:

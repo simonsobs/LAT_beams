@@ -12,7 +12,7 @@ from so3g.proj import quat
 import sotodlib.coords.planets as planets
 from sotodlib import core
 import so3g
-from pqdm.processes import pqdm
+import sys
 # from . import noise as nn
 
 def invsafe(matrix, thresh: float = 1e-14):
@@ -224,6 +224,9 @@ def pointing_quickfit(aman, bandpass_range=(None, None), fwhm=np.deg2rad(0.5), m
     if show_tqdm:
         it = tqdm(aman.dets.vals) 
     for i, det in enumerate(it):
+        if show_tqdm:
+            it.refresh()
+            sys.stderr.flush()
         fit_am = aman.restrict("dets", [det], in_place=False)
         fit_am.wrap("resid", fit_am.signal.copy(), [(0, "dets"), (1, "samps")])
         fit_am.wrap("resid_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")])
