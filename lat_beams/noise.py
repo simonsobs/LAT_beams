@@ -1,6 +1,7 @@
 import numpy as np
 from sotodlib.core import AxisManager
 
+
 def dct_i(dat, inv: bool = False, axis: int = -1):
     r"""
     Compute the 1d discrete cosine transform (DCT) of the first kind.
@@ -35,6 +36,7 @@ def dct_i(dat, inv: bool = False, axis: int = -1):
         dat_dct = dat_dct * (1.0 / (2 * (dat.shape[axis] - 1)))
     return dat_dct.reshape(s)
 
+
 def gauss_smooth_1d(dat, fwhm):
     """
     Smooth an array along its last axis with a gaussian.
@@ -60,10 +62,11 @@ def gauss_smooth_1d(dat, fwhm):
     smooth_kern /= tot
     smooth_kern = dct_i(smooth_kern)
     dat_smooth = dct_i(dat)
-    dat_smooth = dat_smooth*smooth_kern
+    dat_smooth = dat_smooth * smooth_kern
     dat_smooth = dct_i(dat_smooth, True)
 
     return dat_smooth
+
 
 def compute_noise(aman, dat, fwhm=20):
     if dat is None:
@@ -77,7 +80,7 @@ def compute_noise(aman, dat, fwhm=20):
     dat_ft = dct_i(dat_rot)
     dat_ft = gauss_smooth_1d(dat_ft**2, fwhm)
     dat_ft[:, 1:] = 1.0 / dat_ft[:, 1:]
-    dat_ft[:, 0] = 0.
+    dat_ft[:, 0] = 0.0
 
     if "noise" in aman:
         aman.move("noise", None)
@@ -99,9 +102,7 @@ def apply_noise(aman, dat):
 
     dat_rot = np.dot(aman.noise.v, dat)
     dat_rft = dct_i(dat_rot)
-    dat_filt = dct_i(
-        dat_rft*aman.noise.filt_spectrum[:, : dat_rft.shape[1]], False
-    )
+    dat_filt = dct_i(dat_rft * aman.noise.filt_spectrum[:, : dat_rft.shape[1]], False)
     dat_filt = np.dot(aman.noise.v.T, dat_filt)
     dat_filt[:, 0] *= 0.5
     dat_filt[:, -1] *= 0.5

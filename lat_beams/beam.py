@@ -1,8 +1,10 @@
-from sotodlib.core import AxisManager, IndexAxis
-from sotodlib import coords
 import numpy as np
-from pixell import utils, resample
+from pixell import resample, utils
+from sotodlib import coords
+from sotodlib.core import AxisManager, IndexAxis
+
 from . import noise as nn
+
 
 def downsample_obs(obs, down):
     """Downsample AxisManager obs by the integer factor down.
@@ -14,11 +16,13 @@ def downsample_obs(obs, down):
     it uses fourier-resampling when downsampling the detector
     timestreams to avoid both aliasing noise and introducing
     a transfer function."""
-    assert down == utils.nint(down), "Only integer downsampling supported, but got '%.8g'" % down
+    assert down == utils.nint(down), (
+        "Only integer downsampling supported, but got '%.8g'" % down
+    )
     # Compute how many samples we will end up with
-    onsamp = (obs.samps.count+down-1)//down
+    onsamp = (obs.samps.count + down - 1) // down
     # Set up our output axis manager
-    res    = AxisManager(obs.dets, IndexAxis("samps", onsamp))
+    res = AxisManager(obs.dets, IndexAxis("samps", onsamp))
     # Stuff without sample axes
     for key, axes in obs._assignments.items():
         if "samps" not in axes:
@@ -26,7 +30,7 @@ def downsample_obs(obs, down):
             if isinstance(val, AxisManager):
                 res.wrap(key, val)
             else:
-                axdesc = [(k,v) for k,v in enumerate(axes) if v is not None]
+                axdesc = [(k, v) for k, v in enumerate(axes) if v is not None]
                 res.wrap(key, val, axdesc)
     # The normal sample stuff
     res.wrap("timestamps", obs.timestamps[::down], [(0, "samps")])
@@ -34,12 +38,18 @@ def downsample_obs(obs, down):
     for key in ["az", "el", "roll"]:
         bore.wrap(key, getattr(obs.boresight, key)[::down], [(0, "samps")])
     res.wrap("boresight", bore)
-    res.wrap("signal", resample.resample_fft_simple(obs.signal, onsamp), [(0,"dets"),(1,"samps")])
+    res.wrap(
+        "signal",
+        resample.resample_fft_simple(obs.signal, onsamp),
+        [(0, "dets"), (1, "samps")],
+    )
 
     return res
+
+
 def dirty_source(aman, wcs, n_rounds=3, fwhm=20, ds=20, P=None):
     print("Downsampling")
-    aman = downsample_obs(aman, ds) 
+    aman = downsample_obs(aman, ds)
     aman.signal = aman.signal.astype(np.float32)
     if P is None:
         P = coords.P.for_tod(aman, wcs_kernel=wcs)
@@ -58,8 +68,9 @@ def dirty_source(aman, wcs, n_rounds=3, fwhm=20, ds=20, P=None):
 
     return omap, aman
 
+
 def dirty_source_no_pointing(aman, wcs, n_rounds=3, fwhm=20, ds=20):
-    if 'focal_plane' in aman:
+    if "focal_plane" in aman:
         aman.move("focal_plane", None)
     focal_plane = AxisManager(aman.dets)
     focal_plane.wrap("xi", np.zeros(aman.dets.count), [(0, "dets")])
