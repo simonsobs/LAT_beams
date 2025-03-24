@@ -172,6 +172,7 @@ for i, obs in enumerate(obslist):
     obs_plot_dir = os.path.join(plot_dir, obs["obs_id"])
     os.makedirs(obs_plot_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
+    print_once(f"Fitting UFMs: {ufms}")
     for ufm in ufms:
         comm.barrier()
         # Check if we already fit
