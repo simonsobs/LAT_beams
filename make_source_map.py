@@ -8,7 +8,7 @@ from sotodlib import tod_ops
 from so3g.proj import RangesMatrix
 from sotodlib.coords import planets as cp
 from scipy.ndimage import gaussian_filter
-from matplotlib.colors import SymLogNorm
+from matplotlib.colors import LogNorm
 from so3g.proj import RangesMatrix
 from sotodlib.core import metadata
 import sys
@@ -44,8 +44,9 @@ xi_off = cfg.get("xi_off", np.nan)
 eta_off = cfg.get("eta_off", np.nan)
 min_dets = cfg.get("min_dets", 30)
 extent = cfg.get("extent", 50)
+buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-5)
-norm = SymLogNorm(log_thresh)
+norm = LogNorm() 
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -62,8 +63,8 @@ if ctx.obsdb is None:
 if args.obs_ids is not None:
     obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
 else:
-    obslist = ctx.obsdb.query(f'type=="obs" and subtype=="cal" and {source} and start_time > {cfg["start_time"]} and stop_time < {cfg["stop_time"]}', tags=[f"{source}=1"])
-print(f"Found {len(obslist} observations to map")
+    obslist = ctx.obsdb.query(f"type=='obs' and subtype=='cal' and {source} and start_time > {cfg['start_time']} and stop_time < {cfg['stop_time']}", tags=[f"{source}=1"])
+print(f"Found {len(obslist)} observations to map")
 
 # Keep only the ones with a focal plane 
 if cfg.get("per_obs_point", True):
@@ -80,7 +81,7 @@ if cfg.get("per_obs_point", True):
     print(f"Only {len(obslist)} observations with pointing metadata")
 
 # Load nominal pointing
-nominal_path = cfg.get("nominal", "/so/home/saianeesh/data/pointing/lat/nominal/focal_plane.h5")
+nominal_path = os.path.expanduser(cfg.get("nominal", "~/data/pointing/lat/nominal/focal_plane.h5"))
 nominal = h5py.File(nominal_path)
 
 # Get settings for source mask
@@ -92,14 +93,22 @@ for i, obs in enumerate(obslist):
     print(f"Mapping {obs['obs_id']} ({i+1}/{len(obslist)})")
 
     obs = ctx.obsdb.get(obs['obs_id'], tags=True)
-    meta = ctx.get_obs(obs['obs_id'])
+    meta = ctx.get_meta(obs['obs_id'])
+    if meta.dets.count == 0:
+        print(f"Looks like we don't have real metadata for this observation. Skipping...")
+        continue
+
     meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
     db_flag = tod_ops.flags.get_det_bias_flags(meta)
-    meta.restrict("dets", db_flag.det_bias_flags)
+    meta.restrict("dets", ~db_flag.det_bias_flags)
     meta.restrict("dets", np.isfinite(meta.det_cal.phase_to_pW))
+    if meta.dets.count == 0:
+        print(f"No detectors with good bias. Skipping...")
+        continue
+
 
     obs_plot_dir = os.path.join(plot_dir, obs['obs_id'])
-    obs_data_dir = os.path.join(plot_dir, obs['obs_id'])
+    obs_data_dir = os.path.join(data_dir, obs['obs_id'])
     os.makedirs(obs_plot_dir, exist_ok=True)
     os.makedirs(obs_data_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
@@ -117,8 +126,9 @@ for i, obs in enumerate(obslist):
             # TODO: add a mode to replot but not refit
             glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*")
             flist = glob.glob(glob_path)
-            if len(flist) >= N_FILES and not args.overwrite:
+            if len(flist) >= N_FILES and (not args.overwrite):
                 print("\t\tMaps appear to already exist and overwrite is not set. Skipping...")
+                continue
 
             if meta_band.dets.count == 0:
                 print("\t\tNo dets! Skipping...")
@@ -135,7 +145,7 @@ for i, obs in enumerate(obslist):
             orig = aman.copy()
 
             if aman.dets.count < min_dets:
-                print("\t\tOnly {aman.dets.count} dets! Skipping...")
+                print(f"\t\tOnly {aman.dets.count} dets! Skipping...")
                 continue
 
             # Its map time!
@@ -146,6 +156,10 @@ for i, obs in enumerate(obslist):
 
             # Smooth and find the center
             smoothed = gaussian_filter(out["solved"][0], sigma=1)
+            smoothed[:buf] = 0
+            smoothed[-1*buf:] = 0
+            smoothed[:, :buf] = 0
+            smoothed[:, -1*buf:] = 0
             cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
 
             # Plot
@@ -155,17 +169,17 @@ for i, obs in enumerate(obslist):
             plt.ylim((cent[0]-extent, cent[0]+extent))
             plt.colorbar()
             plt.grid()
-            plt.savefig(os.path.join(plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map.png"))
+            plt.savefig(os.path.join(obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map.png"))
             
             plt.close()
-            lognormed, _ = norm.process_values(out["solved"][0])
-            lognormed[lognormed < log_thresh] = np.nan
-            plt.imshow(lognormed, origin='lower')
+            lognormed = out["solved"][0].copy()
+            lognormed[lognormed < log_thresh] = 0
+            plt.imshow(lognormed, origin='lower', norm=norm)
             plt.xlim((cent[1]-extent, cent[1]+extent))
             plt.ylim((cent[0]-extent, cent[0]+extent))
             plt.colorbar()
             plt.grid()
-            plt.savefig(os.path.join(plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map_log10.png"))
+            plt.savefig(os.path.join(obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map_log10.png"))
             
             rprof = radial_profile(smoothed, cent[::-1])
             rlen = len(rprof)
