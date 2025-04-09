@@ -7,6 +7,7 @@ import argparse
 import os
 import sys
 from functools import reduce
+from itertools import groupby
 
 import h5py
 import matplotlib.pyplot as plt
@@ -15,7 +16,7 @@ import numpy as np
 import yaml
 from so3g import block_moment
 from sotodlib import tod_ops
-from sotodlib import tod_ops as to
+from sotodlib.core.flagman import has_any_cuts
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
@@ -81,6 +82,7 @@ if cfg.get("try_all", False):
 ds = cfg.get("ds", 5)
 hp_fc = cfg.get("hp_fc", 4)
 n_med = cfg.get("n_med", 3)
+n_std = cfg.get("n_std", 10)
 source = cfg.get("source", "mars")
 xi_off = cfg.get("xi_off", 0.0)
 eta_off = cfg.get("eta_off", 0.0)
@@ -190,6 +192,7 @@ for i, obs in enumerate(obslist):
         outdt[0] = ("dets:readout_id", np.array(meta.dets.vals).dtype)
         rsets = []
         for band in np.unique(bp):
+            fake_fit = False
             comm.barrier()
             meta_band = meta_ufm.copy().restrict("dets", bp == band)
             band_name = band_names[tube_band][band]
@@ -214,14 +217,24 @@ for i, obs in enumerate(obslist):
             aman.signal = tod_ops.filters.fourier_filter(
                 aman, filt, signal_name="signal"
             )
-            aman.signal -= np.mean(np.array(aman.signal), axis=-1)[..., None]
 
-            # jflags, _, jfix = to.jumps.twopi_jumps(aman, signal=aman.signal, fix=True, inplace=False)
-            # nj = np.array([len(jflags.ranges[i].ranges()) for i in range(len(aman.signal))])
-            # aman.signal = jfix
-            # aman.restrict("dets", nj < 50)
-            # gfilled = to.gapfill.fill_glitches(aman, nbuf=10, use_pca=False, modes=1, glitch_flags=aman.flags.jumps_2pi)
-            # aman.signal = gfilled
+            tod_ops.detrend_tod(aman, "median", in_place=True)
+            tf = tod_ops.flags.get_trending_flags(aman, max_trend=3, t_piece=30)
+            tdets = has_any_cuts(tf)
+            aman.restrict("dets", ~tdets)
+
+            if aman.dets.count == 0:
+                fake_fit=True
+                meta_band.restrict("dets", [meta_band.dets.vals[0]])
+                aman = ctx.get_obs(meta_band)
+                aman.signal[:] = 0
+
+            jflags, _, jfix = tod_ops.jumps.twopi_jumps(aman, signal=aman.signal, win_size=30, nsigma=3, fix=True, inplace=True, merge=False)
+            aman.signal = jfix
+            gfilled = tod_ops.gapfill.fill_glitches(aman, nbuf=30, use_pca=False, modes=1, glitch_flags=jflags)
+            aman.signal = gfilled
+            nj = np.array([len(jflags.ranges[i].ranges()) for i in range(len(aman.signal))])
+            aman.restrict("dets", nj < 10)
 
             # gflag = to.flags.get_glitch_flags(aman, t_glitch=.00001, hp_fc=10, n_sig=50, overwrite=True)
             # ng = np.array([len(gflag.ranges[i].ranges()) for i in range(len(aman.signal))])
@@ -229,15 +242,24 @@ for i, obs in enumerate(obslist):
             # gfilled = to.gapfill.fill_glitches(aman, nbuf=10, use_pca=False, modes=1, glitch_flags=aman.flags.glitches)
             # aman.signal = gfilled
 
+            if aman.dets.count == 0:
+                fake_fit=True
+                meta_band.restrict("dets", [meta_band.dets.vals[0]])
+                aman = ctx.get_obs(meta_band)
+                aman.signal[:] = 0
+
+            tod_ops.detrend_tod(aman, "median", in_place=True)
             aman = lb.downsample_obs(aman, ds)
             ptp = np.ptp(aman.signal, axis=-1)
-            aman = aman.restrict("dets", ptp < 2.5 * np.median(ptp))
+            aman = aman.restrict("dets", fake_fit + (ptp < 2.5 * np.median(ptp)))
+            if aman.dets.count == 0 and not fake_fit:
+                fake_fit=True
+                meta_band.restrict("dets", [meta_band.dets.vals[0]])
+                aman = ctx.get_obs(meta_band)
+                aman.signal[:] = 0
+
             filt = tod_ops.filters.high_pass_butter4(hp_fc * 2)
             sig_filt = tod_ops.filters.fourier_filter(aman, filt)
-            pip = np.ptp(sig_filt)
-
-            # Lets get the rough std of the observations
-            std_all = comm.allreduce(np.median(np.std(sig_filt, axis=-1))) / nproc
 
             # See how much of the source we saw...
             aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
@@ -258,11 +280,14 @@ for i, obs in enumerate(obslist):
                 [(0, "dets")],
             )
             aman_dummy.wrap("focal_plane", fp)
+            source_name = source
+            if source == "j1058p0133":
+                source_name = "J1058+0133"
             source_flags = cp.compute_source_flags(
                 tod=aman_dummy,
                 P=None,
                 mask=mask,
-                center_on="mars",
+                center_on=source_name,
                 res=res * 10,
                 max_pix=4e8,
                 wrap=None,
@@ -293,8 +318,19 @@ for i, obs in enumerate(obslist):
             # Kill dets with really high noise
             std = np.std(sig_filt, axis=-1)
             thresh = n_med * np.median(std)
-            aman.restrict("dets", std < thresh)
-            sig_filt = sig_filt[std < thresh]
+            aman.restrict("dets", fake_fit + (std < thresh))
+            sig_filt = sig_filt[fake_fit + (std < thresh)]
+            if aman.dets.count == 0 and not fake_fit:
+                fake_fit=True
+                meta_band.restrict("dets", [meta_band.dets.vals[0]])
+                aman = ctx.get_obs(meta_band)
+                aman.signal[:] = 0
+                sig_filt = np.zeros_like(aman.signal)
+
+            # Lets get the rough std of the observations
+            not_fit = comm.allreduce(int(fake_fit))
+            std_all = comm.allreduce(np.median(np.std(sig_filt, axis=-1))) / (nproc - not_fit)
+
 
             # Lets try to find the source blind
             ptp = np.array(
@@ -303,9 +339,19 @@ for i, obs in enumerate(obslist):
             buf = np.zeros_like(ptp, order="C")
             block_moment(ptp, buf, block_size, 1, 0, 0)
             buf = buf[0]
-            samp_idx = np.where(buf > 5 * std_all)[0]
+            samp_idx = np.where(buf > n_std * std_all)[0]
             # Lets sync up all the MPI procs
             samp_idx = np.unique(np.hstack(comm.allgather(samp_idx)).ravel())
+            # TODO: This needs some better logic
+            # Lets kill spurs by only keeping chunks that are mostly continous 
+            if len(samp_idx) > 2*block_size:
+                diff_idx = np.diff(samp_idx, prepend=1)
+                m = np.r_[False,diff_idx<2*block_size,False]
+                idx = np.flatnonzero(m[:-1]!=m[1:])
+                max_idx = (idx[1::2]-idx[::2]).argmax()
+                samp_idx = samp_idx[idx[2*max_idx]:idx[2*max_idx+1]]
+                print_once(f"\t\tFound {len(samp_idx)} continously flagged samples")
+
             if len(samp_idx) < min(block_size, min_samps / 2):
                 if args.no_fit:
                     print_once(
@@ -317,10 +363,10 @@ for i, obs in enumerate(obslist):
                     )
                     continue
             else:
-                start = int(max(0, np.percentile(samp_idx, 10) - (block_size * 3)))
+                start = int(max(0, np.percentile(samp_idx, 10) - (block_size * 5)))
                 stop = int(
                     min(
-                        aman.samps.count, np.percentile(samp_idx, 90) + (block_size * 3)
+                        aman.samps.count, np.percentile(samp_idx, 90) + (block_size * 5)
                     )
                 )
                 if stop - start < min_samps:
@@ -339,16 +385,24 @@ for i, obs in enumerate(obslist):
             ptp = np.ptp(sig_filt, axis=-1)
             thresh = 0.1 * np.percentile(ptp, 90)
             thresh = comm.allreduce(thresh, op=MPI.MAX)
-            msk = (ptp > thresh) * (ptp > 10 * std_all)
+            msk = fake_fit + ((ptp > thresh) * (ptp > 10 * std_all))
             aman = aman.restrict("dets", msk)
             sig_filt = sig_filt[msk]
+            if aman.dets.count == 0 and not fake_fit:
+                fake_fit=True
+                meta_band.restrict("dets", [meta_band.dets.vals[0]])
+                aman = ctx.get_obs(meta_band)
+                aman.signal[:] = 0
+                sig_filt = np.zeros_like(aman.signal)
 
             # Check how many detectors we have
+            not_fit = comm.allreduce(int(fake_fit))
             num_dets = np.array(comm.allgather(aman.dets.count))
-            tot_dets = np.sum(num_dets)
+            tot_dets = np.sum(num_dets) - not_fit
             if tot_dets < min_dets:
                 print_once(f"\t\tOnly {tot_dets} detectors! Skipping...")
                 continue
+            print_once(f"\t\tAttempting to fit {tot_dets} detectors")
 
             # The proc with the most detectors should plot and tqdm
             max_det_rank = np.argmax(num_dets)
@@ -383,7 +437,7 @@ for i, obs in enumerate(obslist):
                 aman,
                 (4, None),
                 fwhm=np.deg2rad(fwhm[band_name] / 60.0),
-                source=source,
+                source=source_name,
                 bin_priors=True,
                 show_tqdm=(myrank == max_det_rank),
             )
@@ -405,6 +459,8 @@ for i, obs in enumerate(obslist):
 
         # Get rsets from everyone
         comm.barrier()
+        if args.no_fit:
+            continue
         rsets = comm.gather(rsets, root=0)
         if myrank != 0:
             continue
@@ -437,15 +493,11 @@ for i, obs in enumerate(obslist):
             msk *= np.array(focal_plane.amp) < n_med * np.median(
                 np.array(focal_plane.amp[msk])
             )
-            msk *= np.array(focal_plane.amp) > np.median(
-                np.array(focal_plane.amp[msk]) / n_med
-            )
+            msk *= np.array(focal_plane.amp) > np.median(np.array(focal_plane.amp[msk])) / n_med
             msk *= np.array(focal_plane.fwhm) < n_med * np.median(
                 np.array(focal_plane.fwhm[msk])
             )
-            msk *= np.array(focal_plane.fwhm) > np.median(
-                np.array(focal_plane.fwhm[msk]) / n_med
-            )
+            msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])) / n_med
             focal_plane.restrict("dets", msk)
             rset = rset.subset(rows=msk)
             # Plot
