@@ -1,9 +1,9 @@
 source: "mars"
-min_samps: 5000
+min_samps: 20000
 context: '/so/metadata/lat/contexts/smurf_detcal.yaml'
 # context: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
-# start_time: 1739923200 
-start_time: 1743983519 
+project_dir: "test"
+start_time: 1739923200 
 stop_time: 1845020800 # To be changed...
 xi_off: 0.
 # eta_off: .013
@@ -14,4 +14,4 @@ mask:
   xyr:
     - 0.
     - 0.
-    - 3 
+    - 1.5 
