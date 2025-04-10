@@ -188,7 +188,7 @@ for i, obs in enumerate(obslist):
             fig, axd = plt.subplot_mosaic([['A', 'A', 'A'], ['A', 'A', 'A'], ['A', 'A', 'A'], ['B', 'B', 'B']], layout='constrained', figsize=(7,10))
             axd['A'].imshow(smoothed[cent[0]-extent:cent[0]+extent, cent[1]-extent:cent[1]+extent], origin="lower")
             axd['B'].plot(rprof[rlen-extent:rlen+extent])
-            plt.savefig(os.path.join(plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map_smooth.png"), bbox_inches='tight')
+            plt.savefig(os.path.join(obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map_smooth.png"), bbox_inches='tight')
 
 nominal.close()
             
