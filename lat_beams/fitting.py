@@ -15,6 +15,7 @@ from so3g.proj import quat
 from sotodlib import core
 from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, low_pass_sine2
 from tqdm.auto import tqdm
+from so3g.proj import Ranges
 
 # from . import noise as nn
 
@@ -225,6 +226,7 @@ def pointing_quickfit(
     focal_plane.wrap("fwhm", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("amp", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("dist", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
+    focal_plane.wrap("hits", np.zeros(len(aman.dets.vals), dtype=int), [(0, "dets")])
 
     xi, eta = get_xieta_src_centered_new(ts, az, el, roll, source)
     aman.wrap("xi", xi, [(0, "samps")])
@@ -347,5 +349,12 @@ def pointing_quickfit(
         focal_plane.dist[i] = np.sqrt(
             (focal_plane.xi[i] - xi0) ** 2 + (focal_plane.eta[i] - eta0) ** 2
         )
+
+        # Lets calculate hits
+        xi_msk = np.isclose(xi, focal_plane.xi[i], atol=2*np.median(np.diff(xi)).item())
+        eta_msk = np.isclose(eta, focal_plane.eta[i], atol=2*np.median(np.diff(eta)).item())
+        hits = Ranges.from_mask(xi_msk * eta_msk)
+        focal_plane.hits[i] = len(hits.ranges()) 
+
 
     return focal_plane

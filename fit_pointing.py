@@ -90,6 +90,7 @@ min_samps = cfg.get("min_samps", 1000) / ds
 block_size = cfg.get("block_size", 5000) // ds
 min_dets = cfg.get("min_dets", 30)
 trim_samps = cfg.get("time_samps", 200) // ds
+min_hits = cfg.get("min_hits", 1)
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -133,6 +134,7 @@ outdt = [
     ("gamma", np.float32),
     ("fwhm", np.float32),
     ("amp", np.float32),
+    ("hits", np.int32),
 ]
 
 # Load nominal pointing
@@ -458,6 +460,7 @@ for i, obs in enumerate(obslist):
                     np.array(focal_plane.gamma, dtype=np.float32),
                     np.array(focal_plane.fwhm, dtype=np.float32),
                     np.array(focal_plane.amp, dtype=np.float32),
+                    np.array(focal_plane.hits, dtype=np.int32),
                 ),
                 dtype=outdt,
                 count=np.sum(msk),
@@ -505,6 +508,7 @@ for i, obs in enumerate(obslist):
                 np.array(focal_plane.fwhm[msk])
             )
             msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])) / n_med
+            msk *= np.array(focal_plane.hits) > min_hits 
             focal_plane.restrict("dets", msk)
             rset = rset.subset(rows=msk)
             # Plot
@@ -518,6 +522,9 @@ for i, obs in enumerate(obslist):
             plt.close()
             plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
             plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_fwhm.png"))
+            plt.close()
+            plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
+            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_hits.png"))
             if len(rset) == 0:
                 fake_res = True
                 rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
