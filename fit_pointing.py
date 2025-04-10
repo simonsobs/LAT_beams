@@ -348,6 +348,7 @@ for i, obs in enumerate(obslist):
             # Lets sync up all the MPI procs
             samp_idx = np.unique(np.hstack(comm.allgather(samp_idx)).ravel())
             # TODO: This needs some better logic
+            # TODO: Keep the block with the highest sum?
             # Lets kill spurs by only keeping chunks that are mostly continous 
             if len(samp_idx) > 2*block_size:
                 diff_idx = np.diff(samp_idx, prepend=1)
@@ -388,9 +389,10 @@ for i, obs in enumerate(obslist):
 
             # Do some final cuts to kill dets that didn't see the source
             ptp = np.ptp(sig_filt, axis=-1)
+            std = np.std(sig_filt, axis=-1)
             thresh = 0.1 * np.percentile(ptp, 90)
             thresh = comm.allreduce(thresh, op=MPI.MAX)
-            msk = fake_fit + ((ptp > thresh) * (ptp > 10 * std_all))
+            msk = fake_fit + ((ptp > thresh) * (ptp > n_std * std))
             aman = aman.restrict("dets", msk)
             sig_filt = sig_filt[msk]
             if aman.dets.count == 0 and not fake_fit:
