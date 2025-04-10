@@ -174,8 +174,10 @@ for i, obs in enumerate(obslist):
     meta.restrict("dets", meta.det_cal.bg > -1)
     meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
 
-    obs_plot_dir = os.path.join(plot_dir, obs["obs_id"])
-    os.makedirs(obs_plot_dir, exist_ok=True)
+    tod_plot_dir = os.path.join(plot_dir, "tods", obs["obs_id"])
+    fit_plot_dir = os.path.join(plot_dir, "fits", obs["obs_id"])
+    os.makedirs(tod_plot_dir, exist_ok=True)
+    os.makedirs(fit_plot_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
     print_once(f"Fitting UFMs: {ufms}")
     for ufm in ufms:
@@ -420,16 +422,16 @@ for i, obs in enumerate(obslist):
             if myrank == max_det_rank:
                 plt.close()
                 plt.plot(np.array(aman.signal).T, alpha=0.3)
-                plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_{band_name}_tod.png"))
+                plt.savefig(os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod.png"))
                 plt.close()
                 plt.plot(sig_filt.T, alpha=0.3)
                 plt.savefig(
-                    os.path.join(obs_plot_dir, f"{ufm}_{band_name}_tod_filt.png")
+                    os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_filt.png")
                 )
                 plt.close()
                 plt.plot(buf, alpha=0.3)
                 plt.savefig(
-                    os.path.join(obs_plot_dir, f"{ufm}_{band_name}_tod_ptp.png")
+                    os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_ptp.png")
                 )
 
             if args.no_fit:
@@ -515,16 +517,16 @@ for i, obs in enumerate(obslist):
             # TODO: Split by band?
             plt.close()
             plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
-            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp.png"))
+            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
             plt.close()
             plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
-            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_amp.png"))
+            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
             plt.close()
             plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
-            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_fwhm.png"))
+            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
             plt.close()
             plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
-            plt.savefig(os.path.join(obs_plot_dir, f"{ufm}_fp_hits.png"))
+            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
             if len(rset) == 0:
                 fake_res = True
                 rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
