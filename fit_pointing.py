@@ -89,6 +89,7 @@ eta_off = cfg.get("eta_off", 0.0)
 min_samps = cfg.get("min_samps", 1000) / ds
 block_size = cfg.get("block_size", 5000) // ds
 min_dets = cfg.get("min_dets", 30)
+trim_samps = cfg.get("time_samps", 200) // ds
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -248,7 +249,7 @@ for i, obs in enumerate(obslist):
                 aman = ctx.get_obs(meta_band)
                 aman.signal[:] = 0
 
-            tod_ops.detrend_tod(aman, "median", in_place=True)
+            tod_ops.detrend_tod(aman, "linear", in_place=True)
             aman = lb.downsample_obs(aman, ds)
             ptp = np.ptp(aman.signal, axis=-1)
             aman = aman.restrict("dets", fake_fit + (ptp < 2.5 * np.median(ptp)))
@@ -260,6 +261,10 @@ for i, obs in enumerate(obslist):
 
             filt = tod_ops.filters.high_pass_butter4(hp_fc * 2)
             sig_filt = tod_ops.filters.fourier_filter(aman, filt)
+
+            # Trim edges in case of FFT ringing
+            aman.restrict("samps", slice(trim_samps, -1*trim_samps))
+            sig_filt = sig_filt[:, trim_samps:(-1*trim_samps)]
 
             # See how much of the source we saw...
             aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
