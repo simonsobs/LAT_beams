@@ -82,7 +82,7 @@ if cfg.get("try_all", False):
     forced_ws = ["ws0", "ws1", "ws2"]
 ds = cfg.get("ds", 5)
 hp_fc = cfg.get("hp_fc", 4)
-n_med = cfg.get("n_med", 3)
+n_med = cfg.get("n_med", 5)
 n_std = cfg.get("n_std", 10)
 source = cfg.get("source", "mars")
 xi_off = cfg.get("xi_off", 0.0)
@@ -519,15 +519,15 @@ for i, obs in enumerate(obslist):
             msk *= np.sqrt(
                 (np.array(focal_plane.xi) - med_xi) ** 2
                 + np.abs(np.array(focal_plane.eta) - med_eta) ** 2
-            ) < np.deg2rad(0.22)
+            ) < .01
             msk *= np.array(focal_plane.amp) < n_med * np.median(
                 np.array(focal_plane.amp[msk])
             )
-            msk *= np.array(focal_plane.amp) > np.median(np.array(focal_plane.amp[msk])) / n_med
+            msk *= np.array(focal_plane.amp) > np.median(np.array(focal_plane.amp[msk])) / n_med**2
             msk *= np.array(focal_plane.fwhm) < n_med * np.median(
                 np.array(focal_plane.fwhm[msk])
             )
-            msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])) / n_med
+            msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])) / n_med**2
             msk *= np.array(focal_plane.hits) > min_hits 
             focal_plane.restrict("dets", msk)
             rset = rset.subset(rows=msk)
