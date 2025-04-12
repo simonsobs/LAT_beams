@@ -229,7 +229,7 @@ def pointing_quickfit(
     focal_plane.wrap("hits", np.zeros(len(aman.dets.vals), dtype=int), [(0, "dets")])
     focal_plane.wrap("az", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("el", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("roll", np.zeros(len(aman.dets.vals) + roll, dtype=float), [(0, "dets")])
+    focal_plane.wrap("roll", np.zeros(len(aman.dets.vals), dtype=float) + np.mean(roll), [(0, "dets")])
     focal_plane.wrap("reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
 
     xi, eta = get_xieta_src_centered_new(ts, az, el, roll, source)
@@ -316,7 +316,7 @@ def pointing_quickfit(
         if len(msk_samps) < 10:
             print(f"Not enouth samples flagged for {det}")
             msk_samps = np.arange(aman.samps.count)
-        sl = slice(int(np.percentile(msk_samps, 5)), int(np.percentile(msk_samps, 95)))
+        sl = slice(int(np.percentile(msk_samps, 5)) + aman.samps.offset, int(np.percentile(msk_samps, 95)) + aman.samps.offset)
         fit_am.restrict("samps", sl)
 
         init_pars = [xi0, eta0, amp, fwhm]
