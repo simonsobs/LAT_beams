@@ -139,6 +139,7 @@ outdt = [
     ("az", np.float32),
     ("el", np.float32),
     ("roll", np.float32),
+    ("reduced_chisq", np.float32),
 ]
 
 # Load nominal pointing
@@ -447,7 +448,6 @@ for i, obs in enumerate(obslist):
                 continue
 
             # Fit
-            # TODO: include some sort of goodness of fit metric? Normalized chisq?
             focal_plane = pointing_quickfit(
                 aman,
                 (4, None),
@@ -471,6 +471,7 @@ for i, obs in enumerate(obslist):
                     np.array(focal_plane.az, dtype=np.float32),
                     np.array(focal_plane.el, dtype=np.float32),
                     np.array(focal_plane.roll, dtype=np.float32),
+                    np.array(focal_plane.reduced_chisq, dtype=np.float32),
                 ),
                 dtype=outdt,
                 count=np.sum(msk),

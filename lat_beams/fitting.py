@@ -230,6 +230,7 @@ def pointing_quickfit(
     focal_plane.wrap("az", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("el", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("roll", np.zeros(len(aman.dets.vals) + roll, dtype=float), [(0, "dets")])
+    focal_plane.wrap("reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
 
     xi, eta = get_xieta_src_centered_new(ts, az, el, roll, source)
     aman.wrap("xi", xi, [(0, "samps")])
@@ -358,6 +359,9 @@ def pointing_quickfit(
         tot_weight = np.sum(weights)
         focal_plane.az[i] = np.sum(aman.boresight.az*weights)/tot_weight
         focal_plane.el[i] = np.sum(aman.boresight.el*weights)/tot_weight
+
+        # Chisq
+        focal_plane.reduced_chisq[i] = res.fun/len(res.x)
 
 
     return focal_plane
