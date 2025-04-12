@@ -205,7 +205,6 @@ def pointing_quickfit(
     max_rad=None,
     source="mars",
     bin_priors=False,
-    lm_fit=False,
     show_tqdm=False,
 ):
     """
@@ -327,29 +326,18 @@ def pointing_quickfit(
             (fwhm / 4, 4 * fwhm),
         ]
 
-        if not lm_fit:
-            res = minimize(
-                fit_func, init_pars, bounds=bounds, args=(fit_am,), method="Nelder-Mead"
-            )
+        res = minimize(
+            fit_func, init_pars, bounds=bounds, args=(fit_am,), method="Nelder-Mead"
+        )
 
-            focal_plane.xi[i] = res.x[0]
-            focal_plane.eta[i] = res.x[1]
-            focal_plane.amp[i] = res.x[2]
-            focal_plane.fwhm[i] = res.x[3]
+        focal_plane.xi[i] = res.x[0]
+        focal_plane.eta[i] = res.x[1]
+        focal_plane.amp[i] = res.x[2]
+        focal_plane.fwhm[i] = res.x[3]
 
-            if not res.success:
-                focal_plane.amp[i] = -np.inf
+        if not res.success:
+            focal_plane.amp[i] = -np.inf
 
-        else:
-            res, errs, _, _ = lm_fitter(fit_am, filter_tod, init_pars, bounds)
-            focal_plane.xi[i] = res[0]
-            focal_plane.eta[i] = res[1]
-            focal_plane.amp[i] = res[2]
-            focal_plane.fwhm[i] = res[3]
-
-            # Lets say anything less than 3 sigma is a fluke
-            if res[2] / errs[2] < 3:
-                focal_plane.amp[i] = -np.inf
         focal_plane.dist[i] = np.sqrt(
             (focal_plane.xi[i] - xi0) ** 2 + (focal_plane.eta[i] - eta0) ** 2
         )
