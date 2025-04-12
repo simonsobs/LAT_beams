@@ -9,6 +9,7 @@ import sys
 from functools import reduce
 from itertools import groupby
 import sqlite3
+import time
 
 import h5py
 import matplotlib.pyplot as plt
@@ -66,6 +67,7 @@ parser.add_argument(
 parser.add_argument(
     "--start_from", "-s", default=0, type=int, help="Skip to the nth obs (0 indexed)"
 )
+parser.add_argument("--lookback", "-l", type=float, help="Amount of time to lookback for query, overides start time from config")
 args = parser.parse_args()
 
 with open(args.cfg, "r") as f:
@@ -108,8 +110,11 @@ if ctx.obsdb is None:
 if args.obs_ids is not None:
     obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
 else:
+    start_time = cfg['start_time']
+    if args.lookback is not None:
+        start_time = time.time() - 3600*args.lookback
     obslist = ctx.obsdb.query(
-        f"type=='obs' and subtype=='cal' and {source} and start_time > {cfg['start_time']} and stop_time < {cfg['stop_time']}",
+        f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {cfg['stop_time']}",
         tags=[f"{source}=1"],
     )
 
@@ -178,6 +183,7 @@ for i, obs in enumerate(obslist):
     try:
         meta = ctx.get_meta(obs["obs_id"])
     except sqlite3.OperationalError:
+        time.sleep(5)
         ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
         meta = ctx.get_meta(obs["obs_id"])
     meta.restrict("dets", np.isin(meta.det_info.wafer_slot, wafers))
@@ -224,8 +230,10 @@ for i, obs in enumerate(obslist):
             try:
                 aman = ctx.get_obs(meta_band)
             except sqlite3.OperationalError:
+                time.sleep(5)
                 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
                 aman = ctx.get_obs(meta_band)
+            aman.signal *= aman.det_cal.phase_to_pW[..., None]
             filt = tod_ops.filters.iir_filter(invert=True)
             aman.signal = tod_ops.filters.fourier_filter(
                 aman, filt, signal_name="signal"
