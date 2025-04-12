@@ -8,6 +8,7 @@ import os
 import sys
 from functools import reduce
 from itertools import groupby
+import sqlite3
 
 import h5py
 import matplotlib.pyplot as plt
@@ -174,7 +175,11 @@ for i, obs in enumerate(obslist):
 
     if h5_file is not None and myrank == 0 and obs["obs_id"] not in h5_file:
         h5_file.create_group(obs["obs_id"])
-    meta = ctx.get_obs(obs["obs_id"])
+    try:
+        meta = ctx.get_meta(obs["obs_id"])
+    except sqlite3.OperationalError:
+        ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
+        meta = ctx.get_meta(obs["obs_id"])
     meta.restrict("dets", np.isin(meta.det_info.wafer_slot, wafers))
     meta.restrict("dets", meta.det_cal.bg > -1)
     meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
@@ -216,7 +221,11 @@ for i, obs in enumerate(obslist):
                 continue
 
             # Load and process the TOD
-            aman = ctx.get_obs(meta_band)
+            try:
+                aman = ctx.get_obs(meta_band)
+            except sqlite3.OperationalError:
+                ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
+                aman = ctx.get_obs(meta_band)
             filt = tod_ops.filters.iir_filter(invert=True)
             aman.signal = tod_ops.filters.fourier_filter(
                 aman, filt, signal_name="signal"
