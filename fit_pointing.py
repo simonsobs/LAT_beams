@@ -134,7 +134,11 @@ outdt = [
     ("gamma", np.float32),
     ("fwhm", np.float32),
     ("amp", np.float32),
+    ("prior_dist", np.float32),
     ("hits", np.int32),
+    ("az", np.float32),
+    ("el", np.float32),
+    ("roll", np.float32),
 ]
 
 # Load nominal pointing
@@ -462,7 +466,11 @@ for i, obs in enumerate(obslist):
                     np.array(focal_plane.gamma, dtype=np.float32),
                     np.array(focal_plane.fwhm, dtype=np.float32),
                     np.array(focal_plane.amp, dtype=np.float32),
+                    np.array(focal_plane.dist, dtype=np.float32),
                     np.array(focal_plane.hits, dtype=np.int32),
+                    np.array(focal_plane.az, dtype=np.float32),
+                    np.array(focal_plane.el, dtype=np.float32),
+                    np.array(focal_plane.roll, dtype=np.float32),
                 ),
                 dtype=outdt,
                 count=np.sum(msk),

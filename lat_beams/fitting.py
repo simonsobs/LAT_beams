@@ -211,6 +211,7 @@ def pointing_quickfit(
     """
     Modified from analyze_bright_ptsrc
     """
+    sigma = fwhm / 2.3548
     if max_rad is None:
         max_rad = 5 * fwhm
 
@@ -227,6 +228,9 @@ def pointing_quickfit(
     focal_plane.wrap("amp", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("dist", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("hits", np.zeros(len(aman.dets.vals), dtype=int), [(0, "dets")])
+    focal_plane.wrap("az", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
+    focal_plane.wrap("el", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
+    focal_plane.wrap("roll", np.zeros(len(aman.dets.vals) + roll, dtype=float), [(0, "dets")])
 
     xi, eta = get_xieta_src_centered_new(ts, az, el, roll, source)
     aman.wrap("xi", xi, [(0, "samps")])
@@ -350,11 +354,22 @@ def pointing_quickfit(
             (focal_plane.xi[i] - xi0) ** 2 + (focal_plane.eta[i] - eta0) ** 2
         )
 
+        delta_xi = xi - focal_plane.xi[i]
+        delta_eta = eta - focal_plane.eta[i]
+
         # Lets calculate hits
-        xi_msk = np.isclose(xi, focal_plane.xi[i], atol=2*np.median(np.diff(xi)).item())
-        eta_msk = np.isclose(eta, focal_plane.eta[i], atol=2*np.median(np.diff(eta)).item())
+        xi_msk = np.abs(delta_xi) <= 3 * focal_plane.fwhm[i] / 2.3548
+        eta_msk = np.abs(delta_eta) <= 3 * focal_plane.fwhm[i] / 2.3548
         hits = Ranges.from_mask(xi_msk * eta_msk)
         focal_plane.hits[i] = len(hits.ranges()) 
+
+        # Azel crossings
+        xi_weights = np.exp(-.5*((delta_xi/sigma)**2))/(sigma*np.sqrt(2*np.pi)) 
+        eta_weights = np.exp(-.5*((delta_eta/sigma)**2))/(sigma*np.sqrt(2*np.pi)) 
+        weights = xi_weights * eta_weights
+        tot_weight = np.sum(weights)
+        focal_plane.az[i] = np.sum(aman.boresight.az*weights)/tot_weight
+        focal_plane.el[i] = np.sum(aman.boresight.el*weights)/tot_weight
 
 
     return focal_plane
