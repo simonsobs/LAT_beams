@@ -1,7 +1,7 @@
 import numpy as np
 from pixell import resample, utils
 from sotodlib import coords
-from sotodlib.core import AxisManager, IndexAxis
+from sotodlib.core import AxisManager, IndexAxis, OffsetAxis
 
 from . import noise as nn
 
@@ -22,7 +22,7 @@ def downsample_obs(obs, down):
     # Compute how many samples we will end up with
     onsamp = (obs.samps.count + down - 1) // down
     # Set up our output axis manager
-    res = AxisManager(obs.dets, IndexAxis("samps", onsamp))
+    res = AxisManager(obs.dets, OffsetAxis("samps", onsamp))
     # Stuff without sample axes
     for key, axes in obs._assignments.items():
         if "samps" not in axes:
@@ -34,7 +34,7 @@ def downsample_obs(obs, down):
                 res.wrap(key, val, axdesc)
     # The normal sample stuff
     res.wrap("timestamps", obs.timestamps[::down], [(0, "samps")])
-    bore = AxisManager(IndexAxis("samps", onsamp))
+    bore = AxisManager(OffsetAxis("samps", onsamp))
     for key in ["az", "el", "roll"]:
         bore.wrap(key, getattr(obs.boresight, key)[::down], [(0, "samps")])
     res.wrap("boresight", bore)

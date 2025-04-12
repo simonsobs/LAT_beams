@@ -272,7 +272,7 @@ for i, obs in enumerate(obslist):
             sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
             # Trim edges in case of FFT ringing
-            aman.restrict("samps", slice(trim_samps+aman.samps.offset, -1*trim_samps))
+            aman.restrict("samps", slice(trim_samps + aman.samps.offset, -1*trim_samps))
             sig_filt = sig_filt[:, trim_samps:(-1*trim_samps)]
 
             # See how much of the source we saw...
