@@ -271,7 +271,7 @@ for i, obs in enumerate(obslist):
             sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
             # Trim edges in case of FFT ringing
-            aman.restrict("samps", slice(trim_samps, -1*trim_samps))
+            aman.restrict("samps", slice(trim_samps+aman.samps.offset, -1*trim_samps))
             sig_filt = sig_filt[:, trim_samps:(-1*trim_samps)]
 
             # See how much of the source we saw...
@@ -325,7 +325,7 @@ for i, obs in enumerate(obslist):
                 )
             else:
                 print_once(f"\t\t{stop - start} samps flagged in the source range")
-            aman = aman.restrict("samps", (start, stop))
+            aman = aman.restrict("samps", slice(start + aman.samps.offset, stop + aman.samps.offset))
             sig_filt = sig_filt[:, start:stop]
 
             # Kill dets with really high noise
@@ -392,7 +392,7 @@ for i, obs in enumerate(obslist):
                     )
                 else:
                     print_once(f"\t\t{stop - start} samps flagged blind")
-                aman = aman.restrict("samps", (start, stop))
+                aman = aman.restrict("samps", slice(start + aman.samps.offset, stop + aman.samps.offset))
                 sig_filt = sig_filt[:, start:stop]
 
             # Do some final cuts to kill dets that didn't see the source
