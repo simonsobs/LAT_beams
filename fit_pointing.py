@@ -312,6 +312,8 @@ for i, obs in enumerate(obslist):
             source_name = source
             if source == "j1058p0133":
                 source_name = "J1058+0133"
+            elif source == "rcw38":
+                source_name = "J134.78-47.509"
             source_flags = cp.compute_source_flags(
                 tod=aman_dummy,
                 P=None,
@@ -441,10 +443,10 @@ for i, obs in enumerate(obslist):
                     os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_filt.png")
                 )
                 plt.close()
-                plt.plot(buf, alpha=0.3)
-                plt.savefig(
-                    os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_ptp.png")
-                )
+                # plt.plot(buf, alpha=0.3)
+                # plt.savefig(
+                #     os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_ptp.png")
+                # )
 
             if args.no_fit:
                 continue
