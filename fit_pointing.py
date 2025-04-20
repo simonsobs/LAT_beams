@@ -233,6 +233,9 @@ for i, obs in enumerate(obslist):
                 time.sleep(5)
                 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
                 aman = ctx.get_obs(meta_band)
+            fake_aman = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
+            fake_aman.signal[:] = 0
+
             aman.signal *= aman.det_cal.phase_to_pW[..., None]
             filt = tod_ops.filters.iir_filter(invert=True)
             aman.signal = tod_ops.filters.fourier_filter(
@@ -252,9 +255,7 @@ for i, obs in enumerate(obslist):
 
             if aman.dets.count == 0:
                 fake_fit=True
-                meta_band.restrict("dets", [meta_band.dets.vals[0]])
-                aman = ctx.get_obs(meta_band)
-                aman.signal[:] = 0
+                aman = fake_aman.copy()
 
             jflags, _, jfix = tod_ops.jumps.twopi_jumps(aman, signal=aman.signal, win_size=30, nsigma=3, fix=True, inplace=True, merge=False)
             aman.signal = jfix
@@ -271,19 +272,16 @@ for i, obs in enumerate(obslist):
 
             if aman.dets.count == 0:
                 fake_fit=True
-                meta_band.restrict("dets", [meta_band.dets.vals[0]])
-                aman = ctx.get_obs(meta_band)
-                aman.signal[:] = 0
+                aman = fake_aman.copy()
 
             tod_ops.detrend_tod(aman, "linear", in_place=True)
             aman = lb.downsample_obs(aman, ds)
+            fake_aman = lb.downsample_obs(fake_aman, ds)
             ptp = np.ptp(aman.signal, axis=-1)
             aman = aman.restrict("dets", fake_fit + (ptp < 2.5 * np.median(ptp)))
             if aman.dets.count == 0 and not fake_fit:
                 fake_fit=True
-                meta_band.restrict("dets", [meta_band.dets.vals[0]])
-                aman = ctx.get_obs(meta_band)
-                aman.signal[:] = 0
+                aman = fake_aman.copy()
 
             filt = tod_ops.filters.high_pass_butter4(hp_fc * 2)
             sig_filt = tod_ops.filters.fourier_filter(aman, filt)
@@ -326,6 +324,7 @@ for i, obs in enumerate(obslist):
             if len(source_flags.ranges[0].ranges()) == 0:
                 if not args.no_fit:
                     print_once("\t\tNo samples flagged! Skipping...")
+                    continue
                 print_once(
                     "\t\tNo samples flagged! But running in no_fit mode so will continue with all samples"
                 )
@@ -353,9 +352,7 @@ for i, obs in enumerate(obslist):
             sig_filt = sig_filt[fake_fit + (std < thresh)]
             if aman.dets.count == 0 and not fake_fit:
                 fake_fit=True
-                meta_band.restrict("dets", [meta_band.dets.vals[0]])
-                aman = ctx.get_obs(meta_band)
-                aman.signal[:] = 0
+                aman = fake_aman.copy()
                 sig_filt = np.zeros_like(aman.signal)
 
             # Lets get the rough std of the observations
@@ -364,13 +361,8 @@ for i, obs in enumerate(obslist):
 
 
             # Lets try to find the source blind
-            ptp = np.array(
-                np.atleast_2d(np.ptp(sig_filt, axis=0)), dtype=np.float32, order="C"
-            )
-            buf = np.zeros_like(ptp, order="C")
-            block_moment(ptp, buf, block_size, 1, 0, 0)
-            buf = buf[0]
-            samp_idx = np.where(buf > n_std * std_all)[0]
+            flagged = sig_filt > n_std * std_all
+            samp_idx = np.where(np.any(flagged, 0))[0]
             # Lets sync up all the MPI procs
             samp_idx = np.unique(np.hstack(comm.allgather(samp_idx)).ravel())
             # TODO: This needs some better logic
@@ -423,9 +415,7 @@ for i, obs in enumerate(obslist):
             sig_filt = sig_filt[msk]
             if aman.dets.count == 0 and not fake_fit:
                 fake_fit=True
-                meta_band.restrict("dets", [meta_band.dets.vals[0]])
-                aman = ctx.get_obs(meta_band)
-                aman.signal[:] = 0
+                aman = fake_aman.copy()
                 sig_filt = np.zeros_like(aman.signal)
 
             # Check how many detectors we have
