@@ -97,7 +97,7 @@ min_hits = cfg.get("min_hits", 1)
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
-project_dir = cfg.get("project_dir", "first_light_unfocused")
+project_dir = cfg.get("project_dir", "pointing/lat")
 plot_dir = os.path.join(root_dir, "plots", project_dir, "source_fits", source)
 data_dir = os.path.join(root_dir, "data", project_dir, "source_fits")
 os.makedirs(plot_dir, exist_ok=True)
@@ -190,8 +190,8 @@ for i, obs in enumerate(obslist):
     meta.restrict("dets", meta.det_cal.bg > -1)
     meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
 
-    tod_plot_dir = os.path.join(plot_dir, "tods", obs["obs_id"])
-    fit_plot_dir = os.path.join(plot_dir, "fits", obs["obs_id"])
+    tod_plot_dir = os.path.join(plot_dir, "tods", str(obs['timestamp'])[:5], obs["obs_id"])
+    fit_plot_dir = os.path.join(plot_dir, "fits", str(obs['timestamp'])[:5], obs["obs_id"])
     os.makedirs(tod_plot_dir, exist_ok=True)
     os.makedirs(fit_plot_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
@@ -528,7 +528,7 @@ for i, obs in enumerate(obslist):
                 np.array(focal_plane.fwhm[msk])
             )
             msk *= np.array(focal_plane.fwhm) > np.median(np.array(focal_plane.fwhm[msk])) / n_med**2
-            msk *= np.array(focal_plane.hits) > min_hits 
+            msk *= np.array(focal_plane.hits) >= min_hits 
             focal_plane.restrict("dets", msk)
             rset = rset.subset(rows=msk)
             # Plot
