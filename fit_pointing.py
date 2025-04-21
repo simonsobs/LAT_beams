@@ -236,7 +236,6 @@ for i, obs in enumerate(obslist):
             fake_aman = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
             fake_aman.signal[:] = 0
 
-            aman.signal *= aman.det_cal.phase_to_pW[..., None]
             filt = tod_ops.filters.iir_filter(invert=True)
             aman.signal = tod_ops.filters.fourier_filter(
                 aman, filt, signal_name="signal"
@@ -264,21 +263,15 @@ for i, obs in enumerate(obslist):
             nj = np.array([len(jflags.ranges[i].ranges()) for i in range(len(aman.signal))])
             aman.restrict("dets", nj < 10)
 
-            # gflag = to.flags.get_glitch_flags(aman, t_glitch=.00001, hp_fc=10, n_sig=50, overwrite=True)
-            # ng = np.array([len(gflag.ranges[i].ranges()) for i in range(len(aman.signal))])
-            # aman.restrict("dets", ng < 30)
-            # gfilled = to.gapfill.fill_glitches(aman, nbuf=10, use_pca=False, modes=1, glitch_flags=aman.flags.glitches)
-            # aman.signal = gfilled
-
             if aman.dets.count == 0:
                 fake_fit=True
                 aman = fake_aman.copy()
-
             tod_ops.detrend_tod(aman, "linear", in_place=True)
             aman = lb.downsample_obs(aman, ds)
             fake_aman = lb.downsample_obs(fake_aman, ds)
             ptp = np.ptp(aman.signal, axis=-1)
-            aman = aman.restrict("dets", fake_fit + (ptp < 2.5 * np.median(ptp)))
+            ptp_all = np.hstack(comm.allgather(ptp))
+            aman = aman.restrict("dets", fake_fit + (ptp < n_med * np.median(ptp_all)))
             if aman.dets.count == 0 and not fake_fit:
                 fake_fit=True
                 aman = fake_aman.copy()
@@ -287,7 +280,8 @@ for i, obs in enumerate(obslist):
             sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
             # Trim edges in case of FFT ringing
-            aman.restrict("samps", slice(trim_samps + aman.samps.offset, -1*trim_samps))
+            aman = aman.restrict("samps", slice(trim_samps + aman.samps.offset, -1*trim_samps))
+            fake_aman = fake_aman.restrict("samps", slice(trim_samps + fake_aman.samps.offset, -1*trim_samps))
             sig_filt = sig_filt[:, trim_samps:(-1*trim_samps)]
 
             # See how much of the source we saw...
@@ -345,11 +339,13 @@ for i, obs in enumerate(obslist):
             else:
                 print_once(f"\t\t{stop - start} samps flagged in the source range")
             aman = aman.restrict("samps", slice(start + aman.samps.offset, stop + aman.samps.offset))
+            fake_aman = fake_aman.restrict("samps", slice(start + fake_aman.samps.offset, stop + fake_aman.samps.offset))
             sig_filt = sig_filt[:, start:stop]
 
             # Kill dets with really high noise
             std = np.std(sig_filt, axis=-1)
-            thresh = n_med * np.median(std)
+            std_all = np.hstack(comm.allgather(std))
+            thresh = n_med * np.median(std_all[std_all > 0])
             aman.restrict("dets", fake_fit + (std < thresh))
             sig_filt = sig_filt[fake_fit + (std < thresh)]
             if aman.dets.count == 0 and not fake_fit:
@@ -358,13 +354,18 @@ for i, obs in enumerate(obslist):
                 sig_filt = np.zeros_like(aman.signal)
 
             # Lets get the rough std of the observations
-            not_fit = comm.allreduce(int(fake_fit))
-            std_all = comm.allreduce(np.median(np.std(sig_filt, axis=-1))) / (nproc - not_fit)
-
+            std_all = np.median(std_all[(std_all < thresh) * (std_all > 0)])
 
             # Lets try to find the source blind
             flagged = sig_filt > n_std * std_all
             samp_idx = np.where(np.any(flagged, 0))[0]
+            # ptp = np.array(
+            #     np.atleast_2d(np.ptp(sig_filt, axis=0)), dtype=np.float32, order="C"
+            # )
+            # buf = np.zeros_like(ptp, order="C")
+            # block_moment(ptp, buf, block_size, 1, 0, 0)
+            # buf = buf[0]
+            # samp_idx = np.where(buf > n_std * std_all)[0]
             # Lets sync up all the MPI procs
             samp_idx = np.unique(np.hstack(comm.allgather(samp_idx)).ravel())
             # TODO: This needs some better logic
@@ -372,7 +373,7 @@ for i, obs in enumerate(obslist):
             # Lets kill spurs by only keeping chunks that are mostly continous 
             if len(samp_idx) > 2*block_size:
                 diff_idx = np.diff(samp_idx, prepend=1)
-                m = np.r_[False,diff_idx<2*block_size,False]
+                m = np.r_[False,diff_idx<block_size,False]
                 idx = np.flatnonzero(m[:-1]!=m[1:])
                 max_idx = (idx[1::2]-idx[::2]).argmax()
                 samp_idx = samp_idx[idx[2*max_idx]:idx[2*max_idx+1]]
@@ -405,6 +406,7 @@ for i, obs in enumerate(obslist):
                 else:
                     print_once(f"\t\t{stop - start} samps flagged blind")
                 aman = aman.restrict("samps", slice(start + aman.samps.offset, stop + aman.samps.offset))
+                fake_aman = fake_aman.restrict("samps", slice(start + fake_aman.samps.offset, stop + fake_aman.samps.offset))
                 sig_filt = sig_filt[:, start:stop]
 
             # Do some final cuts to kill dets that didn't see the source
@@ -457,6 +459,7 @@ for i, obs in enumerate(obslist):
                 continue
 
             # Fit
+            aman.signal *= aman.det_cal.phase_to_pW[..., None]
             focal_plane = pointing_quickfit(
                 aman,
                 (4, None),
@@ -464,6 +467,7 @@ for i, obs in enumerate(obslist):
                 source=source_name,
                 bin_priors=True,
                 show_tqdm=(myrank == max_det_rank),
+                min_sigma = n_std,
             )
 
             # Convert to rset
@@ -537,6 +541,9 @@ for i, obs in enumerate(obslist):
             plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
             plt.close()
+            plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
+            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
+            plt.close()
             plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
             plt.close()
@@ -545,6 +552,9 @@ for i, obs in enumerate(obslist):
             plt.close()
             plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
+            plt.close()
+            plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
+            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
             if len(rset) == 0:
                 fake_res = True
                 rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))

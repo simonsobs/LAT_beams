@@ -206,6 +206,7 @@ def pointing_quickfit(
     source="mars",
     bin_priors=False,
     show_tqdm=False,
+    min_sigma=5
 ):
     """
     Modified from analyze_bright_ptsrc
@@ -260,6 +261,7 @@ def pointing_quickfit(
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid")
         return np.sum(fit_am.resid * fit_am.resid_filt)
+        # return (fit_am.resid.ravel().T@fit_am.resid_filt.ravel())#*fit_am.wn
 
     it = aman.dets.vals
     if show_tqdm:
@@ -280,6 +282,7 @@ def pointing_quickfit(
             "grad_buf_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
         )
         fit_am = filter_tod(fit_am)
+        # fit_am.wrap("wn", 1./np.std(fit_am.resid_filt).item()**2)
 
         max_idx = np.argmax(fit_am.resid_filt[0])
         xi_max = xi[max_idx]
@@ -338,6 +341,9 @@ def pointing_quickfit(
 
         if not res.success:
             focal_plane.amp[i] = -np.inf
+
+        # if focal_plane.amp[i] > 0 and (focal_plane.amp[i] < min_sigma*np.std(fit_am.resid_filt)):
+        #     focal_plane.amp[i] *= -1
 
         focal_plane.dist[i] = np.sqrt(
             (focal_plane.xi[i] - xi0) ** 2 + (focal_plane.eta[i] - eta0) ** 2
