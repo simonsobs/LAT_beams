@@ -13,7 +13,7 @@ from scipy.optimize import minimize
 from scipy.stats import binned_statistic
 from so3g.proj import quat
 from sotodlib import core
-from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, low_pass_sine2
+from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, low_pass_sine2, identity_filter
 from tqdm.auto import tqdm
 from so3g.proj import Ranges
 
@@ -237,6 +237,12 @@ def pointing_quickfit(
     aman.wrap("xi", xi, [(0, "samps")])
     aman.wrap("eta", eta, [(0, "samps")])
 
+    filt = identity_filter()
+    if bandpass_range[0] is not None:
+        filt *= high_pass_sine2(cutoff=bandpass_range[0])
+    if bandpass_range[1] is not None:
+        filt *= low_pass_sine2(cutoff=bandpass_range[1])
+
     def filter_tod(am, signal_name="resid"):
         sig_filt_name = f"{signal_name}_filt"
         am[sig_filt_name] = am[signal_name].copy()
@@ -247,20 +253,15 @@ def pointing_quickfit(
             signal_name=sig_filt_name,
             time_name="timestamps",
         )
-        if bandpass_range[0] is not None:
-            highpass = high_pass_sine2(cutoff=bandpass_range[0])
-            am[sig_filt_name] = fourier_filter(am, highpass, **filt_kw)
-        if bandpass_range[1] is not None:
-            lowpass = low_pass_sine2(cutoff=bandpass_range[1])
-            am[sig_filt_name] = fourier_filter(am, lowpass, **filt_kw)
+        am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
         return am
 
     def fit_func(x, fit_am):
-        xi0, eta0, amp, fwhm = x
-        model = gaussian2d(fit_am.xi, fit_am.eta, amp, xi0, eta0, fwhm, fwhm, 0)
+        xi0, eta0, amp, fwhm, offset = x
+        model = gaussian2d(fit_am.xi, fit_am.eta, amp, xi0, eta0, fwhm, fwhm, 0) + offset 
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid")
-        return np.sum(fit_am.resid * fit_am.resid_filt)
+        return np.sum(fit_am.resid * fit_am.resid_filt)*fit_am.wn
         # return (fit_am.resid.ravel().T@fit_am.resid_filt.ravel())#*fit_am.wn
 
     it = aman.dets.vals
@@ -275,14 +276,12 @@ def pointing_quickfit(
         fit_am.wrap(
             "resid_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
         )
-        fit_am.wrap(
-            "grad_buf", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
-        )
-        fit_am.wrap(
-            "grad_buf_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
-        )
         fit_am = filter_tod(fit_am)
-        # fit_am.wrap("wn", 1./np.std(fit_am.resid_filt).item()**2)
+        std = np.std(fit_am.resid_filt)
+        if std == 0:
+            focal_plane.amp[i] = -np.inf
+            continue
+        fit_am.wrap("wn", 1./np.std(fit_am.resid_filt).item()**2)
 
         max_idx = np.argmax(fit_am.resid_filt[0])
         xi_max = xi[max_idx]
@@ -298,7 +297,8 @@ def pointing_quickfit(
             xi_binned = gaussian_filter1d(
                 xi_binned, (fwhm / 2.3548) / np.mean(np.diff(edges))
             )
-            xi0 = xi_cents[np.nanargmax(xi_binned)]
+            if not np.all(np.isnan(xi_binned)):
+                xi0 = xi_cents[np.nanargmax(xi_binned)]
             eta_binned, edges, _ = binned_statistic(
                 eta, fit_am.resid_filt[0], bins=int(np.ptp(eta) / (0.1 * fwhm))
             )
@@ -306,8 +306,10 @@ def pointing_quickfit(
             eta_binned = gaussian_filter1d(
                 eta_binned, (fwhm / 2.3548) / np.mean(np.diff(edges))
             )
-            eta0 = eta_cents[np.nanargmax(eta_binned)]
-        amp = np.ptp(fit_am.signal) * 3
+            if not np.all(np.isnan(eta_binned)):
+                eta0 = eta_cents[np.nanargmax(eta_binned)]
+        ptp = np.ptp(fit_am.signal)
+        amp = ptp * 3
         msk_samps = np.where((xi - xi0) ** 2 + (eta - eta0) ** 2 < max_rad**2)[
             0
         ].astype(float)
@@ -322,12 +324,13 @@ def pointing_quickfit(
         sl = slice(int(np.percentile(msk_samps, 5)) + aman.samps.offset, int(np.percentile(msk_samps, 95)) + aman.samps.offset)
         fit_am.restrict("samps", sl)
 
-        init_pars = [xi0, eta0, amp, fwhm]
+        init_pars = [xi0, eta0, amp, fwhm, 0]
         bounds = [
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
             (-1, 10 * amp),
             (fwhm / 4, 4 * fwhm),
+            (-ptp, ptp)
         ]
 
         res = minimize(
