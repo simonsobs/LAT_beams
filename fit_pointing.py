@@ -183,7 +183,7 @@ for i, obs in enumerate(obslist):
     try:
         meta = ctx.get_meta(obs["obs_id"])
     except sqlite3.OperationalError:
-        time.sleep(5)
+        time.sleep(30)
         ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
         meta = ctx.get_meta(obs["obs_id"])
     meta.restrict("dets", np.isin(meta.det_info.wafer_slot, wafers))
@@ -230,7 +230,7 @@ for i, obs in enumerate(obslist):
             try:
                 aman = ctx.get_obs(meta_band)
             except sqlite3.OperationalError:
-                time.sleep(5)
+                time.sleep(30)
                 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
                 aman = ctx.get_obs(meta_band)
             fake_aman = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
@@ -414,7 +414,7 @@ for i, obs in enumerate(obslist):
             std = np.std(sig_filt, axis=-1)
             thresh = 0.1 * np.percentile(ptp, 90)
             thresh = comm.allreduce(thresh, op=MPI.MAX)
-            msk = fake_fit + ((ptp > thresh) * (ptp > n_std * std))
+            msk = fake_fit + ((ptp > thresh) * (ptp > n_std * std) * (std > 0))
             aman = aman.restrict("dets", msk)
             sig_filt = sig_filt[msk]
             if aman.dets.count == 0 and not fake_fit:
@@ -455,7 +455,7 @@ for i, obs in enumerate(obslist):
 
             # If my MPI proc has no good dets
             # TODO: Even out the dets at this point?
-            if aman.dets.count == 0:
+            if aman.dets.count == 0 or fake_fit:
                 continue
 
             # Fit
