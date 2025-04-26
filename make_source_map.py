@@ -119,10 +119,12 @@ for i, obs in enumerate(obslist):
     if meta.dets.count < min_dets:
         print(f"Only {meta.dets.count} detectors with good bias. Skipping...")
         continue
-    meta.restrict("dets", meta.focal_plane.hits >= min_hits)
-    if meta.dets.count < min_dets:
-        print(f"Only {meta.dets.count} detectors with good fits. Skipping...")
-        continue
+    if "hits" in meta.focal_plane:
+        meta.restrict("dets", meta.focal_plane.hits >= min_hits)
+        if meta.dets.count < min_dets:
+            print(f"Only {meta.dets.count} detectors with good fits. Skipping...")
+            continue
+    meta.restrict("dets", np.isfinite(meta.focal_plane.xi) * np.isfinite(meta.focal_plane.eta)* np.isfinite(meta.focal_plane.gamma))
 
 
     obs_plot_dir = os.path.join(plot_dir, str(obs['timestamp'])[:5], obs['obs_id'])

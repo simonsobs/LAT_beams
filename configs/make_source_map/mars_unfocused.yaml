@@ -1,7 +1,9 @@
 source: "mars"
+per_obs_point: False
 min_samps: 20000
 min_dets: 50
-context: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/source_fits/pointing_nersc.yaml'
+# context: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/source_fits/pointing_nersc.yaml'
+context: /so/home/saianeesh/data/beams/lat/context.yaml
 start_time: 1739923200 
 stop_time: 1845020800 # To be changed...
 n_med: 3
