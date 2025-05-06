@@ -13,7 +13,12 @@ from scipy.optimize import minimize
 from scipy.stats import binned_statistic
 from so3g.proj import quat
 from sotodlib import core
-from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, low_pass_sine2, identity_filter
+from sotodlib.tod_ops.filters import (
+    fourier_filter,
+    high_pass_sine2,
+    low_pass_sine2,
+    identity_filter,
+)
 from tqdm.auto import tqdm
 from so3g.proj import Ranges
 
@@ -206,7 +211,7 @@ def pointing_quickfit(
     source="mars",
     bin_priors=False,
     show_tqdm=False,
-    min_sigma=5
+    min_sigma=5,
 ):
     """
     Modified from analyze_bright_ptsrc
@@ -230,8 +235,14 @@ def pointing_quickfit(
     focal_plane.wrap("hits", np.zeros(len(aman.dets.vals), dtype=int), [(0, "dets")])
     focal_plane.wrap("az", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("el", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("roll", np.zeros(len(aman.dets.vals), dtype=float) + np.mean(roll), [(0, "dets")])
-    focal_plane.wrap("reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
+    focal_plane.wrap(
+        "roll",
+        np.zeros(len(aman.dets.vals), dtype=float) + np.mean(roll),
+        [(0, "dets")],
+    )
+    focal_plane.wrap(
+        "reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")]
+    )
 
     xi, eta = get_xieta_src_centered_new(ts, az, el, roll, source)
     aman.wrap("xi", xi, [(0, "samps")])
@@ -258,10 +269,12 @@ def pointing_quickfit(
 
     def fit_func(x, fit_am):
         xi0, eta0, amp, fwhm, offset = x
-        model = gaussian2d(fit_am.xi, fit_am.eta, amp, xi0, eta0, fwhm, fwhm, 0) + offset 
+        model = (
+            gaussian2d(fit_am.xi, fit_am.eta, amp, xi0, eta0, fwhm, fwhm, 0) + offset
+        )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid")
-        return np.sum(fit_am.resid * fit_am.resid_filt)*fit_am.wn
+        return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
         # return (fit_am.resid.ravel().T@fit_am.resid_filt.ravel())#*fit_am.wn
 
     it = aman.dets.vals
@@ -281,7 +294,7 @@ def pointing_quickfit(
         if std == 0:
             focal_plane.amp[i] = -np.inf
             continue
-        fit_am.wrap("wn", 1./np.std(fit_am.resid_filt).item()**2)
+        fit_am.wrap("wn", 1.0 / np.std(fit_am.resid_filt).item() ** 2)
 
         max_idx = np.argmax(fit_am.resid_filt[0])
         xi_max = xi[max_idx]
@@ -321,7 +334,10 @@ def pointing_quickfit(
         if len(msk_samps) < 10:
             print(f"Not enouth samples flagged for {det}")
             msk_samps = np.arange(aman.samps.count)
-        sl = slice(int(np.percentile(msk_samps, 5)) + aman.samps.offset, int(np.percentile(msk_samps, 95)) + aman.samps.offset)
+        sl = slice(
+            int(np.percentile(msk_samps, 5)) + aman.samps.offset,
+            int(np.percentile(msk_samps, 95)) + aman.samps.offset,
+        )
         fit_am.restrict("samps", sl)
 
         init_pars = [xi0, eta0, amp, fwhm, 0]
@@ -330,7 +346,7 @@ def pointing_quickfit(
             (eta0 - max_rad, eta0 + max_rad),
             (-1, 10 * amp),
             (fwhm / 4, 4 * fwhm),
-            (-ptp, ptp)
+            (-ptp, ptp),
         ]
 
         res = minimize(
@@ -359,18 +375,21 @@ def pointing_quickfit(
         xi_msk = np.abs(delta_xi) <= 3 * focal_plane.fwhm[i] / 2.3548
         eta_msk = np.abs(delta_eta) <= 3 * focal_plane.fwhm[i] / 2.3548
         hits = Ranges.from_mask(xi_msk * eta_msk)
-        focal_plane.hits[i] = len(hits.ranges()) 
+        focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings
-        xi_weights = np.exp(-.5*((delta_xi/sigma)**2))/(sigma*np.sqrt(2*np.pi)) 
-        eta_weights = np.exp(-.5*((delta_eta/sigma)**2))/(sigma*np.sqrt(2*np.pi)) 
+        xi_weights = np.exp(-0.5 * ((delta_xi / sigma) ** 2)) / (
+            sigma * np.sqrt(2 * np.pi)
+        )
+        eta_weights = np.exp(-0.5 * ((delta_eta / sigma) ** 2)) / (
+            sigma * np.sqrt(2 * np.pi)
+        )
         weights = xi_weights * eta_weights
         tot_weight = np.sum(weights)
-        focal_plane.az[i] = np.sum(aman.boresight.az*weights)/tot_weight
-        focal_plane.el[i] = np.sum(aman.boresight.el*weights)/tot_weight
+        focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
+        focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
 
         # Chisq
-        focal_plane.reduced_chisq[i] = res.fun/len(res.x)
-
+        focal_plane.reduced_chisq[i] = res.fun / len(res.x)
 
     return focal_plane

@@ -22,7 +22,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
 parser.add_argument("obs_id", help="The obs_id to delete")
 parser.add_argument("ufm", help="The stream_id to delete (ie. ufm_mv20)")
-parser.add_argument("--delete", action="store_true", help="If passed delete from the h5 file rather than nulling it out")
+parser.add_argument(
+    "--delete",
+    action="store_true",
+    help="If passed delete from the h5 file rather than nulling it out",
+)
 args = parser.parse_args()
 
 with open(args.cfg, "r") as f:
@@ -55,14 +59,14 @@ if obs["obs_id"] not in h5_file:
     raise ValueError(f"{obs['obs_id']} not in h5 file!")
 obs_plot_dir = os.path.join(plot_dir, obs["obs_id"])
 dset = f"{obs['obs_id']}/{args.ufm}"
-if dset  not in h5_file:
+if dset not in h5_file:
     raise ValueError(f"{dset} not in h5 file!")
 
 if args.delete:
     del h5_file[dset]
 else:
     # Null out the dataset
-    rset = read_dataset(h5_file, dset) 
+    rset = read_dataset(h5_file, dset)
     arr = rset.asarray()
     rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=arr.dtype))
     write_dataset(rset, h5_file, dset, True)
