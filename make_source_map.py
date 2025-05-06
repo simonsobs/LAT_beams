@@ -15,6 +15,7 @@ from sotodlib.core import metadata
 import sys
 import argparse
 import yaml
+from lat_beams.pointing_model import apply_pointing_model
 plt.rcParams['image.cmap'] = 'RdGy_r'
 
 N_FILES = 4
@@ -184,6 +185,12 @@ for i, obs in enumerate(obslist):
             aman.signal -= np.mean(np.array(aman.signal), axis=-1)[..., None]
             aman.signal *= aman.det_cal.phase_to_pW[..., None]
             orig = aman.copy()
+
+            # Pointing model
+            az, el, roll = apply_pointing_model({}, aman.boresight.az, aman.boresight.el, aman.boresight.roll)
+            aman.boresight.az[:] = az
+            aman.boresight.el[:] = el
+            aman.boresight.roll[:] = roll
 
             # Its map time!
             cuts = RangesMatrix.zeros(aman.signal.shape)
