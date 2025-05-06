@@ -1,14 +1,13 @@
 from so3g.proj import quat
 import numpy as np
 
-# lat_params = {"az_offset":-8.17579902e-07, "el_offset":-2.09855826e-01, "roll_offset":2.57302291e-02, "xi_offset":1.61256976e-01, "eta_offset":-2.09820301e-01}
-lat_params = {
-    "az_offset": 1.49788300e-08,
-    "el_offset": -2.08882807e-01,
-    "roll_offset": 3.40844271e-02,
-    "xi_offset": 1.21677030e-01,
-    "eta_offset": -2.08870814e-01,
-}
+# lat_params = {
+#     "az_offset": 1.49788300e-08,
+#     "el_offset": -2.08882807e-01,
+#     "roll_offset": 3.40844271e-02,
+#     "xi_offset": 1.21677030e-01,
+#     "eta_offset": -2.08870814e-01,
+# }
 lat_params = {
     "az_offset": 4.03704816e-08,
     "el_offset": -1.39564042e-01,
