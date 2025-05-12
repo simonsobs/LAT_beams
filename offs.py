@@ -1,4 +1,6 @@
 # coding: utf-8
+import os
+from sotodlib.core import AxisManager, metadata
 import corner
 from so3g.proj import quat
 from sotodlib.coords import fp_containers as fpc
@@ -184,6 +186,28 @@ params = {
     "mir_eta_offset": res.x[8],
 }
 print(params)
+
+
+# Save
+outdir = "/so/home/saianeesh/data/pointing/lat/pointing_model"
+os.makedirs(outdir, exist_ok=True)
+scheme = metadata.ManifestScheme()
+scheme.add_range_match("obs:timestamp")
+scheme.add_data_field("dataset")
+metadata.ManifestDb(scheme=scheme).to_file(os.path.join(outdir, "db.sqlite"))
+db = metadata.ManifestDb(os.path.join(outdir, "db.sqlite"))
+times = [(0, 1744848000), (1744848000, 2e9)]
+for time in times:
+    aman = AxisManager()
+    aman.wrap("version", "lat_v1")
+    for key, val in params.items():
+        if time[0] == 0:
+            val = 0
+        aman.wrap(key, val)
+    aman.save(os.path.join(outdir, "pointing_model.h5"), f"t{time[0]}")
+    entry = {"obs:timestamp": (time[0], time[1]), "dataset": f"t{time[0]}"}
+    db.add_entry(entry, filename="pointing_model.h5", replace=True)
+
 pmsk = np.ones_like(
     xi0, bool
 )  # (np.abs(xi0-np.mean(xi0))/np.std(xi0) < 5) * (np.abs(eta0-np.mean(eta0))/np.std(eta0) < 5)
