@@ -20,6 +20,7 @@ from so3g import block_moment
 from sotodlib import tod_ops
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.coords import planets as cp
+from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 
@@ -247,10 +248,13 @@ for i, obs in enumerate(obslist):
             fake_aman = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
             fake_aman.signal[:] = 0
 
-            filt = tod_ops.filters.iir_filter(invert=True)
-            aman.signal = tod_ops.filters.fourier_filter(
-                aman, filt, signal_name="signal"
-            )
+            try:
+                aman.signal = tod_ops.filters.fourier_filter(
+                    aman, filt, signal_name="signal"
+                )
+            except ValueError:
+                print("\t\tNo iir params! Adding defaults...")
+                correct_iir_params(aman, True, 5)
             filt = tod_ops.filters.timeconst_filter(
                 timeconst=aman.det_cal.tau_eff, invert=True
             )

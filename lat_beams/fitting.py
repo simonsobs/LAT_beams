@@ -4,12 +4,15 @@ Maybe should add priors
 """
 
 import sys
+from pixell import enmap
 
 import numpy as np
 import so3g
 import sotodlib.coords.planets as planets
 from scipy.ndimage import gaussian_filter1d
-from scipy.optimize import minimize
+from scipy.ndimage import gaussian_filter
+from scipy.optimize import minimize, curve_fit
+from scipy.interpolate import interp1d
 from scipy.stats import binned_statistic
 from so3g.proj import quat
 from sotodlib import core
@@ -23,48 +26,6 @@ from tqdm.auto import tqdm
 from so3g.proj import Ranges
 
 # from . import noise as nn
-
-
-def invsafe(matrix, thresh: float = 1e-14):
-    """
-    Safe SVD based psuedo-inversion of the matrix.
-    This zeros out modes that are too small when inverting.
-    Use with caution in cases where you really care about what the inverse is.
-    """
-    u, s, v = np.linalg.svd(matrix, False)
-    s_inv = np.array(np.where(np.abs(s) < thresh * np.max(s), 0, 1 / s))
-
-    return np.dot(np.transpose(v), np.dot(np.diag(s_inv), np.transpose(u)))
-
-
-def invscale(matrix, thresh: float = 1e-14):
-    """
-    Invert and rescale a matrix by the diagonal.
-    This uses `invsafe` for the inversion.
-
-    """
-    diag = np.diag(matrix)
-    vec = np.array(np.where(diag != 0, 1.0 / np.sqrt(np.abs(diag)), 1e-10))
-    mm = np.outer(vec, vec)
-
-    return mm * invsafe(mm * matrix, thresh)
-
-
-# TODO: ellipticity
-def gauss_grad(x, y, x0, y0, amp, fwhm):
-    dx = x - x0
-    dy = y - y0
-    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
-    var = sigma**2
-    gauss = amp * np.exp(-0.5 * (dx**2 + dy**2) / (var))
-
-    dfdx = -(dx / var) * gauss
-    dfdy = -(dy / var) * gauss
-    dady = gauss / amp
-    dsdy = ((dx**2 + dy**2) / sigma**3) * gauss
-    grad = np.array([dfdx, dfdy, dady, dsdy])
-
-    return gauss, grad
 
 
 def get_xieta_src_centered_new(
@@ -93,7 +54,7 @@ def get_xieta_src_centered_new(
     return xi, eta
 
 
-def gaussian2d(xi, eta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi):
+def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
     Stolen from analyze_bright_ptsrc
 
@@ -114,93 +75,16 @@ def gaussian2d(xi, eta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi):
     sim_data: 1d array of float
         Time stream at sampling points given by xieta
     """
-    xi_rot = xi * np.cos(phi) - eta * np.sin(phi)
-    eta_rot = xi * np.sin(phi) + eta * np.cos(phi)
+    xi, eta = xieta
+    xi_sft = xi - xi0
+    eta_sft = eta - eta0
+    xi_rot = xi_sft * np.cos(phi) - eta_sft * np.sin(phi)
+    eta_rot = xi_sft * np.sin(phi) + eta_sft * np.cos(phi)
     factor = 2 * np.sqrt(2 * np.log(2))
-    xi_coef = -0.5 * (xi_rot - xi0) ** 2 / (fwhm_xi / factor) ** 2
-    eta_coef = -0.5 * (eta_rot - eta0) ** 2 / (fwhm_eta / factor) ** 2
+    xi_coef = -0.5 * (xi_rot) ** 2 / (fwhm_xi / factor) ** 2
+    eta_coef = -0.5 * (eta_rot) ** 2 / (fwhm_eta / factor) ** 2
     sim_data = a * np.exp(xi_coef + eta_coef)
-    return sim_data
-
-
-def objective(aman, pars, filter_tod):
-    npar = len(pars)
-    chisq = np.array(0)
-    grad = np.zeros(npar)
-    curve = np.zeros((npar, npar))
-
-    pred_dat, grad_dat = gauss_grad(aman.xi, aman.eta, *pars)
-
-    aman.resid = aman.signal - pred_dat
-    aman = filter_tod(aman, signal_name="resid")
-    chisq = np.sum(aman.resid * aman.resid_filt)
-    grad_filt = np.zeros_like(grad_dat)
-    for i in range(npar):
-        aman.grad_buf[0] = grad_dat[i]
-        aman = filter_tod(aman, signal_name="grad_buf")
-        grad_filt[i] = aman.grad_buf_filt.copy().ravel()
-    grad_filt = np.reshape(grad_filt, (npar, -1))
-    grad_dat = np.reshape(grad_dat, (npar, -1))
-    resid = aman.resid.ravel()
-    grad = np.dot(grad_filt, np.transpose(resid))
-    curve = np.dot(grad_filt, np.transpose(grad_dat))
-
-    return chisq, grad, curve
-
-
-def prior_pars(pars, priors):
-    prior_l, prior_u = priors
-    at_edge_l = pars <= prior_l
-    at_edge_u = pars >= prior_u
-    pars = np.where(at_edge_l, prior_l, pars)
-    pars = np.where(at_edge_u, prior_u, pars)
-
-    return pars
-
-
-def lm_fitter(aman, filter_tod, init_pars, bounds, max_iters=20, chitol=1e-5):
-    priors = np.array(
-        [[bound[i] for bound in bounds] for i in range(2)]
-    )  # Convert from scipy opt bounds to flat priors
-    pars = prior_pars(np.array(init_pars), priors)
-    chisq, grad, curve = objective(aman, pars, filter_tod)
-    errs = np.inf + np.zeros_like(pars)
-    delta_chisq = np.inf
-    lmd = 0
-    i = 0
-
-    for i in range(max_iters):
-        if delta_chisq < chitol:
-            break
-        curve_use = curve + (lmd * np.diag(np.diag(curve)))
-        # Get the step
-        step = np.dot(invscale(curve_use), grad)
-        new_pars = prior_pars(pars + step, priors)
-        # Get errs
-        errs = np.sqrt(np.diag(invscale(curve_use)))
-        # Now lets get an updated model
-        new_chisq, new_grad, new_curve = objective(aman, new_pars, filter_tod)
-        new_delta_chisq = chisq - new_chisq
-
-        if new_delta_chisq > 0:
-            pars, chisq, grad, curve, delta_chisq = (
-                new_pars,
-                new_chisq,
-                new_grad,
-                new_curve,
-                new_delta_chisq,
-            )
-            if lmd < 0.2:
-                lmd = 0
-            else:
-                lmd /= np.sqrt(2)
-        else:
-            if lmd == 0:
-                lmd = 1
-            else:
-                lmd *= 2
-
-    return pars, errs, i, delta_chisq
+    return sim_data + off
 
 
 def pointing_quickfit(
@@ -270,7 +154,7 @@ def pointing_quickfit(
     def fit_func(x, fit_am):
         xi0, eta0, amp, fwhm, offset = x
         model = (
-            gaussian2d(fit_am.xi, fit_am.eta, amp, xi0, eta0, fwhm, fwhm, 0) + offset
+            gaussian2d((fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0) + offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid")
@@ -393,3 +277,148 @@ def pointing_quickfit(
         focal_plane.reduced_chisq[i] = res.fun / len(res.x)
 
     return focal_plane
+
+
+def radial_profile(data, center):
+    msk = np.isfinite(data.ravel())
+    y, x = np.indices((data.shape))
+    r = np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2)
+    r = r.astype(int)
+
+    tbin = np.bincount(r.ravel()[msk], data.ravel()[msk])
+    nr = np.bincount(r.ravel()[msk])
+    radialprofile = tbin / nr
+    return radialprofile
+
+
+def get_fwhm_radial_bins(r, y, interpolate=False):
+    half_point = np.max(y) * 0.5
+
+    if interpolate:
+        r_diff = r[1] - r[0]
+        interp_func = interp1d(r, y)
+        r_interp = np.arange(np.min(r), np.max(r) - r_diff, r_diff / 100)
+        y_interp = interp_func(r_interp)
+        r, y = (r_interp, y_interp)
+    d = y - half_point
+    inds = np.where(d > 0)[0]
+    fwhm = 2 * (r[inds[-1]])
+    return fwhm
+
+
+def solid_angle(az, el, beam, cent, min_sigma, smooth=0):
+    """Compute the integrated solid angle of a beam map.
+
+    return value is in steradians  (sr)
+    """
+    # convert from arcsec to rad
+    az = np.deg2rad(az / 3600)
+    el = np.deg2rad(el / 3600)
+    norm = beam[cent]
+    if smooth > 0:
+        smoothed = gaussian_filter(beam, sigma=smooth)
+        norm = smoothed[cent]
+    integrand = beam / norm
+    integrand[integrand < np.exp(-0.5 * (min_sigma**2))] = 0
+    # perform the solid angle integral
+    integral = np.trapz(np.trapz(integrand, el, axis=0), az, axis=0)
+    return integral
+
+
+def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=3):
+    """
+    Fit 2d Gaussian to input map.
+    Based on Tommy's code from 2024 F2F tutorial.
+
+    Arguments
+    ---------
+    imap : (ny, nx) enmap
+        Input map.
+    ivar : (ny, nx) enmap
+        Inverse-variance map.
+    pixmap : (2, ny, nx) array
+        X and Y pixel indices for each pixel.
+
+    Returns
+    -------
+    amp : float
+        Amplitude of Gaussian.
+    shift_x : float
+        X shift needed to center the Gaussian in middle of map
+    shift_y : float
+        Y shift needed to center the Gaussian in middle of map
+    fwhm
+        Fitted FWHM of Gaussian
+    """
+    res = imap.wcs.wcs.cdelt[1] * (60 * 60)
+    ny, nx = imap.shape[-2:]
+
+    sigma = np.sqrt(ivar)
+    sigma = np.divide(1, sigma, where=sigma != 0)
+
+    # Set to numerically large value.
+    sigma[ivar == 0] = sigma[~(ivar == 0)].max() * 1e5
+
+    guess = [
+        imap[cent[0], cent[1]],
+        pixmap[0][cent[0], cent[1]],
+        pixmap[1][cent[0], cent[1]],
+        60 / res,
+        60 / res,
+        0,
+        0,
+    ]
+
+    #  amp, x0, y0, fwhm_x, fwhm_y, phi
+    bounds = (
+        [0, 0, 20 / res, 20 / res, 0, 0, -np.inf],
+        [np.inf, nx, ny, 300 / res, 300 / res, 2 * np.pi, np.inf],
+    )
+
+    pixmap = (pixmap[0].ravel().astype(float), pixmap[1].ravel().astype(float))
+
+    try:
+        popt, pcov = curve_fit(
+            gaussian2d,
+            pixmap,
+            imap.ravel(),
+            p0=guess,
+            sigma=sigma.ravel(),
+            bounds=bounds,
+        )
+    except RuntimeError:
+        return None
+    perr = np.sqrt(np.diag(pcov))
+
+    model = gaussian2d(pixmap, *popt).reshape(imap.shape)
+    c = np.unravel_index(np.argmax(model, axis=None), model.shape)
+    if popt[0] < min_sigma * perr[0] or model[c] == 0:
+        return None
+
+    # convert units of pixels to arcsecs
+    popt[1:5] *= res
+    perr[1:5] *= res
+
+    # Get FWHM from data
+    rprof = radial_profile(imap, c[::-1])
+    mprof = radial_profile(model, c[::-1])
+    r = np.linspace(0, len(rprof), len(rprof)) * res
+    data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
+
+    # Get solid angles
+    y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
+    x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
+    data_solid_angle = solid_angle(x, y, imap, c, min_sigma, (data_fwhm / 2.355) / res)
+    model_solid_angle = solid_angle(x, y, model, c, min_sigma)
+
+    return (
+        popt,
+        perr,
+        model,
+        data_fwhm,
+        data_solid_angle,
+        model_solid_angle,
+        r,
+        rprof,
+        mprof,
+    )

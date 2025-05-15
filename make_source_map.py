@@ -1,4 +1,5 @@
 from sotodlib.core import Context
+from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.core.flagman import has_any_cuts
 import h5py
 import glob
@@ -61,6 +62,7 @@ xi_off = cfg.get("xi_off", np.nan)
 eta_off = cfg.get("eta_off", np.nan)
 min_dets = cfg.get("min_dets", 50)
 min_hits = cfg.get("min_hits", 5)
+min_det_secs = cfg.get("min_det_secs", 1000)
 extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
@@ -183,9 +185,13 @@ for i, obs in enumerate(obslist):
             # Load and process the TOD
             aman = ctx.get_obs(meta_band)
             filt = tod_ops.filters.iir_filter(invert=True)
-            aman.signal = tod_ops.filters.fourier_filter(
-                aman, filt, signal_name="signal"
-            )
+            try:
+                aman.signal = tod_ops.filters.fourier_filter(
+                    aman, filt, signal_name="signal"
+                )
+            except ValueError:
+                print("\t\tNo iir params! Adding defaults...")
+                correct_iir_params(aman, True, 5)
             filt = tod_ops.filters.timeconst_filter(
                 timeconst=aman.det_cal.tau_eff, invert=True
             )
@@ -248,9 +254,13 @@ for i, obs in enumerate(obslist):
                 max_pix=4e8,
                 wrap=None,
             )
-            print(
-                f"\t\t{np.sum(source_flags.get_stats()['samples'])*np.mean(np.diff(aman.timestamps))} detector seconds on source"
+            det_secs = np.sum(source_flags.get_stats()["samples"]) * np.mean(
+                np.diff(aman.timestamps)
             )
+            print(f"\t\t{det_secs} detector seconds on source")
+            if det_secs < min_det_secs:
+                print(f"\t\tNot enough time on source. Skipping...")
+                continue
             out = cp.make_map(
                 aman,
                 center_on="mars",
