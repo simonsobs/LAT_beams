@@ -28,7 +28,7 @@ from so3g.proj import Ranges
 # from . import noise as nn
 
 
-def get_xieta_src_centered_new(
+def get_xieta_src_centered(
     ctime,
     az,
     el,
@@ -95,7 +95,6 @@ def pointing_quickfit(
     source="mars",
     bin_priors=False,
     show_tqdm=False,
-    min_sigma=5,
 ):
     """
     Modified from analyze_bright_ptsrc
@@ -128,7 +127,7 @@ def pointing_quickfit(
         "reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")]
     )
 
-    xi, eta = get_xieta_src_centered_new(ts, az, el, roll, source)
+    xi, eta = get_xieta_src_centered(ts, az, el, roll, source)
     aman.wrap("xi", xi, [(0, "samps")])
     aman.wrap("eta", eta, [(0, "samps")])
 
@@ -154,12 +153,11 @@ def pointing_quickfit(
     def fit_func(x, fit_am):
         xi0, eta0, amp, fwhm, offset = x
         model = (
-            gaussian2d((fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0) + offset
+            gaussian2d((fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset)
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid")
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
-        # return (fit_am.resid.ravel().T@fit_am.resid_filt.ravel())#*fit_am.wn
 
     it = aman.dets.vals
     if show_tqdm:
@@ -245,9 +243,6 @@ def pointing_quickfit(
         if not res.success:
             focal_plane.amp[i] = -np.inf
 
-        # if focal_plane.amp[i] > 0 and (focal_plane.amp[i] < min_sigma*np.std(fit_am.resid_filt)):
-        #     focal_plane.amp[i] *= -1
-
         focal_plane.dist[i] = np.sqrt(
             (focal_plane.xi[i] - xi0) ** 2 + (focal_plane.eta[i] - eta0) ** 2
         )
@@ -274,7 +269,7 @@ def pointing_quickfit(
         focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
 
         # Chisq
-        focal_plane.reduced_chisq[i] = res.fun / len(res.x)
+        focal_plane.reduced_chisq[i] = res.fun / (fit_am.samps.count - len(res.x))
 
     return focal_plane
 
