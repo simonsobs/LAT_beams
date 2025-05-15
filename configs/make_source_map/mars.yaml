@@ -1,0 +1,15 @@
+source: "mars"
+per_obs_point: False
+min_samps: 20000
+min_dets: 50
+context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc.yaml'
+# context: /so/home/saianeesh/data/beams/lat/context.yaml
+start_time: 1744848000 # Everything aligned
+stop_time: 1746187200 # Corotator moved
+n_med: 3
+mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - .5 
