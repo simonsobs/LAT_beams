@@ -1,14 +1,14 @@
 # coding: utf-8
+import datetime as dt
 import os
-from sotodlib.core import AxisManager, metadata
+
 import corner
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import minimize
 from so3g.proj import quat
 from sotodlib.coords import fp_containers as fpc
-from sotodlib.core import Context
-import numpy as np
-import matplotlib.pyplot as plt
-import datetime as dt
-from scipy.optimize import minimize
+from sotodlib.core import AxisManager, Context, metadata
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler("color", plt.cm.Set3.colors)
 ctx = Context("/so/metadata/lat/contexts/smurf_detcal.yaml")

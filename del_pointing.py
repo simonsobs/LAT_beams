@@ -12,8 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from sotodlib.core import AxisManager, Context, metadata
-from sotodlib.io.metadata import write_dataset, read_dataset
-
+from sotodlib.io.metadata import read_dataset, write_dataset
 
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin

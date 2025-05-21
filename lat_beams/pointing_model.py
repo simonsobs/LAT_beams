@@ -1,5 +1,5 @@
-from so3g.proj import quat
 import numpy as np
+from so3g.proj import quat
 
 # lat_params = {
 #     "az_offset": 1.49788300e-08,

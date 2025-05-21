@@ -1,21 +1,21 @@
-from sotodlib.core import Context
-from sotodlib.obs_ops.utils import correct_iir_params
-from sotodlib.core.flagman import has_any_cuts
-import h5py
+import argparse
 import glob
+import os
+import sys
+
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-from sotodlib import tod_ops
-from so3g.proj import RangesMatrix
-from sotodlib.coords import planets as cp
-from scipy.ndimage import gaussian_filter
-from matplotlib.colors import LogNorm
-from so3g.proj import RangesMatrix
-from sotodlib.core import metadata
-import sys
-import argparse
 import yaml
+from matplotlib.colors import LogNorm
+from scipy.ndimage import gaussian_filter
+from so3g.proj import RangesMatrix
+from sotodlib import tod_ops
+from sotodlib.coords import planets as cp
+from sotodlib.core import Context, metadata
+from sotodlib.core.flagman import has_any_cuts
+from sotodlib.obs_ops.utils import correct_iir_params
+
 from lat_beams.pointing_model import apply_pointing_model
 
 plt.rcParams["image.cmap"] = "RdGy_r"
@@ -192,6 +192,10 @@ for i, obs in enumerate(obslist):
             except ValueError:
                 print("\t\tNo iir params! Adding defaults...")
                 correct_iir_params(aman, True, 5)
+                filt = tod_ops.filters.iir_filter(invert=True)
+                aman.signal = tod_ops.filters.fourier_filter(
+                    aman, filt, signal_name="signal"
+                )
             filt = tod_ops.filters.timeconst_filter(
                 timeconst=aman.det_cal.tau_eff, invert=True
             )

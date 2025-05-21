@@ -4,26 +4,31 @@ Maybe should add priors
 """
 
 import sys
-from pixell import enmap
+import warnings
+from copy import deepcopy
 
 import numpy as np
 import so3g
 import sotodlib.coords.planets as planets
-from scipy.ndimage import gaussian_filter1d
-from scipy.ndimage import gaussian_filter
-from scipy.optimize import minimize, curve_fit
+from astropy.convolution import (
+    Gaussian1DKernel,
+    Gaussian2DKernel,
+    convolve,
+    convolve_fft,
+)
 from scipy.interpolate import interp1d
-from scipy.stats import binned_statistic
-from so3g.proj import quat
+from scipy.ndimage import gaussian_filter, gaussian_filter1d
+from scipy.optimize import curve_fit, minimize
+from scipy.stats import binned_statistic, binned_statistic_2d
+from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.tod_ops.filters import (
     fourier_filter,
     high_pass_sine2,
-    low_pass_sine2,
     identity_filter,
+    low_pass_sine2,
 )
 from tqdm.auto import tqdm
-from so3g.proj import Ranges
 
 # from . import noise as nn
 
@@ -54,6 +59,7 @@ def get_xieta_src_centered(
     return xi, eta
 
 
+# TOOO: Add gradient function
 def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
     Stolen from analyze_bright_ptsrc
@@ -95,13 +101,23 @@ def pointing_quickfit(
     source="mars",
     bin_priors=False,
     show_tqdm=False,
+    multistep=True,
+    n_err=5,
+    pos_priors=None,
+    bin_2d=False,
 ):
     """
     Modified from analyze_bright_ptsrc
     """
+    if pos_priors is not None and len(pos_priors) != aman.dets.count:
+        raise ValueError(
+            f"{len(pos_priors)} positional priors given for {aman.dets.count} detectors"
+        )
+    if pos_priors is None:
+        pos_priors = np.ones((aman.dets.count, 2)) * np.nan
     sigma = fwhm / 2.3548
     if max_rad is None:
-        max_rad = 5 * fwhm
+        max_rad = 20 * fwhm
 
     ts = aman.timestamps
     az = aman.boresight.az
@@ -152,8 +168,8 @@ def pointing_quickfit(
 
     def fit_func(x, fit_am):
         xi0, eta0, amp, fwhm, offset = x
-        model = (
-            gaussian2d((fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset)
+        model = gaussian2d(
+            (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid")
@@ -166,6 +182,7 @@ def pointing_quickfit(
         if show_tqdm:
             it.refresh()
             sys.stderr.flush()
+            sys.stdout.flush()
         fit_am = aman.restrict("dets", [det], in_place=False)
         fit_am.wrap("resid", fit_am.signal.copy(), [(0, "dets"), (1, "samps")])
         fit_am.wrap(
@@ -182,33 +199,58 @@ def pointing_quickfit(
         xi_max = xi[max_idx]
         eta_max = eta[max_idx]
         xi0, eta0 = xi_max, eta_max
+        _bin_priors = bin_priors
+        if np.all(np.isfinite(pos_priors[i])):
+            xi0, eta0 = pos_priors[i]
+            _bin_priors = False
+
         # Bin in xi and eta
-        # Should I do this in 2d as a crappy map?
-        if bin_priors:
+        if _bin_priors and not bin_2d:
             xi_binned, edges, _ = binned_statistic(
-                xi, fit_am.resid_filt[0], bins=int(np.ptp(xi) / (0.1 * fwhm))
+                xi, fit_am.resid_filt[0], bins=int(np.ptp(xi) / (1 * fwhm))
             )
             xi_cents = 0.5 * (edges[:-1] + edges[1:])
-            xi_binned = gaussian_filter1d(
-                xi_binned, (fwhm / 2.3548) / np.mean(np.diff(edges))
+            xi_binned = convolve(
+                xi_binned, Gaussian1DKernel((fwhm / 2.3548) / np.mean(np.diff(edges)))
             )
             if not np.all(np.isnan(xi_binned)):
                 xi0 = xi_cents[np.nanargmax(xi_binned)]
             eta_binned, edges, _ = binned_statistic(
-                eta, fit_am.resid_filt[0], bins=int(np.ptp(eta) / (0.1 * fwhm))
+                eta, fit_am.resid_filt[0], bins=int(np.ptp(eta) / (1 * fwhm))
             )
             eta_cents = 0.5 * (edges[:-1] + edges[1:])
-            eta_binned = gaussian_filter1d(
-                eta_binned, (fwhm / 2.3548) / np.mean(np.diff(edges))
+            eta_binned = convolve(
+                eta_binned, Gaussian1DKernel((fwhm / 2.3548) / np.mean(np.diff(edges)))
             )
             if not np.all(np.isnan(eta_binned)):
                 eta0 = eta_cents[np.nanargmax(eta_binned)]
+        elif _bin_priors and bin_2d:
+            binned, x_edges, y_edges, _ = binned_statistic_2d(
+                xi,
+                eta,
+                fit_am.resid_filt[0],
+                bins=(int(np.ptp(xi) / (1 * fwhm)), int(np.ptp(eta) / (1 * fwhm))),
+            )
+            warnings.filterwarnings("ignore", category=UserWarning, append=True)
+            binned = convolve_fft(
+                binned,
+                Gaussian2DKernel(
+                    (fwhm / 2.3548) / np.mean(np.diff(x_edges)),
+                    (fwhm / 2.3548) / np.mean(np.diff(y_edges)),
+                ),
+            )
+            xi_cents = 0.5 * (x_edges[:-1] + x_edges[1:])
+            eta_cents = 0.5 * (y_edges[:-1] + y_edges[1:])
+            if not np.all(np.isnan(binned)):
+                max_idx = np.unravel_index(np.nanargmax(binned), binned.shape)
+                xi0 = xi_cents[max_idx[0]]
+                eta0 = eta_cents[max_idx[1]]
         ptp = np.ptp(fit_am.signal)
         amp = ptp * 3
         msk_samps = np.where((xi - xi0) ** 2 + (eta - eta0) ** 2 < max_rad**2)[
             0
         ].astype(float)
-        if len(msk_samps) < 10 and bin_priors:
+        if len(msk_samps) < 10 and _bin_priors:
             xi0, eta0 = xi_max, eta_max
             msk_samps = np.where((xi - xi0) ** 2 + (eta - eta0) ** 2 < max_rad**2)[
                 0
@@ -226,14 +268,40 @@ def pointing_quickfit(
         bounds = [
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
-            (-1, 10 * amp),
-            (fwhm / 4, 4 * fwhm),
+            (-1, np.inf),
+            (fwhm * 0.9, 1.1 * fwhm),
             (-ptp, ptp),
         ]
 
-        res = minimize(
-            fit_func, init_pars, bounds=bounds, args=(fit_am,), method="Nelder-Mead"
-        )
+        if multistep:
+            _bounds = deepcopy(bounds)
+            _bounds[3] = (fwhm, fwhm)
+            _bounds[0] = (np.min(xi), np.max(xi))
+            _bounds[1] = (np.min(eta), np.max(eta))
+            res = minimize(
+                fit_func, init_pars, bounds=_bounds, args=(fit_am,), method="L-BFGS-B"
+            )
+            init_pars = res.x
+            bounds[0] = (res.x[0] - max_rad, res.x[0] + max_rad)
+            bounds[1] = (res.x[1] - max_rad, res.x[1] + max_rad)
+            # if res.success:
+            #     _bounds = deepcopy(bounds)
+            #     _bounds[0] = (res.x[0]-1e-9, res.x[0]+1e-9)
+            #     _bounds[1] = (res.x[1]-1e-9, res.x[1]+1e-9)
+            #     res = minimize(
+            #         fit_func, res.x, bounds=_bounds, args=(fit_am,), method='L-BFGS-B'
+            #     )
+            # if res.success:
+            #     ftol = 2.220446049250313e-09 # default
+            #     errs = [np.sqrt(max(1, abs(res.fun)) * ftol * res.hess_inv(eye)[i]) for i, eye in enumerate(np.eye(len(res.x)))]
+            #     _bounds = [(p-n_err*e, p+n_err*e) for p, e in zip(res.x, errs)]
+            #     res = minimize(
+            #         fit_func, res.x, bounds=_bounds, args=(fit_am,), method='L-BFGS-B'
+            #     )
+        else:
+            res = minimize(
+                fit_func, init_pars, bounds=bounds, args=(fit_am,), method="Nelder-Mead"
+            )
 
         focal_plane.xi[i] = res.x[0]
         focal_plane.eta[i] = res.x[1]
@@ -251,8 +319,8 @@ def pointing_quickfit(
         delta_eta = eta - focal_plane.eta[i]
 
         # Lets calculate hits
-        xi_msk = np.abs(delta_xi) <= 3 * focal_plane.fwhm[i] / 2.3548
-        eta_msk = np.abs(delta_eta) <= 3 * focal_plane.fwhm[i] / 2.3548
+        xi_msk = np.abs(delta_xi) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
+        eta_msk = np.abs(delta_eta) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
         hits = Ranges.from_mask(xi_msk * eta_msk)
         focal_plane.hits[i] = len(hits.ranges())
 
@@ -265,8 +333,11 @@ def pointing_quickfit(
         )
         weights = xi_weights * eta_weights
         tot_weight = np.sum(weights)
-        focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
-        focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
+        if tot_weight == 0:
+            focal_plane.amp[i] = -np.inf
+        else:
+            focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
+            focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
 
         # Chisq
         focal_plane.reduced_chisq[i] = res.fun / (fit_am.samps.count - len(res.x))

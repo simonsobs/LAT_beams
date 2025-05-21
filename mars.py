@@ -1,15 +1,16 @@
-from sotodlib.core import Context, AxisManager
-from lat_beams import beam as lb
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-from sotodlib import tod_ops
-from so3g.proj import RangesMatrix
-from sotodlib.coords import planets as cp
-from scipy.ndimage import gaussian_filter
 from matplotlib.colors import SymLogNorm
-from lat_beams.fitting import pointing_quickfit
+from scipy.ndimage import gaussian_filter
 from so3g.proj import RangesMatrix
+from sotodlib import tod_ops
+from sotodlib.coords import planets as cp
+from sotodlib.core import AxisManager, Context
+
+from lat_beams import beam as lb
+from lat_beams.fitting import pointing_quickfit
 
 plt.rcParams["image.cmap"] = "PRGn"
 

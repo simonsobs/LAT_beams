@@ -5,24 +5,22 @@ Still somewhat LAT specific but could be genralized if desired.
 
 import argparse
 import os
-import sys
-from functools import reduce
-from itertools import groupby
 import sqlite3
+import sys
 import time
+from functools import reduce
 
 import h5py
 import matplotlib.pyplot as plt
 import mpi4py.rc
 import numpy as np
 import yaml
-from so3g import block_moment
 from sotodlib import tod_ops
-from sotodlib.core.flagman import has_any_cuts
 from sotodlib.coords import planets as cp
-from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.core import AxisManager, Context, metadata
+from sotodlib.core.flagman import has_any_cuts
 from sotodlib.io.metadata import write_dataset
+from sotodlib.obs_ops.utils import correct_iir_params
 
 from lat_beams import beam as lb
 from lat_beams.fitting import pointing_quickfit
@@ -99,7 +97,7 @@ min_samps = cfg.get("min_samps", 1000) / ds
 block_size = cfg.get("block_size", 5000) // ds
 min_dets = cfg.get("min_dets", 30)
 trim_samps = cfg.get("time_samps", 200) // ds
-min_hits = cfg.get("min_hits", 1)
+min_hits = cfg.get("min_hits", 0)
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -249,12 +247,17 @@ for i, obs in enumerate(obslist):
             fake_aman.signal[:] = 0
 
             try:
+                filt = tod_ops.filters.iir_filter(invert=True)
                 aman.signal = tod_ops.filters.fourier_filter(
                     aman, filt, signal_name="signal"
                 )
             except ValueError:
                 print("\t\tNo iir params! Adding defaults...")
-                correct_iir_params(aman, True, 5)
+                correct_iir_params(aman, True)
+                filt = tod_ops.filters.iir_filter(invert=True)
+                aman.signal = tod_ops.filters.fourier_filter(
+                    aman, filt, signal_name="signal"
+                )
             filt = tod_ops.filters.timeconst_filter(
                 timeconst=aman.det_cal.tau_eff, invert=True
             )
@@ -263,7 +266,7 @@ for i, obs in enumerate(obslist):
             )
 
             tod_ops.detrend_tod(aman, "median", in_place=True)
-            tf = tod_ops.flags.get_trending_flags(aman, max_trend=3, t_piece=30)
+            tf = tod_ops.flags.get_trending_flags(aman, max_trend=5, t_piece=30)
             tdets = has_any_cuts(tf)
             aman.restrict("dets", ~tdets)
 
@@ -455,8 +458,8 @@ for i, obs in enumerate(obslist):
             # Do some final cuts to kill dets that didn't see the source
             ptp = np.ptp(sig_filt, axis=-1)
             std = np.std(sig_filt, axis=-1)
-            thresh = 0.1 * np.percentile(ptp, 90)
-            thresh = comm.allreduce(thresh, op=MPI.MAX)
+            ptp_all = np.hstack(comm.allgather(ptp))
+            thresh = 0.1 * np.percentile(ptp_all, 90)
             msk = fake_fit + ((ptp > thresh) * (ptp > n_std * std) * (std > 0))
             aman = aman.restrict("dets", msk)
             sig_filt = sig_filt[msk]
@@ -505,12 +508,13 @@ for i, obs in enumerate(obslist):
             aman.signal *= aman.det_cal.phase_to_pW[..., None]
             focal_plane = pointing_quickfit(
                 aman,
-                (4, None),
+                (4, 30),
                 fwhm=np.deg2rad(fwhm[band_name] / 60.0),
                 source=source_name,
                 bin_priors=True,
                 show_tqdm=(myrank == max_det_rank),
-                min_sigma=n_std,
+                multistep=False,
+                bin_2d=True,
             )
 
             # Convert to rset

@@ -1,22 +1,22 @@
-from pixell import enmap
-from sotodlib.core import Context, AxisManager
-import h5py
+import argparse
 import glob
+import os
+import sys
+
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-from scipy.ndimage import gaussian_filter
-from matplotlib.colors import LogNorm
-from so3g.proj import RangesMatrix
-from sotodlib.core import metadata
-import sys
-import argparse
 import yaml
-from lat_beams.pointing_model import apply_pointing_model
-from lat_beams.fitting import fit_gauss_beam
-from mpi4py import MPI
-import h5py
 from astropy import units as u
+from matplotlib.colors import LogNorm
+from mpi4py import MPI
+from pixell import enmap
+from scipy.ndimage import gaussian_filter
+from so3g.proj import RangesMatrix
+from sotodlib.core import AxisManager, Context, metadata
+
+from lat_beams.fitting import fit_gauss_beam
+from lat_beams.pointing_model import apply_pointing_model
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 

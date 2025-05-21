@@ -1,11 +1,12 @@
 # coding: utf-8
 import datetime as dt
 import os
-import h5py
-from sotodlib.core import AxisManager
-import numpy as np
-import matplotlib.pyplot as plt
+
 import astropy.units as u
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from sotodlib.core import AxisManager
 
 nominal_fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 fpath = "/so/home/saianeesh/data/beams/lat/source_map_fits/mars/beam_pars.h5"
@@ -148,6 +149,7 @@ for stream_id in np.unique(stream_ids[msk]):
         ]
 
         print(f"{stream_id} {band}: {np.sum(bmsk)} good maps")
+        print(obs_ids[bmsk])
         plt.hist(fwhm_x[bmsk], alpha=0.5, bins=20, label="FWHM_x")
         plt.hist(fwhm_y[bmsk], alpha=0.5, bins=20, label="FWHM_y")
         plt.hist(fwhm_data[bmsk], alpha=0.5, bins=20, label="FWHM Data")
