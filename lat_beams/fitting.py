@@ -16,12 +16,14 @@ from astropy.convolution import (
     convolve,
     convolve_fft,
 )
+from numpy.typing import NDArray
 from scipy.interpolate import interp1d
-from scipy.ndimage import gaussian_filter, gaussian_filter1d
+from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit, minimize
 from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
+from sotodlib.core.context import AxisManager
 from sotodlib.tod_ops.filters import (
     fourier_filter,
     high_pass_sine2,
@@ -29,24 +31,42 @@ from sotodlib.tod_ops.filters import (
     low_pass_sine2,
 )
 from tqdm.auto import tqdm
-
-# from . import noise as nn
+from typing_extensions import Optional, cast
 
 
 def get_xieta_src_centered(
-    ctime,
-    az,
-    el,
-    roll,
-    sso_name,
-):
+    ctime: NDArray[np.floating],
+    az: NDArray[np.floating],
+    el: NDArray[np.floating],
+    roll: NDArray[np.floating],
+    sso_name: str,
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """
-    Modified from analyze_bright_ptsrc
+    Get xieta in source centered coordinates.
+    Here we get the source trajectory at the center of the ctime array,
+    for a slow source this is a fairly good approximation but you may get bad results
+    if you are spanning a very large ctime or a ctime that spans both sides of a transit.
+
+    Arguments:
+
+        ctime: Array of times to get the source at. See docstring for caveat on this.
+
+        az: Array of azimuth angles in radians to get the source at. Should be the same size as ctime.
+
+        el: Array of elevation angles in radians to get the source at. Should be the same size as ctime.
+
+        roll: Array of roll angles in radians to get the source at. Should be the same size as ctime.
+
+    Returns:
+
+        xi: The xi angles centered on the source in radians.
+
+        eta: The eta angles centered on the source in radians.
     """
     csl = so3g.proj.CelestialSightLine.az_el(
         ctime, az, el, roll=roll, weather="typical"
     )
-    q_bore = csl.Q
+    q_bore = csl.Q  # type: ignore
 
     # planet position
     planet = planets.SlowSource.for_named_source(sso_name, ctime[int(len(ctime) / 2)])
@@ -93,37 +113,65 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     return sim_data + off
 
 
-def pointing_quickfit(
-    aman,
-    bandpass_range=(None, None),
-    fwhm=np.deg2rad(0.5),
-    max_rad=None,
-    source="mars",
-    bin_priors=False,
-    show_tqdm=False,
-    multistep=True,
-    n_err=5,
-    pos_priors=None,
-    bin_2d=False,
-):
-    """
-    Modified from analyze_bright_ptsrc
-    """
-    if pos_priors is not None and len(pos_priors) != aman.dets.count:
-        raise ValueError(
-            f"{len(pos_priors)} positional priors given for {aman.dets.count} detectors"
+def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
+    factor = 2 * np.sqrt(2 * np.log(2))
+    xi, eta = xieta
+    gauss = gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
+    xi_sft = xi - xi0
+    eta_sft = eta - eta0
+
+    da = gauss - off
+    dxi0 = (
+        -1
+        * (factor**2)
+        * da
+        * (
+            (-1 * eta_sft) * (fwhm_xi**2 - fwhm_eta**2) * np.sin(phi) * np.cos(phi)
+            + (-1 * xi_sft)
+            * ((fwhm_xi * np.sin(phi)) ** 2 + (fwhm_eta * np.cos(phi)) ** 2)
         )
-    if pos_priors is None:
-        pos_priors = np.ones((aman.dets.count, 2)) * np.nan
-    sigma = fwhm / 2.3548
-    if max_rad is None:
-        max_rad = 20 * fwhm
+        / ((fwhm_xi * fwhm_eta) ** 2)
+    )
+    deta0 = (
+        -1
+        * (factor**2)
+        * da
+        * (
+            (-1 * xi_sft) * (fwhm_xi**2 - fwhm_eta**2) * np.sin(phi) * np.cos(phi)
+            + (-1 * eta_sft)
+            * ((fwhm_xi * np.cos(phi)) ** 2 + (fwhm_eta * np.sin(phi)) ** 2)
+        )
+        / ((fwhm_xi * fwhm_eta) ** 2)
+    )
+    dfwhm_xi = (
+        (factor**2)
+        * da
+        * (((-1 * xi_sft) * np.cos(phi) - (-1 * eta_sft) * np.sin(phi)) ** 2)
+        / (fwhm_xi**3)
+    )
+    dfwhm_eta = (
+        (factor**2)
+        * da
+        * (((-1 * xi_sft) * np.sin(phi) + (-1 * eta_sft) * np.cos(phi)) ** 2)
+        / (fwhm_eta**3)
+    )
+    dphi = (
+        -1
+        * (factor**2)
+        * da
+        * (fwhm_xi**2 + fwhm_eta**2)
+        * ((xi_sft) * np.sin(phi) - ((-1 * eta_sft) * np.cos(phi)))
+        * ((-1 * xi_sft) * np.cos(phi) + (eta_sft) * np.sin(phi))
+        / ((fwhm_xi * fwhm_eta) ** 2)
+    )
+    doff = np.ones_like(xi)
 
-    ts = aman.timestamps
-    az = aman.boresight.az
-    el = aman.boresight.el
-    roll = aman.boresight.roll
+    dgauss = np.vstack([da, dxi0, deta0, dfwhm_xi, dfwhm_eta, dphi, doff])
 
+    return gauss, dgauss
+
+
+def _empty_fp(aman: AxisManager) -> AxisManager:
     focal_plane = core.AxisManager(aman.dets)
     focal_plane.wrap("xi", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap("eta", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
@@ -136,14 +184,157 @@ def pointing_quickfit(
     focal_plane.wrap("el", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
     focal_plane.wrap(
         "roll",
-        np.zeros(len(aman.dets.vals), dtype=float) + np.mean(roll),
+        np.zeros(len(aman.dets.vals), dtype=float) + np.mean(aman.boresight.roll),
         [(0, "dets")],
     )
     focal_plane.wrap(
         "reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")]
     )
 
-    xi, eta = get_xieta_src_centered(ts, az, el, roll, source)
+    return focal_plane
+
+
+def _bin_priors_1d(
+    fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
+) -> tuple[float, float]:
+    xi = np.array(fit_am.xi)
+    eta = np.array(fit_am.eta)
+    xi_binned, edges, _ = binned_statistic(
+        xi, fit_am.resid_filt[0], bins=int(np.ptp(xi) / (1 * fwhm))
+    )
+    xi_cents = 0.5 * (edges[:-1] + edges[1:])
+    xi_binned = convolve(
+        xi_binned, Gaussian1DKernel((fwhm / 2.3548) / np.mean(np.diff(edges)))
+    )
+    if not np.all(np.isnan(xi_binned)):
+        xi0 = xi_cents[np.nanargmax(xi_binned)]
+    eta_binned, edges, _ = binned_statistic(
+        eta, fit_am.resid_filt[0], bins=int(np.ptp(eta) / (1 * fwhm))
+    )
+    eta_cents = 0.5 * (edges[:-1] + edges[1:])
+    eta_binned = convolve(
+        eta_binned, Gaussian1DKernel((fwhm / 2.3548) / np.mean(np.diff(edges)))
+    )
+    if not np.all(np.isnan(eta_binned)):
+        eta0 = eta_cents[np.nanargmax(eta_binned)]
+
+    return xi0, eta0
+
+
+def _bin_priors_2d(
+    fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
+) -> tuple[float, float]:
+    xi = np.array(fit_am.xi)
+    eta = np.array(fit_am.eta)
+    binned, x_edges, y_edges, _ = binned_statistic_2d(
+        xi,
+        eta,
+        fit_am.resid_filt[0],
+        bins=(int(np.ptp(xi) / (1 * fwhm)), int(np.ptp(eta) / (1 * fwhm))),  # type: ignore
+    )
+    warnings.filterwarnings("ignore", category=UserWarning, append=True)
+    binned = convolve_fft(
+        binned,
+        Gaussian2DKernel(
+            (fwhm / 2.3548) / np.mean(np.diff(x_edges)),
+            (fwhm / 2.3548) / np.mean(np.diff(y_edges)),
+        ),
+    )
+    xi_cents = 0.5 * (x_edges[:-1] + x_edges[1:])
+    eta_cents = 0.5 * (y_edges[:-1] + y_edges[1:])
+    if not np.all(np.isnan(binned)):
+        max_idx = np.unravel_index(np.nanargmax(binned), binned.shape)
+        xi0 = xi_cents[max_idx[0]]
+        eta0 = eta_cents[max_idx[1]]
+    return xi0, eta0
+
+
+def fit_tod_pointing(
+    aman: AxisManager,
+    bandpass_range: tuple[Optional[float], Optional[float]] = (None, None),
+    fwhm: float = np.deg2rad(0.5),
+    max_rad: Optional[float] = None,
+    source: str = "mars",
+    bin_priors: bool = True,
+    bin_2d: bool = True,
+    multistep: bool = False,
+    n_err: float = 5,
+    pos_priors: Optional[NDArray[np.floating]] = None,
+    show_tqdm: bool = False,
+) -> AxisManager:
+    """
+    Fit detector offsets from a TOD of a source observation.
+
+    Arguments:
+
+        aman: AxisManager containing at minimum a source TOD and boresight TOD.
+              For best performance please fft trim ahead of time.
+
+        bandpass_range: A tuple specifying the (low, high) cuttoffs for a bandpass filter in Hz.
+                        Set a cutoff to None to not use it.
+
+        max_rad: The maximum radius around the initial guess of the detector offset to use.
+                 This is in radians, if None then 20  times the input fwhm is used.
+
+        source: The name of the source to fit.
+
+        bin_priors: If True try to guess the detector offsets by binning and smoothing the TODs.
+                    If a positional prior is provided for a given detector it is used instead of this.
+
+        bin_2d: If True the binned prior is done by binning the TOD into a naive map.
+                If False xi and eta are binned seperately.
+
+        multistep: If True fit using a multiple rounds of the L-BFGS-B optimizer.
+                   In the first round we hold the fwhm fixed.
+                   In the second the detector offsets are held fixed based on the first round and fwhm is fit.
+                   In the third all parameters are fit and the bounds are set based on the errors from the previous rounds.
+                   If False fit with a single round of Nelder-Mead.
+
+        n_err: How many times to errors to use for bounds in multistep fitting.
+
+        pos_priors: Positional priors. Pass None to not use.
+                    If using pass in a (ndets, 2) array where each row is the (xi, eta) to
+                    start the fit for that detector at. To disable for only some detectors set
+                    the row to (nan, nan).
+
+        show_tqdm: If True show a progress bar.
+
+    Returns:
+
+        focal_plane: An AxisManager with the same detectors as the input aman.
+                     This contains the following fields:
+
+                     * xi (in radians)
+                     * eta (in radians)
+                     * gamma (all 0 placeholder)
+                     * fwhm (in radians)
+                     * amp (in units of aman.signal)
+                     * dist (in radians), distance between fit offset and the initial guess
+                     * az (in radians), the azimuth at the detector crossing
+                     * el (in radians), the elevation at the detector crossing
+                     * roll (in radians), the roll at the detector crossing
+                     * reduced_chisq
+    """
+    if pos_priors is not None and len(pos_priors) != aman.dets.count:
+        raise ValueError(
+            f"{len(pos_priors)} positional priors given for {aman.dets.count} detectors"
+        )
+    if pos_priors is None:
+        pos_priors = np.ones((cast(int, aman.dets.count), 2)) * np.nan
+    sigma = fwhm / 2.3548
+    if max_rad is None:
+        max_rad = 20 * fwhm
+
+    focal_plane = _empty_fp(aman)
+    mean_el = np.mean(np.array(aman.boresight.el))
+
+    xi, eta = get_xieta_src_centered(
+        np.array(aman.timestamps),
+        np.array(aman.boresight.az),
+        np.array(aman.boresight.el),
+        np.array(aman.boresight.roll),
+        source,
+    )
     aman.wrap("xi", xi, [(0, "samps")])
     aman.wrap("eta", eta, [(0, "samps")])
 
@@ -158,7 +349,7 @@ def pointing_quickfit(
         am[sig_filt_name] = am[signal_name].copy()
         filt_kw = dict(
             detrend="linear",
-            resize="zero_pad",
+            resize=None,
             axis_name="samps",
             signal_name=sig_filt_name,
             time_name="timestamps",
@@ -175,30 +366,28 @@ def pointing_quickfit(
         fit_am = filter_tod(fit_am, signal_name="resid")
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
 
-    it = aman.dets.vals
+    it = np.array(aman.dets.vals)
     if show_tqdm:
-        it = tqdm(aman.dets.vals)
+        it = tqdm(np.array(aman.dets.vals))
     for i, det in enumerate(it):
         if show_tqdm:
-            it.refresh()
             sys.stderr.flush()
-            sys.stdout.flush()
         fit_am = aman.restrict("dets", [det], in_place=False)
         fit_am.wrap("resid", fit_am.signal.copy(), [(0, "dets"), (1, "samps")])
         fit_am.wrap(
             "resid_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
         )
         fit_am = filter_tod(fit_am)
-        std = np.std(fit_am.resid_filt)
+        std = np.std(np.array(fit_am.resid_filt))
         if std == 0:
             focal_plane.amp[i] = -np.inf
             continue
-        fit_am.wrap("wn", 1.0 / np.std(fit_am.resid_filt).item() ** 2)
+        fit_am.wrap("wn", 1.0 / std.item() ** 2)
 
-        max_idx = np.argmax(fit_am.resid_filt[0])
+        max_idx = np.argmax(np.array(fit_am.resid_filt[0]))
         xi_max = xi[max_idx]
         eta_max = eta[max_idx]
-        xi0, eta0 = xi_max, eta_max
+        xi0, eta0 = float(xi_max), float(eta_max)
         _bin_priors = bin_priors
         if np.all(np.isfinite(pos_priors[i])):
             xi0, eta0 = pos_priors[i]
@@ -206,47 +395,9 @@ def pointing_quickfit(
 
         # Bin in xi and eta
         if _bin_priors and not bin_2d:
-            xi_binned, edges, _ = binned_statistic(
-                xi, fit_am.resid_filt[0], bins=int(np.ptp(xi) / (1 * fwhm))
-            )
-            xi_cents = 0.5 * (edges[:-1] + edges[1:])
-            xi_binned = convolve(
-                xi_binned, Gaussian1DKernel((fwhm / 2.3548) / np.mean(np.diff(edges)))
-            )
-            if not np.all(np.isnan(xi_binned)):
-                xi0 = xi_cents[np.nanargmax(xi_binned)]
-            eta_binned, edges, _ = binned_statistic(
-                eta, fit_am.resid_filt[0], bins=int(np.ptp(eta) / (1 * fwhm))
-            )
-            eta_cents = 0.5 * (edges[:-1] + edges[1:])
-            eta_binned = convolve(
-                eta_binned, Gaussian1DKernel((fwhm / 2.3548) / np.mean(np.diff(edges)))
-            )
-            if not np.all(np.isnan(eta_binned)):
-                eta0 = eta_cents[np.nanargmax(eta_binned)]
+            xi0, eta0 = _bin_priors_1d(fit_am, xi0, eta0, fwhm)
         elif _bin_priors and bin_2d:
-            binned, x_edges, y_edges, _ = binned_statistic_2d(
-                xi,
-                eta,
-                fit_am.resid_filt[0],
-                bins=(int(np.ptp(xi) / (1 * fwhm)), int(np.ptp(eta) / (1 * fwhm))),
-            )
-            warnings.filterwarnings("ignore", category=UserWarning, append=True)
-            binned = convolve_fft(
-                binned,
-                Gaussian2DKernel(
-                    (fwhm / 2.3548) / np.mean(np.diff(x_edges)),
-                    (fwhm / 2.3548) / np.mean(np.diff(y_edges)),
-                ),
-            )
-            xi_cents = 0.5 * (x_edges[:-1] + x_edges[1:])
-            eta_cents = 0.5 * (y_edges[:-1] + y_edges[1:])
-            if not np.all(np.isnan(binned)):
-                max_idx = np.unravel_index(np.nanargmax(binned), binned.shape)
-                xi0 = xi_cents[max_idx[0]]
-                eta0 = eta_cents[max_idx[1]]
-        ptp = np.ptp(fit_am.signal)
-        amp = ptp * 3
+            xi0, eta0 = _bin_priors_2d(fit_am, xi0, eta0, fwhm)
         msk_samps = np.where((xi - xi0) ** 2 + (eta - eta0) ** 2 < max_rad**2)[
             0
         ].astype(float)
@@ -257,23 +408,26 @@ def pointing_quickfit(
             ].astype(float)
         if len(msk_samps) < 10:
             print(f"Not enouth samples flagged for {det}")
-            msk_samps = np.arange(aman.samps.count)
+            msk_samps = np.arange(cast(int, aman.samps.count))
         sl = slice(
-            int(np.percentile(msk_samps, 5)) + aman.samps.offset,
-            int(np.percentile(msk_samps, 95)) + aman.samps.offset,
+            int(np.percentile(msk_samps, 5)) + cast(int, aman.samps.offset),
+            int(np.percentile(msk_samps, 95)) + cast(int, aman.samps.offset),
         )
         fit_am.restrict("samps", sl)
 
+        ptp = np.ptp(np.array(fit_am.signal))
+        amp = ptp * 3
         init_pars = [xi0, eta0, amp, fwhm, 0]
         bounds = [
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
-            (-1, np.inf),
+            (-ptp, np.inf),
             (fwhm * 0.9, 1.1 * fwhm),
             (-ptp, ptp),
         ]
 
         if multistep:
+            ftol = 2.220446049250313e-09  # default
             _bounds = deepcopy(bounds)
             _bounds[3] = (fwhm, fwhm)
             _bounds[0] = (np.min(xi), np.max(xi))
@@ -284,20 +438,33 @@ def pointing_quickfit(
             init_pars = res.x
             bounds[0] = (res.x[0] - max_rad, res.x[0] + max_rad)
             bounds[1] = (res.x[1] - max_rad, res.x[1] + max_rad)
-            # if res.success:
-            #     _bounds = deepcopy(bounds)
-            #     _bounds[0] = (res.x[0]-1e-9, res.x[0]+1e-9)
-            #     _bounds[1] = (res.x[1]-1e-9, res.x[1]+1e-9)
-            #     res = minimize(
-            #         fit_func, res.x, bounds=_bounds, args=(fit_am,), method='L-BFGS-B'
-            #     )
-            # if res.success:
-            #     ftol = 2.220446049250313e-09 # default
-            #     errs = [np.sqrt(max(1, abs(res.fun)) * ftol * res.hess_inv(eye)[i]) for i, eye in enumerate(np.eye(len(res.x)))]
-            #     _bounds = [(p-n_err*e, p+n_err*e) for p, e in zip(res.x, errs)]
-            #     res = minimize(
-            #         fit_func, res.x, bounds=_bounds, args=(fit_am,), method='L-BFGS-B'
-            #     )
+            if res.success:
+                errs = [
+                    np.sqrt(max(1, abs(res.fun)) * ftol * res.hess_inv(eye)[i])
+                    for i, eye in enumerate(np.eye(len(res.x)))
+                ]
+                _bounds = deepcopy(bounds)
+                _bounds[0] = (res.x[0] - 1e-9, res.x[0] + 1e-9)
+                _bounds[1] = (res.x[1] - 1e-9, res.x[1] + 1e-9)
+                res = minimize(
+                    fit_func, res.x, bounds=_bounds, args=(fit_am,), method="L-BFGS-B"
+                )
+                if res.success:
+                    errs_new = [
+                        np.sqrt(max(1, abs(res.fun)) * ftol * res.hess_inv(eye)[i])
+                        for i, eye in enumerate(np.eye(len(res.x)))
+                    ]
+                    errs[2:] = errs_new[2:]
+                    _bounds = [
+                        (p - n_err * e, p + n_err * e) for p, e in zip(res.x, errs)
+                    ]
+                    res = minimize(
+                        fit_func,
+                        res.x,
+                        bounds=_bounds,
+                        args=(fit_am,),
+                        method="L-BFGS-B",
+                    )
         else:
             res = minimize(
                 fit_func, init_pars, bounds=bounds, args=(fit_am,), method="Nelder-Mead"
@@ -312,11 +479,11 @@ def pointing_quickfit(
             focal_plane.amp[i] = -np.inf
 
         focal_plane.dist[i] = np.sqrt(
-            (focal_plane.xi[i] - xi0) ** 2 + (focal_plane.eta[i] - eta0) ** 2
+            (np.array(focal_plane.xi[i]) - xi0) ** 2
+            + (np.array(focal_plane.eta[i]) - eta0) ** 2
         )
-
-        delta_xi = xi - focal_plane.xi[i]
-        delta_eta = eta - focal_plane.eta[i]
+        delta_xi = xi - np.array(focal_plane.xi[i])
+        delta_eta = eta - np.array(focal_plane.eta[i])
 
         # Lets calculate hits
         xi_msk = np.abs(delta_xi) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
@@ -338,9 +505,16 @@ def pointing_quickfit(
         else:
             focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
             focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
+            focal_plane.roll[i] = (
+                cast(float, focal_plane.roll[i])
+                + cast(float, focal_plane.el[i])
+                - mean_el
+            )
 
         # Chisq
-        focal_plane.reduced_chisq[i] = res.fun / (fit_am.samps.count - len(res.x))
+        focal_plane.reduced_chisq[i] = res.fun / (
+            cast(int, fit_am.samps.count) - len(res.x)
+        )
 
     return focal_plane
 

@@ -21,12 +21,16 @@ from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.io.metadata import write_dataset
 from sotodlib.obs_ops.utils import correct_iir_params
+from typing_extensions import cast
 
 from lat_beams import beam as lb
-from lat_beams.fitting import pointing_quickfit
+from lat_beams.fitting import fit_tod_pointing
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
+
+# from pyinstrument import Profiler
+# profiler = Profiler()
 
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
@@ -98,6 +102,7 @@ block_size = cfg.get("block_size", 5000) // ds
 min_dets = cfg.get("min_dets", 30)
 trim_samps = cfg.get("time_samps", 200) // ds
 min_hits = cfg.get("min_hits", 0)
+fit_pars = cfg.get("fit_pars", {})
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -161,7 +166,7 @@ nominal = h5py.File(nominal_path)
 # Get settings for source mask
 res = cfg.get("res", (2 / 300.0) * np.pi / 180.0)
 mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.75)})
-
+# profiler.start()
 print_once(f"{len(obslist)} observations to fit")
 for i, obs in enumerate(obslist):
     if i < args.start_from:
@@ -205,6 +210,8 @@ for i, obs in enumerate(obslist):
     ufms = np.unique(meta.det_info.stream_id)
     print_once(f"Fitting UFMs: {ufms}")
     for ufm in ufms:
+        if ufm != "ufm_mv28":
+            continue
         comm.barrier()
         # Check if we already fit
         # TODO: add a mode to replot but not refit
@@ -299,7 +306,7 @@ for i, obs in enumerate(obslist):
             tod_ops.detrend_tod(aman, "linear", in_place=True)
             aman = lb.downsample_obs(aman, ds)
             fake_aman = lb.downsample_obs(fake_aman, ds)
-            ptp = np.ptp(aman.signal, axis=-1)
+            ptp = np.ptp(np.array(aman.signal), axis=-1)
             ptp_all = np.hstack(comm.allgather(ptp))
             aman = aman.restrict("dets", fake_fit + (ptp < n_med * np.median(ptp_all)))
             if aman.dets.count == 0 and not fake_fit:
@@ -338,9 +345,7 @@ for i, obs in enumerate(obslist):
             )
             aman_dummy.wrap("focal_plane", fp)
             source_name = source
-            if source == "j1058p0133":
-                source_name = "J1058+0133"
-            elif source == "rcw38":
+            if source == "rcw38":
                 source_name = "J134.78-47.509"
             source_flags = cp.compute_source_flags(
                 tod=aman_dummy,
@@ -359,7 +364,7 @@ for i, obs in enumerate(obslist):
                     "\t\tNo samples flagged! But running in no_fit mode so will continue with all samples"
                 )
                 start = 0
-                stop = int(aman.samps.count)
+                stop = int(cast(int, aman.samps.count))
             else:
                 start = source_flags.ranges[0].ranges()[0][0]
                 stop = source_flags.ranges[0].ranges()[-1][-1]
@@ -373,11 +378,18 @@ for i, obs in enumerate(obslist):
             else:
                 print_once(f"\t\t{stop - start} samps flagged in the source range")
             aman = aman.restrict(
-                "samps", slice(start + aman.samps.offset, stop + aman.samps.offset)
+                "samps",
+                slice(
+                    start + cast(int, aman.samps.offset),
+                    stop + cast(int, aman.samps.offset),
+                ),
             )
             fake_aman = fake_aman.restrict(
                 "samps",
-                slice(start + fake_aman.samps.offset, stop + fake_aman.samps.offset),
+                slice(
+                    start + cast(int, fake_aman.samps.offset),
+                    stop + cast(int, fake_aman.samps.offset),
+                ),
             )
             sig_filt = sig_filt[:, start:stop]
 
@@ -432,7 +444,8 @@ for i, obs in enumerate(obslist):
                 start = int(max(0, np.percentile(samp_idx, 10) - (block_size * 5)))
                 stop = int(
                     min(
-                        aman.samps.count, np.percentile(samp_idx, 90) + (block_size * 5)
+                        cast(int, aman.samps.count),
+                        np.percentile(samp_idx, 90) + (block_size * 5),
                     )
                 )
                 if stop - start < min_samps:
@@ -445,12 +458,17 @@ for i, obs in enumerate(obslist):
                 else:
                     print_once(f"\t\t{stop - start} samps flagged blind")
                 aman = aman.restrict(
-                    "samps", slice(start + aman.samps.offset, stop + aman.samps.offset)
+                    "samps",
+                    slice(
+                        start + cast(int, aman.samps.offset),
+                        stop + cast(int, aman.samps.offset),
+                    ),
                 )
                 fake_aman = fake_aman.restrict(
                     "samps",
                     slice(
-                        start + fake_aman.samps.offset, stop + fake_aman.samps.offset
+                        start + cast(int, fake_aman.samps.offset),
+                        stop + cast(int, fake_aman.samps.offset),
                     ),
                 )
                 sig_filt = sig_filt[:, start:stop]
@@ -505,16 +523,15 @@ for i, obs in enumerate(obslist):
                 continue
 
             # Fit
-            aman.signal *= aman.det_cal.phase_to_pW[..., None]
-            focal_plane = pointing_quickfit(
+            aman.signal *= aman.det_cal.phase_to_pW[..., None]  # type: ignore
+            _ = tod_ops.filters.fft_trim(aman, prefer="center")
+            focal_plane = fit_tod_pointing(
                 aman,
                 (4, 30),
                 fwhm=np.deg2rad(fwhm[band_name] / 60.0),
                 source=source_name,
-                bin_priors=True,
                 show_tqdm=(myrank == max_det_rank),
-                multistep=False,
-                bin_2d=True,
+                **fit_pars,
             )
 
             # Convert to rset
@@ -534,7 +551,7 @@ for i, obs in enumerate(obslist):
                     np.array(focal_plane.reduced_chisq, dtype=np.float32),
                 ),
                 dtype=outdt,
-                count=np.sum(msk),
+                count=focal_plane.dets.count,
             )
             rsets += [metadata.ResultSet.from_friend(sarray)]
 
@@ -564,6 +581,7 @@ for i, obs in enumerate(obslist):
         # Kill bad fits
         if not fake_res:
             focal_plane = rset.to_axismanager(axis_key="dets:readout_id")
+            print_once(focal_plane.dets.count)
             msk = np.array(focal_plane.amp) > 0
             med_xi = np.median(np.array(focal_plane.xi[msk]))
             med_eta = np.median(np.array(focal_plane.eta[msk]))
@@ -640,3 +658,6 @@ for i, obs in enumerate(obslist):
 if h5_file is not None:
     h5_file.close()
 nominal.close()
+
+# profiler.stop()
+# profiler.write_html(f"profile_{myrank}.html")
