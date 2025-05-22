@@ -24,6 +24,11 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.core.context import AxisManager
+from sotodlib.tod_ops.fft_ops import (
+    RFFTObj,
+    find_inferior_integer,
+    find_superior_integer,
+)
 from sotodlib.tod_ops.filters import (
     fourier_filter,
     high_pass_sine2,
@@ -344,7 +349,7 @@ def fit_tod_pointing(
     if bandpass_range[1] is not None:
         filt *= low_pass_sine2(cutoff=bandpass_range[1])
 
-    def filter_tod(am, signal_name="resid"):
+    def filter_tod(am, signal_name="resid", rfft=None):
         sig_filt_name = f"{signal_name}_filt"
         am[sig_filt_name] = am[signal_name].copy()
         filt_kw = dict(
@@ -353,17 +358,18 @@ def fit_tod_pointing(
             axis_name="samps",
             signal_name=sig_filt_name,
             time_name="timestamps",
+            rfft=rfft,
         )
         am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
         return am
 
-    def fit_func(x, fit_am):
+    def fit_func(x, fit_am, rfft):
         xi0, eta0, amp, fwhm, offset = x
         model = gaussian2d(
             (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
-        fit_am = filter_tod(fit_am, signal_name="resid")
+        fit_am = filter_tod(fit_am, signal_name="resid", rfft=rfft)
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
 
     it = np.array(aman.dets.vals)
@@ -409,11 +415,21 @@ def fit_tod_pointing(
         if len(msk_samps) < 10:
             print(f"Not enouth samples flagged for {det}")
             msk_samps = np.arange(cast(int, aman.samps.count))
+
+        start = np.percentile(msk_samps, 5)
+        stop = np.percentile(msk_samps, 95)
+        cent = int(0.5 * (start + stop))
+        nsamps = find_superior_integer(stop - start)
+        if nsamps > cast(int, fit_am.samps.count):
+            nsamps = find_inferior_integer(fit_am.samps.count)
+        start = cent - nsamps // 2
+        stop = cent + nsamps // 2 + nsamps % 2
         sl = slice(
-            int(np.percentile(msk_samps, 5)) + cast(int, aman.samps.offset),
-            int(np.percentile(msk_samps, 95)) + cast(int, aman.samps.offset),
+            start + cast(int, fit_am.samps.offset),
+            stop + cast(int, fit_am.samps.offset),
         )
         fit_am.restrict("samps", sl)
+        rfft = RFFTObj.for_shape(1, cast(int, fit_am.samps.count), "BOTH")
 
         ptp = np.ptp(np.array(fit_am.signal))
         amp = ptp * 3
@@ -433,7 +449,11 @@ def fit_tod_pointing(
             _bounds[0] = (np.min(xi), np.max(xi))
             _bounds[1] = (np.min(eta), np.max(eta))
             res = minimize(
-                fit_func, init_pars, bounds=_bounds, args=(fit_am,), method="L-BFGS-B"
+                fit_func,
+                init_pars,
+                bounds=_bounds,
+                args=(fit_am, rfft),
+                method="L-BFGS-B",
             )
             init_pars = res.x
             bounds[0] = (res.x[0] - max_rad, res.x[0] + max_rad)
@@ -447,7 +467,11 @@ def fit_tod_pointing(
                 _bounds[0] = (res.x[0] - 1e-9, res.x[0] + 1e-9)
                 _bounds[1] = (res.x[1] - 1e-9, res.x[1] + 1e-9)
                 res = minimize(
-                    fit_func, res.x, bounds=_bounds, args=(fit_am,), method="L-BFGS-B"
+                    fit_func,
+                    res.x,
+                    bounds=_bounds,
+                    args=(fit_am, rfft),
+                    method="L-BFGS-B",
                 )
                 if res.success:
                     errs_new = [
@@ -462,12 +486,16 @@ def fit_tod_pointing(
                         fit_func,
                         res.x,
                         bounds=_bounds,
-                        args=(fit_am,),
+                        args=(fit_am, rfft),
                         method="L-BFGS-B",
                     )
         else:
             res = minimize(
-                fit_func, init_pars, bounds=bounds, args=(fit_am,), method="Nelder-Mead"
+                fit_func,
+                init_pars,
+                bounds=bounds,
+                args=(fit_am, rfft),
+                method="Nelder-Mead",
             )
 
         focal_plane.xi[i] = res.x[0]

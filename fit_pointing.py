@@ -210,8 +210,6 @@ for i, obs in enumerate(obslist):
     ufms = np.unique(meta.det_info.stream_id)
     print_once(f"Fitting UFMs: {ufms}")
     for ufm in ufms:
-        if ufm != "ufm_mv28":
-            continue
         comm.barrier()
         # Check if we already fit
         # TODO: add a mode to replot but not refit
@@ -525,6 +523,8 @@ for i, obs in enumerate(obslist):
             # Fit
             aman.signal *= aman.det_cal.phase_to_pW[..., None]  # type: ignore
             _ = tod_ops.filters.fft_trim(aman, prefer="center")
+            # if aman.dets.count > 10:
+            #     aman.restrict("dets", aman.dets.vals[:10])
             focal_plane = fit_tod_pointing(
                 aman,
                 (4, 30),
@@ -581,7 +581,6 @@ for i, obs in enumerate(obslist):
         # Kill bad fits
         if not fake_res:
             focal_plane = rset.to_axismanager(axis_key="dets:readout_id")
-            print_once(focal_plane.dets.count)
             msk = np.array(focal_plane.amp) > 0
             med_xi = np.median(np.array(focal_plane.xi[msk]))
             med_eta = np.median(np.array(focal_plane.eta[msk]))
