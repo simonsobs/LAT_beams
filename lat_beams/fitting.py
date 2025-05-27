@@ -424,6 +424,12 @@ def fit_tod_pointing(
             nsamps = find_inferior_integer(fit_am.samps.count)
         start = cent - nsamps // 2
         stop = cent + nsamps // 2 + nsamps % 2
+        if start < 0:
+            stop += start
+            start = 0
+        if stop > fit_am.samps.count:
+            start -= (fit_am.samps.count - stop)
+            stop = fit_am.samps.count
         sl = slice(
             start + cast(int, fit_am.samps.offset),
             stop + cast(int, fit_am.samps.offset),
