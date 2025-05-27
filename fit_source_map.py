@@ -14,6 +14,7 @@ from pixell import enmap
 from scipy.ndimage import gaussian_filter
 from so3g.proj import RangesMatrix
 from sotodlib.core import AxisManager, Context, metadata
+import time
 
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.pointing_model import apply_pointing_model
@@ -83,7 +84,7 @@ data_dir = os.path.join(root_dir, "data", project_dir, "source_map_fits", source
 map_dir = os.path.join(root_dir, "data", project_dir, "source_maps", source)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
-# outfile = h5py.File(os.path.join(data_dir, 'beam_pars.h5'), 'a', driver='mpio', comm=comm)
+outfile = None
 if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, "beam_pars.h5"), "a")
 
@@ -174,7 +175,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         to_save = comm.gather(to_save, root=0)
     else:
         to_save = [to_save]
-    if myrank == 0:
+    if myrank == 0 and to_save is not None and outfile is not None:
         for aman, path in to_save:
             if aman is None:
                 continue
@@ -196,7 +197,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     # Load the maps
     solved = enmap.read_map(fname)[0]
     weights = enmap.read_map(wpath)[0][0]
-    pixsize = 3600 * solved.wcs.wcs.cdelt[1]
+    pixsize = 3600 * solved.wcs.wcs.cdelt[1] # type: ignore
 
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
@@ -238,8 +239,10 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         perr,
         model,
         data_fwhm,
-        data_solid_angle,
-        model_solid_angle,
+        data_solid_angle_meas,
+        data_solid_angle_corr,
+        model_solid_angle_meas,
+        model_solid_angle_true,
         r,
         rprof,
         mprof,
@@ -257,7 +260,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
         solved.corners(corner=False)
     )
-    plt_extent = [ra_min, ra_max, dec_min, dec_max]
+    plt_extent = (ra_min, ra_max, dec_min, dec_max)
 
     plt.imshow(model, origin="lower", extent=plt_extent)
     plt.xlabel('RA (")')
@@ -293,13 +296,13 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         r,
         rprof,
         alpha=0.6,
-        label=f'Data \nFWHM={data_fwhm:.2f}", Ω={data_solid_angle:.2f} sr',
+        label=f'Data \nFWHM={data_fwhm:.2f}", Ω={data_solid_angle_corr:.2f} sr',
     )
     plt.plot(
         r,
         mprof,
         alpha=0.6,
-        label=f'Model \nFWHM=({popt[3]:.2f}, {popt[4]:.2f})", Ω={model_solid_angle:.2f} sr',
+        label=f'Model \nFWHM=({popt[3]:.2f}, {popt[4]:.2f})", Ω={model_solid_angle_true:.2f} sr',
     )
     plt.xlabel('Radius (")')
     plt.ylabel("Power (pW)")
@@ -335,15 +338,17 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         aman.wrap(name, par * unit)
         aman.wrap(f"{name}_err", err * unit)
     aman.wrap("data_fwhm", data_fwhm * u.arcsec)
-    aman.wrap("data_solid_angle", data_solid_angle * u.sr)
-    aman.wrap("model_solid_angle", model_solid_angle * u.sr)
+    aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
+    aman.wrap("data_solid_angle_corr", data_solid_angle_corr* u.sr)
+    aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
+    aman.wrap("model_solid_angle_true", model_solid_angle_true* u.sr)
     aman.wrap("noise", noise * u.pW)
     aman_path = os.path.join(obs_id, stream_id, band)
     to_save = (aman, aman_path)
 
 comm.barrier()
 to_save = comm.gather(to_save, root=0)
-if myrank == 0:
+if myrank == 0 and to_save is not None and outfile is not None:
     for aman, path in to_save:
         if aman is None:
             continue

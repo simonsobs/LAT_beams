@@ -574,11 +574,12 @@ def get_fwhm_radial_bins(r, y, interpolate=False):
     return fwhm
 
 
-def solid_angle(az, el, beam, cent, min_sigma, smooth=0):
+def solid_angle(az, el, beam, cent, r1, r2, smooth=0):
     """Compute the integrated solid angle of a beam map.
 
     return value is in steradians  (sr)
     """
+    r = np.sqrt(az**2 + el**2)
     # convert from arcsec to rad
     az = np.deg2rad(az / 3600)
     el = np.deg2rad(el / 3600)
@@ -587,10 +588,16 @@ def solid_angle(az, el, beam, cent, min_sigma, smooth=0):
         smoothed = gaussian_filter(beam, sigma=smooth)
         norm = smoothed[cent]
     integrand = beam / norm
-    integrand[integrand < np.exp(-0.5 * (min_sigma**2))] = 0
+    # integrand[integrand < np.exp(-0.5 * (min_sigma**2))] = 0
     # perform the solid angle integral
-    integral = np.trapz(np.trapz(integrand, el, axis=0), az, axis=0)
-    return integral
+    _integrand = integrand.copy()
+    _integrand[r > r1] = 0
+    integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    
+    _integrand = integrand.copy()
+    _integrand[(r < r1) + (r > r2)] = 0
+    integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    return integral_inner - integral_outer
 
 
 def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=3):
@@ -676,16 +683,20 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=3):
     # Get solid angles
     y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
     x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
-    data_solid_angle = solid_angle(x, y, imap, c, min_sigma, (data_fwhm / 2.355) / res)
-    model_solid_angle = solid_angle(x, y, model, c, min_sigma)
+    data_solid_angle_meas = solid_angle(x, y, imap, c, min_sigma * (data_fwhm / 2.355), 2*min_sigma * (data_fwhm / 2.355), (data_fwhm / 2.355) / res)
+    model_solid_angle_meas = solid_angle(x, y, model, c, min_sigma * (data_fwhm / 2.355), 2*min_sigma * (data_fwhm / 2.355))
+    model_solid_angle_true = 2*np.pi*(np.deg2rad(popt[3]/3600) * np.deg2rad(popt[4]/3600))
+    data_solid_angle_corr = data_solid_angle_meas*model_solid_angle_true/model_solid_angle_meas
 
     return (
         popt,
         perr,
         model,
         data_fwhm,
-        data_solid_angle,
-        model_solid_angle,
+        data_solid_angle_meas,
+        data_solid_angle_corr,
+        model_solid_angle_meas,
+        model_solid_angle_true,
         r,
         rprof,
         mprof,
