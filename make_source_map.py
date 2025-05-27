@@ -62,7 +62,7 @@ xi_off = cfg.get("xi_off", np.nan)
 eta_off = cfg.get("eta_off", np.nan)
 min_dets = cfg.get("min_dets", 50)
 min_hits = cfg.get("min_hits", 5)
-min_det_secs = cfg.get("min_det_secs", 1000)
+min_det_secs = cfg.get("min_det_secs", 5000)
 extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
@@ -95,7 +95,8 @@ else:
 print(f"Found {len(obslist)} observations to map")
 
 # Keep only the ones with a focal plane
-if cfg.get("per_obs_point", True):
+per_obs = cfg.get("per_obs_point", True)
+if per_obs:
     dbs = [md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")]
     if len(dbs) > 1:
         print("Multiple pointing metadata entries found, using the first one")
@@ -240,12 +241,13 @@ for i, obs in enumerate(obslist):
             orig = aman.copy()
 
             # Pointing model
-            az, el, roll = apply_pointing_model(
-                {}, aman.boresight.az, aman.boresight.el, aman.boresight.roll
-            )
-            aman.boresight.az[:] = az
-            aman.boresight.el[:] = el
-            aman.boresight.roll[:] = roll
+            if not per_obs:
+                az, el, roll = apply_pointing_model(
+                    {}, aman.boresight.az, aman.boresight.el, aman.boresight.roll
+                )
+                aman.boresight.az[:] = az
+                aman.boresight.el[:] = el
+                aman.boresight.roll[:] = roll
 
             # Its map time!
             cuts = RangesMatrix.zeros(aman.signal.shape)
