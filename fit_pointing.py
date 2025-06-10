@@ -103,6 +103,7 @@ min_dets = cfg.get("min_dets", 30)
 trim_samps = cfg.get("time_samps", 200) // ds
 min_hits = cfg.get("min_hits", 0)
 fit_pars = cfg.get("fit_pars", {})
+src_msk = cfg.get("src_msk", True)
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -323,73 +324,75 @@ for i, obs in enumerate(obslist):
             )
             sig_filt = sig_filt[:, trim_samps : (-1 * trim_samps)]
 
-            # See how much of the source we saw...
-            aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
-            fp = AxisManager(aman_dummy.dets)
-            fp.wrap(
-                "xi",
-                np.zeros(1) + xi_off + np.nanmean(np.array(nominal[ufm]["xi"][:])),
-                [(0, "dets")],
-            )
-            fp.wrap(
-                "eta",
-                np.zeros(1) + eta_off + np.nanmean(np.array(nominal[ufm]["eta"][:])),
-                [(0, "dets")],
-            )
-            fp.wrap(
-                "gamma",
-                np.zeros(1) + np.nanmean(np.array(nominal[ufm]["gamma"][:])),
-                [(0, "dets")],
-            )
-            aman_dummy.wrap("focal_plane", fp)
             source_name = source
             if source == "rcw38":
                 source_name = "J134.78-47.509"
-            source_flags = cp.compute_source_flags(
-                tod=aman_dummy,
-                P=None,
-                mask=mask,
-                center_on=source_name,
-                res=res * 10,
-                max_pix=4e8,
-                wrap=None,
-            )
-            if len(source_flags.ranges[0].ranges()) == 0:
-                if not args.no_fit:
-                    print_once("\t\tNo samples flagged! Skipping...")
-                    continue
-                print_once(
-                    "\t\tNo samples flagged! But running in no_fit mode so will continue with all samples"
+
+            # See how much of the source we saw...
+            if src_msk:
+                aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
+                fp = AxisManager(aman_dummy.dets)
+                fp.wrap(
+                    "xi",
+                    np.zeros(1) + xi_off + np.nanmean(np.array(nominal[ufm]["xi"][:])),
+                    [(0, "dets")],
                 )
-                start = 0
-                stop = int(cast(int, aman.samps.count))
-            else:
-                start = source_flags.ranges[0].ranges()[0][0]
-                stop = source_flags.ranges[0].ranges()[-1][-1]
-            if stop - start < min_samps:
-                if not args.no_fit:
-                    print_once(f"\t\tOnly {stop-start} flagged samples... skipping")
-                    continue
-                print_once(
-                    f"\t\tOnly {stop-start} flagged samples! But running in no_fit mode so will continue"
+                fp.wrap(
+                    "eta",
+                    np.zeros(1) + eta_off + np.nanmean(np.array(nominal[ufm]["eta"][:])),
+                    [(0, "dets")],
                 )
-            else:
-                print_once(f"\t\t{stop - start} samps flagged in the source range")
-            aman = aman.restrict(
-                "samps",
-                slice(
-                    start + cast(int, aman.samps.offset),
-                    stop + cast(int, aman.samps.offset),
-                ),
-            )
-            fake_aman = fake_aman.restrict(
-                "samps",
-                slice(
-                    start + cast(int, fake_aman.samps.offset),
-                    stop + cast(int, fake_aman.samps.offset),
-                ),
-            )
-            sig_filt = sig_filt[:, start:stop]
+                fp.wrap(
+                    "gamma",
+                    np.zeros(1) + np.nanmean(np.array(nominal[ufm]["gamma"][:])),
+                    [(0, "dets")],
+                )
+                aman_dummy.wrap("focal_plane", fp)
+                source_flags = cp.compute_source_flags(
+                    tod=aman_dummy,
+                    P=None,
+                    mask=mask,
+                    center_on=source_name,
+                    res=res * 10,
+                    max_pix=4e8,
+                    wrap=None,
+                )
+                if len(source_flags.ranges[0].ranges()) == 0:
+                    if not args.no_fit:
+                        print_once("\t\tNo samples flagged! Skipping...")
+                        continue
+                    print_once(
+                        "\t\tNo samples flagged! But running in no_fit mode so will continue with all samples"
+                    )
+                    start = 0
+                    stop = int(cast(int, aman.samps.count))
+                else:
+                    start = source_flags.ranges[0].ranges()[0][0]
+                    stop = source_flags.ranges[0].ranges()[-1][-1]
+                if stop - start < min_samps:
+                    if not args.no_fit:
+                        print_once(f"\t\tOnly {stop-start} flagged samples... skipping")
+                        continue
+                    print_once(
+                        f"\t\tOnly {stop-start} flagged samples! But running in no_fit mode so will continue"
+                    )
+                else:
+                    print_once(f"\t\t{stop - start} samps flagged in the source range")
+                aman = aman.restrict(
+                    "samps",
+                    slice(
+                        start + cast(int, aman.samps.offset),
+                        stop + cast(int, aman.samps.offset),
+                    ),
+                )
+                fake_aman = fake_aman.restrict(
+                    "samps",
+                    slice(
+                        start + cast(int, fake_aman.samps.offset),
+                        stop + cast(int, fake_aman.samps.offset),
+                    ),
+                )
+                sig_filt = sig_filt[:, start:stop]
 
             # Kill dets with really high noise
             std = np.std(sig_filt, axis=-1)
