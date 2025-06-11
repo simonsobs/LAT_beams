@@ -1,3 +1,4 @@
+# TODO: UPDATE DOCSTRING
 """
 Just fitting a single TOD for now, can genralize later (but maybe just do a WITCH interface for that)
 Maybe should add priors
@@ -199,7 +200,8 @@ def _empty_fp(aman: AxisManager) -> AxisManager:
 
     return focal_plane
 
-
+# TODO: NEED DOCSTRING
+# Smoothening stuff
 def _bin_priors_1d(
     fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
 ) -> tuple[float, float]:
@@ -226,7 +228,7 @@ def _bin_priors_1d(
 
     return xi0, eta0
 
-
+# TODO: NEED DOCSTRING
 def _bin_priors_2d(
     fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
 ) -> tuple[float, float]:
@@ -269,7 +271,7 @@ def fit_tod_pointing(
     show_tqdm: bool = False,
 ) -> AxisManager:
     """
-    Fit detector offsets from a TOD of a source observation.
+    Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.
 
     Arguments:
 
@@ -321,6 +323,10 @@ def fit_tod_pointing(
                      * roll (in radians), the roll at the detector crossing
                      * reduced_chisq
     """
+    # TODO: Can use full detector map to fit the array at once. This hasnt been written.
+    # Right now det maps for LAT not good; SAT will be ok to test with though. Should provide both options here,
+    # since doing full det maps fit is faster than per det.
+    # Either way, want to do per TOD because per TOD would be a refinement to the full det maps fit.
     if pos_priors is not None and len(pos_priors) != aman.dets.count:
         raise ValueError(
             f"{len(pos_priors)} positional priors given for {aman.dets.count} detectors"
@@ -333,7 +339,9 @@ def fit_tod_pointing(
 
     focal_plane = _empty_fp(aman)
     mean_el = np.mean(np.array(aman.boresight.el))
-
+    
+    # getting xi eta in a coordinate system where (0, 0) is the planet youre fitting. Expecting trimmed TOD for source.
+    # Cannot include both rising and setting (ie a sign change). Note that a transit is flat -- so is ok.
     xi, eta = get_xieta_src_centered(
         np.array(aman.timestamps),
         np.array(aman.boresight.az),
@@ -349,12 +357,15 @@ def fit_tod_pointing(
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
     turnarounds = ~Ranges.from_mask(turnarounds) # Invert for convenience
 
+    
+    # 0 is the highpass part, 1 lowpass part.
     filt = identity_filter()
     if bandpass_range[0] is not None:
         filt *= high_pass_sine2(cutoff=bandpass_range[0])
     if bandpass_range[1] is not None:
         filt *= low_pass_sine2(cutoff=bandpass_range[1])
 
+    # TODO: Get this shit outta here
     def filter_tod(am, signal_name="resid", rfft=None):
         sig_filt_name = f"{signal_name}_filt"
         am[sig_filt_name] = am[signal_name].copy()
@@ -372,23 +383,27 @@ def fit_tod_pointing(
     def fit_func(x, fit_am, rfft):
         xi0, eta0, amp, fwhm, offset = x
         model = gaussian2d(
-            (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
+                (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, signal_name="resid", rfft=rfft)
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
-
+    
+    # Loop through all detectors and fit them one at a time.
     it = np.array(aman.dets.vals)
     if show_tqdm:
         it = tqdm(np.array(aman.dets.vals))
     for i, det in enumerate(it):
         if show_tqdm:
             sys.stderr.flush()
+        # Make a temporary restricted axis manager with just the one desired detector.
         fit_am = aman.restrict("dets", [det], in_place=False)
+        # Containers for residual of fit and the filtered residual.
         fit_am.wrap("resid", fit_am.signal.copy(), [(0, "dets"), (1, "samps")])
         fit_am.wrap(
             "resid_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
         )
+        # Estimateing white noise by taking the standard deviation of the filtered TOD.
         fit_am = filter_tod(fit_am)
         std = np.std(np.array(fit_am.resid_filt))
         if std == 0:
@@ -396,15 +411,19 @@ def fit_tod_pointing(
             continue
         fit_am.wrap("wn", 1.0 / std.item() ** 2)
 
+        # Get starting guess for where the detector is looking. Bad guess = bad pointing final fit. Descends into a local instead of global minima.
+        # Get xi, eta at maximum sample, but this is not a very good guess.
         max_idx = np.argmax(np.array(fit_am.resid_filt[0]))
         xi_max = xi[max_idx]
         eta_max = eta[max_idx]
         xi0, eta0 = float(xi_max), float(eta_max)
         _bin_priors = bin_priors
+        # If it has a det map fit then can use given positional prior
         if np.all(np.isfinite(pos_priors[i])):
             xi0, eta0 = pos_priors[i]
             _bin_priors = False
-
+        
+        # Determine if 1d or 2d binning used.
         # Bin in xi and eta
         if _bin_priors and not bin_2d:
             xi0, eta0 = _bin_priors_1d(fit_am, xi0, eta0, fwhm)
@@ -502,6 +521,8 @@ def fit_tod_pointing(
                         method="L-BFGS-B",
                     )
         else:
+            # OPTIMIZE FITS HERE.
+            # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
             res = minimize(
                 fit_func,
                 init_pars,
