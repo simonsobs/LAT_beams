@@ -575,11 +575,17 @@ for i, obs in enumerate(obslist):
 
             # Plot the TOD
             if myrank == max_det_rank:
-                plt.close()
+                #plt.close()
+                
                 plt.plot(np.array(aman.signal).T, alpha=0.3)
+                plt.xlabel('samples')
+                plt.ylabel('signal')
                 plt.savefig(os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod.png"))
                 plt.close()
+                
                 plt.plot(sig_filt.T, alpha=0.3)
+                plt.xlabel('sample')
+                plt.ylabel('signal [filtered]')
                 plt.savefig(
                     os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_filt.png")
                 )
@@ -696,23 +702,43 @@ for i, obs in enumerate(obslist):
             # Plot focal plane, encoders, and a histrogram of fhwp, amp, hits 
             # TODO: Split by band?
             plt.close()
+            
             plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
+            plt.xlabel('xi')
+            plt.ylabel('eta')
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
             plt.close()
+            
             plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
+            plt.xlabel('az')
+            plt.ylabel('el')
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
             plt.close()
+            
             plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
+            plt.xlabel('amp')
+            plt.ylabel('dets')
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
             plt.close()
+            
             plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
+            plt.xlabel('fwhm')
+            plt.ylabel('dets')
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
             plt.close()
+            
             plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
+            plt.xlabel('hits')
+            plt.ylabel('dets')
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
             plt.close()
+            
             plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
+            plt.xlabel('reduced chi sq')
+            plt.ylabel('dets')
             plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
+            plt.close()
+            
             if len(rset) == 0:
                 fake_res = True
                 rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
