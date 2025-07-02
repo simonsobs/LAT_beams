@@ -252,6 +252,10 @@ for i, obs in enumerate(obslist):
             fake_aman = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
             fake_aman.signal[:] = 0
 
+            if aman.samps.count < min_samps*ds:
+                print_once(f"\t\tNot enough samples! Skipping...")
+                continue
+
             try:
                 filt = tod_ops.filters.iir_filter(invert=True)
                 aman.signal = tod_ops.filters.fourier_filter(
@@ -272,7 +276,7 @@ for i, obs in enumerate(obslist):
             )
 
             tod_ops.detrend_tod(aman, "median", in_place=True)
-            tf = tod_ops.flags.get_trending_flags(aman, max_trend=5, t_piece=30)
+            tf = tod_ops.flags.get_trending_flags(aman, max_trend=5, t_piece=min(30, aman.obs_info.duration/2))
             tdets = has_any_cuts(tf)
             aman.restrict("dets", ~tdets)
 
