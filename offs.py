@@ -117,10 +117,10 @@ wmsk = (weights > 300) * (dist < np.deg2rad(20 / 3600))
 q_roll = quat.rotation_xieta(0, 0, 1 * np.deg2rad(roll))
 q_data = quat.rotation_xieta(xi_dist, eta_dist)
 xi0, eta0, _ = quat.decompose_xieta(q_roll * q_data * ~q_roll)
-pmsk = (np.abs(xi0 - np.median(xi0)) / np.std(xi0) < 5) * (
-    np.abs(eta0 - np.median(eta0)) / np.std(eta0) < 5
-)  # * (eta0/quat.DEG > -.2)
-wmsk *= pmsk
+# pmsk = (np.abs(xi0 - np.median(xi0)) / np.std(xi0) < 5) * (
+#     np.abs(eta0 - np.median(eta0)) / np.std(eta0) < 5
+# )  # * (eta0/quat.DEG > -.2)
+# wmsk *= pmsk
 # wmsk *= np.isin( stream_ids, ["ufm_mv24", "ufm_mv21", "ufm_mv14", "ufm_mv13"])
 # wmsk *= np.isin( stream_ids, ["ufm_mv13"])
 q_roll = quat.rotation_xieta(0, 0, 1 * np.deg2rad(roll[wmsk]))
@@ -140,7 +140,8 @@ def go(r, ang):
 
 
 def transform(x):
-    a, e, c, xi_el, eta_el, xi_rx, eta_rx, xi_mir, eta_mir = np.deg2rad(x)
+    a, e, c, xi_el, eta_el, xi_rx, eta_rx, xi_mir, eta_mir, c2 = np.deg2rad(x)
+    # c2 = np.rad2deg(c2)
     _el = np.deg2rad(el[wmsk])
     _cr = np.deg2rad(el - roll - 60)[wmsk]
     q_enc = quat.rotation_lonlat(-a, e + _el, 0)
@@ -148,13 +149,15 @@ def transform(x):
     q_tel = quat.rotation_xieta(xi_el, eta_el)
     q_rx = quat.rotation_xieta(xi_rx, eta_rx)
     q_mir = quat.rotation_xieta(xi_mir, eta_mir)
-    # rot = q_enc*q_tel*q_z*q_roll*q_data*~q_roll*q_enc_inv
-    # rot = q_enc*quat.euler(2, _el + e - np.deg2rad(60))*q_tel*quat.euler(2, -1*(_cr + c))*q_data*~q_roll*q_enc_inv
     rhs = (
+         # ~q_mir *
+        quat.euler(1, c2) *
         q_enc
         * q_mir
+         # * ~q_tel
         * quat.euler(2, _el + e - np.deg2rad(60))
         * q_tel
+         # * ~q_rx
         * quat.euler(2, -1 * (_cr + c))
         * q_rx
     )
@@ -164,49 +167,69 @@ def transform(x):
     return xi0, eta0
 
 
-def fit_func(x):
+def fit_func(x, msk):
     xi0, eta0 = transform(x)
-    print(np.sqrt(np.mean(np.hstack([xi0, eta0]) ** 2)))
-    return np.sqrt(np.mean(np.hstack([xi0, eta0]) ** 2))
+    return np.sqrt(np.mean(np.hstack([xi0[msk], eta0[msk]]) ** 2))
+
+
+def fit(t0, t1):
+    tmsk = (ctime[wmsk] >= t0) * (ctime[wmsk] < t1)
+    if t0 == 0: # special case for now
+        x = np.zeros(10)
+    else:
+        res = minimize(fit_func, (0, 0, 0, 0, 0, 0, 0, 0, 0, 1), args=(tmsk,))
+        x = res.x
+        print(res)
+    xi0, eta0 = transform(x)
+    params = {
+        "az_offset": x[0],
+        "el_offset": x[1],
+        "cr_offset": x[2],
+        "el_xi_offset": x[3],
+        "el_eta_offset": x[4],
+        "rx_xi_offset": x[5],
+        "rx_eta_offset": x[6],
+        "mir_xi_offset": x[7],
+        "mir_eta_offset": x[8],
+    }
+    print(params)
+    return params, tmsk, xi0[tmsk], eta0[tmsk]
 
 
 # Back it out
 xi0, eta0, _ = quat.decompose_xieta(q_roll * q_data * ~q_roll)
-res = minimize(fit_func, (0, 0, 0, 0, 0, 0, 0, 0, 0))
-xi0, eta0 = transform(res.x)
-params = {
-    "az_offset": res.x[0],
-    "el_offset": res.x[1],
-    "cr_offset": res.x[2],
-    "el_xi_offset": res.x[3],
-    "el_eta_offset": res.x[4],
-    "rx_xi_offset": res.x[5],
-    "rx_eta_offset": res.x[6],
-    "mir_xi_offset": res.x[7],
-    "mir_eta_offset": res.x[8],
-}
-print(params)
-
 
 # Save
-outdir = "/so/home/saianeesh/data/pointing/lat/pointing_model"
-os.makedirs(outdir, exist_ok=True)
-scheme = metadata.ManifestScheme()
-scheme.add_range_match("obs:timestamp")
-scheme.add_data_field("dataset")
-metadata.ManifestDb(scheme=scheme).to_file(os.path.join(outdir, "db.sqlite"))
-db = metadata.ManifestDb(os.path.join(outdir, "db.sqlite"))
-times = [(0, 1744848000), (1744848000, 2e9)]
-for time in times:
-    aman = AxisManager()
-    aman.wrap("version", "lat_v1")
-    for key, val in params.items():
-        if time[0] == 0:
-            val = 0
-        aman.wrap(key, val)
-    aman.save(os.path.join(outdir, "pointing_model.h5"), f"t{time[0]}")
-    entry = {"obs:timestamp": (time[0], time[1]), "dataset": f"t{time[0]}"}
-    db.add_entry(entry, filename="pointing_model.h5", replace=True)
+# outdir = "/so/home/saianeesh/data/pointing/lat/pointing_model"
+# os.makedirs(outdir, exist_ok=True)
+# if not os.path.isfile(os.path.join(outdir, "db.sqlite")):
+#     scheme = metadata.ManifestScheme()
+#     scheme.add_range_match("obs:timestamp")
+#     scheme.add_data_field("dataset")
+#     metadata.ManifestDb(scheme=scheme).to_file(os.path.join(outdir, "db.sqlite"))
+# db = metadata.ManifestDb(os.path.join(outdir, "db.sqlite"))
+# times = [(0, 1744848000), (1744848000, 1745150000), (1745150000, 1745400000), (1745400000, 1745590000), (1745590000, 1745800000), (1745800000, 1746000000), (1746000000 ,2e9)]
+# for time in times:
+#     aman = AxisManager()
+#     aman.wrap("version", "lat_v1")
+#     params, tmsk, _xi, _eta = fit(time[0], time[1])
+#     xi0[tmsk] = _xi
+#     eta0[tmsk] = _eta
+#     for key, val in params.items():
+#         aman.wrap(key, val)
+#     aman.save(os.path.join(outdir, "pointing_model.h5"), f"t{time[0]}", overwrite=True)
+#     entry = {"obs:timestamp": (time[0], time[1]), "dataset": f"t{time[0]}"}
+#     db.add_entry(entry, filename="pointing_model.h5", replace=True)
+
+d = np.sqrt(xi0**2 + eta0**2)
+plt.scatter(ctime[wmsk], d/quat.DEG)
+# plt.xlim((None, 1745400000))
+plt.xlabel("ctime")
+plt.ylabel("Disagreement from Model (deg)")
+plt.savefig("/so/home/saianeesh/public_html/offs_t.png")
+plt.clf()
+
+# print(obs_ids[wmsk][np.argsort(d)])
 
 pmsk = np.ones_like(
     xi0, bool
@@ -246,5 +269,5 @@ plt.savefig("/so/home/saianeesh/public_html/offs.png")
 plt.clf()
 
 dat = np.column_stack([xi0, eta0, el[wmsk], corot[wmsk], tdelt[wmsk] / 3600])
-corner.corner(dat, labels=["xi", "eta", "el", "corot", "time"])
+# corner.corner(dat, labels=["xi", "eta", "el", "corot", "time"])
 plt.savefig("/so/home/saianeesh/public_html/corner.png")
