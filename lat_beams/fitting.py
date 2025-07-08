@@ -580,33 +580,40 @@ def get_fwhm_radial_bins(r, y, interpolate=False):
     return fwhm
 
 
-def solid_angle(az, el, beam, cent, r1, r2, smooth=0):
+def solid_angle(az, el, beam, cent, r1, r2, norm):
     """Compute the integrated solid angle of a beam map.
 
     return value is in steradians  (sr)
     """
-    r = np.sqrt(az**2 + el**2)
+
+    _az, _el = np.meshgrid(az, el)
+    r = np.sqrt((_az-_az[cent])**2 + (_el-_el[cent])**2)
     # convert from arcsec to rad
     az = np.deg2rad(az / 3600)
     el = np.deg2rad(el / 3600)
-    norm = beam[cent]
-    if smooth > 0:
-        smoothed = gaussian_filter(beam, sigma=smooth)
-        norm = smoothed[cent]
-    integrand = beam / norm
+
     # integrand[integrand < np.exp(-0.5 * (min_sigma**2))] = 0
+    # norm = beam[cent]
+    # if smooth > 0:
+    #     # smoothed = gaussian_filter(beam, sigma=smooth)
+    #     # norm = smoothed[cent]
+    #     norm = np.max(beam[r < r1/2])
+    integrand = beam / norm
+
     # perform the solid angle integral
     _integrand = integrand.copy()
     _integrand[r > r1] = 0
     integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    print(integral_inner)
     
     _integrand = integrand.copy()
     _integrand[(r < r1) + (r > r2)] = 0
     integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    print(integral_outer)
     return integral_inner - integral_outer
 
 
-def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=3):
+def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     """
     Fit 2d Gaussian to input map.
     Based on Tommy's code from 2024 F2F tutorial.
@@ -689,9 +696,11 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=3):
     # Get solid angles
     y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
     x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
-    data_solid_angle_meas = solid_angle(x, y, imap, c, min_sigma * (data_fwhm / 2.355), 2*min_sigma * (data_fwhm / 2.355), (data_fwhm / 2.355) / res)
-    model_solid_angle_meas = solid_angle(x, y, model, c, min_sigma * (data_fwhm / 2.355), 2*min_sigma * (data_fwhm / 2.355))
-    model_solid_angle_true = 2*np.pi*(np.deg2rad(popt[3]/3600) * np.deg2rad(popt[4]/3600))
+    fwhm_pix = int(data_fwhm/res)
+    norm = np.max(imap[max(0, c[0] - fwhm_pix):min(imap.shape[0], c[0] + fwhm_pix), max(0, c[1] - fwhm_pix):min(imap.shape[1], c[1] + fwhm_pix)])
+    data_solid_angle_meas = solid_angle(x, y, imap, c, min_sigma * (data_fwhm / 2.355), np.sqrt(2)*min_sigma * (data_fwhm / 2.355), norm) #model[c])
+    model_solid_angle_meas = solid_angle(x, y, model, c, min_sigma * (data_fwhm / 2.355), np.sqrt(2)*min_sigma * (data_fwhm / 2.355), norm) #model[c])
+    model_solid_angle_true = 2*np.pi*(np.deg2rad(popt[3]/3600)/ 2.355 * np.deg2rad(popt[4]/3600)/ 2.355)
     data_solid_angle_corr = data_solid_angle_meas*model_solid_angle_true/model_solid_angle_meas
 
     return (

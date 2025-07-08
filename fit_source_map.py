@@ -81,7 +81,7 @@ root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
 plot_dir = os.path.join(root_dir, "plots", project_dir, "source_map_fits", source)
 data_dir = os.path.join(root_dir, "data", project_dir, "source_map_fits", source)
-map_dir = os.path.join(root_dir, "data", project_dir, "source_maps", source)
+map_dir = os.path.join(root_dir, "data", project_dir, "source_maps_per_obs", source)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 outfile = None
@@ -144,25 +144,42 @@ if not args.overwrite and myrank == 0:
             already_have += [fname]
 already_have = comm.bcast(already_have, root=0)
 
-max_split = int(len(flist) // nproc) * nproc
+# max_split = int(len(flist) // nproc) * nproc
+#
+# lo_flist = flist[max_split:]
+# lo_obs_ids = obs_ids[max_split:]
+# lo_stream_ids = stream_ids[max_split:]
+# lo_bands = bands[max_split:]
+#
+# flist = np.array_split(flist[:max_split], nproc)[myrank]
+# obs_ids = np.array_split(obs_ids[:max_split], nproc)[myrank]
+# stream_ids = np.array_split(stream_ids[:max_split], nproc)[myrank]
+# bands = np.array_split(bands[:max_split], nproc)[myrank]
+#
+# nmaps = len(flist)
+# # Shove all the leftovers into rank 0 for now
+# if myrank == 0:
+#     flist = np.hstack([flist, lo_flist])
+#     obs_ids = np.hstack([obs_ids, lo_obs_ids])
+#     stream_ids = np.hstack([stream_ids, lo_stream_ids])
+#     bands = np.hstack([bands, lo_bands])
+flist = np.array_split(flist, nproc)[myrank]
+obs_ids = np.array_split(obs_ids, nproc)[myrank]
+stream_ids = np.array_split(stream_ids, nproc)[myrank]
+bands = np.array_split(bands, nproc)[myrank]
 
-lo_flist = flist[max_split:]
-lo_obs_ids = obs_ids[max_split:]
-lo_stream_ids = stream_ids[max_split:]
-lo_bands = bands[max_split:]
+n_maps = comm.allgather(len(flist))
+max_maps = np.max(n_maps)
+if n_maps[0] != max_maps:
+    raise ValueError("Root doesn't have max maps!")
+if len(flist) < max_maps:
+    lo = max_maps - len(flist)
+    flist = np.hstack([flist, lo*[""]])
+    obs_ids = np.hstack([obs_ids, lo*[""]])
+    stream_ids = np.hstack([stream_ids, lo*[""]])
+    bands = np.hstack([bands, lo*[""]])
+print(len(flist))
 
-flist = np.array_split(flist[:max_split], nproc)[myrank]
-obs_ids = np.array_split(obs_ids[:max_split], nproc)[myrank]
-stream_ids = np.array_split(stream_ids[:max_split], nproc)[myrank]
-bands = np.array_split(bands[:max_split], nproc)[myrank]
-
-nmaps = len(flist)
-# Shove all the leftovers into rank 0 for now
-if myrank == 0:
-    flist = np.hstack([flist, lo_flist])
-    obs_ids = np.hstack([obs_ids, lo_obs_ids])
-    stream_ids = np.hstack([stream_ids, lo_stream_ids])
-    bands = np.hstack([bands, lo_bands])
 
 par_names = ["amp", "dec0", "ra0", "fwhm_dec", "fwhm_ra", "theta", "offset"]
 par_units = [u.pW, u.arcsec, u.arcsec, u.arcsec, u.arcsec, u.radian, u.pW]
@@ -170,11 +187,13 @@ to_save = (None, None)
 for i, (fname, obs_id, stream_id, band) in enumerate(
     zip(flist, obs_ids, stream_ids, bands)
 ):
-    if i < nmaps:
-        comm.barrier()
-        to_save = comm.gather(to_save, root=0)
-    else:
-        to_save = [to_save]
+    comm.barrier()
+    # if i < nmaps:
+    #     comm.barrier()
+    #     to_save = comm.gather(to_save, root=0)
+    # else:
+    #     to_save = [to_save]
+    to_save = comm.gather(to_save, root=0)
     if myrank == 0 and to_save is not None and outfile is not None:
         for aman, path in to_save:
             if aman is None:
@@ -182,8 +201,11 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
             aman.save(outfile, path, overwrite=True)
         if i % 10 == 9:
             outfile.flush()
+    if fname == "":
+        to_save = (None, None)
+        continue
     sys.stdout.flush()
-    print(f"Fitting {obs_id}_{stream_id}_{band} ({i+1}/{len(flist)})")
+    print(f"Fitting {obs_id}_{stream_id}_{band} ({i+1}/{n_maps[myrank]})")
     if fname in already_have:
         print("\tAlready in output file and overwrite not set. Skipping...")
         to_save = (None, None)
