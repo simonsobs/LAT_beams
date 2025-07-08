@@ -5,6 +5,7 @@ import sys
 
 import h5py
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import yaml
 from matplotlib.colors import LogNorm
@@ -68,7 +69,7 @@ zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-8)
 plot_smooth = cfg.get("plot_smooth", False)
-norm = LogNorm()
+norm = LogNorm() #vmin=10**0.0001)
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -357,8 +358,13 @@ for i, obs in enumerate(obslist):
 
             plt.close()
             lognormed = out["solved"][0].copy()
-            lognormed[lognormed < log_thresh] = 0
-            plt.imshow(lognormed, origin="lower", norm=norm, extent=plt_extent)
+            # lognormed[lognormed < log_thresh] = 0
+            # _ = norm(lognormed)
+            _norm = LogNorm(vmin=0.01*np.max(lognormed), clip=True)
+            # cmap = plt.get_cmap("RdGy_r")
+            # colors = cmap(np.linspace(0.0001, 1, cmap.N))
+            # color_map = matplotlib.colors.LinearSegmentedColormap.from_list('cut', colors)
+            plt.imshow(lognormed, origin="lower", norm=_norm, extent=plt_extent) #, cmap=color_map)
             plt.xlim(
                 (
                     ra_min - pixsize * cent[1] - extent,
