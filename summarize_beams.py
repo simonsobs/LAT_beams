@@ -7,6 +7,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from sotodlib.core import AxisManager
+import seaborn as sns
 
 nominal_fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 fpath = "/so/home/saianeesh/data/beams/lat/source_map_fits/mars/beam_pars.h5"
@@ -26,7 +27,7 @@ for o in f.keys():
             stream_ids += [s]
             bands += [b]
 
-limit_bands = ["f090", "f150"]
+limit_bands = ["f090", "f150", "f220", "f280"]
 msk = np.isin(bands, limit_bands)
 obs_ids = np.array(obs_ids)[msk]
 times = np.array(times)[msk]
@@ -54,26 +55,32 @@ noise = u.Quantity([aman.noise for aman in amans])
 fwhm_x = u.Quantity([aman.fwhm_ra for aman in amans])
 fwhm_y = u.Quantity([aman.fwhm_dec for aman in amans])
 fwhm_data = u.Quantity([aman.data_fwhm for aman in amans])
-solid_angle = u.Quantity([aman.model_solid_angle for aman in amans])
-solid_angle_data = u.Quantity([aman.data_solid_angle for aman in amans])
+solid_angle = u.Quantity([aman.model_solid_angle_true for aman in amans])
+solid_angle_data = u.Quantity([aman.data_solid_angle_corr for aman in amans])
+# solid_angle_data = 2*np.pi * (fwhm_data.to(u.rad)/2.355)**2
 eps = np.abs(fwhm_x - fwhm_y) / (fwhm_x + fwhm_y)
 snr = amp / noise
 
-msk = amp / amp_err > 10
+msk = amp / amp_err > 3
 msk *= snr > 20
 msk *= abs(1 - fwhm_x / fwhm_y) < 0.2
 msk *= abs(1 - fwhm_data / fwhm_x) < 0.2
 msk *= abs(1 - fwhm_data / fwhm_y) < 0.2
 msk *= solid_angle_data > 0
 
+fwhm_ratio = []
+ts = []
+sids = []
+bs = []
 for band in np.unique(bands[msk]):
     bmsk = msk * (bands == band)
     bmsk *= fwhm_data < 2 * nominal_fwhm[band] * 60 * u.arcsec
     bmsk *= fwhm_data < np.percentile(fwhm_data[bmsk], 95)
+    print(f"{band}: {np.mean(fwhm_data[bmsk])} +- {np.std(fwhm_data[bmsk])}")
 
-    plt.hist(fwhm_x[bmsk], alpha=0.5, bins=100, label="FWHM_x")
-    plt.hist(fwhm_y[bmsk], alpha=0.5, bins=100, label="FWHM_y")
-    plt.hist(fwhm_data[bmsk], alpha=0.5, bins=100, label="FWHM Data")
+    plt.hist(fwhm_x[bmsk], alpha=0.5, bins=20, label="FWHM_x")
+    plt.hist(fwhm_y[bmsk], alpha=0.5, bins=20, label="FWHM_y")
+    plt.hist(fwhm_data[bmsk], alpha=0.5, bins=20, label="FWHM Data")
     plt.legend()
     plt.axvline(nominal_fwhm[band] * 60)
     plt.title(f"FWHM at {band}")
@@ -81,6 +88,10 @@ for band in np.unique(bands[msk]):
     plt.ylabel("Beam Maps")
     plt.savefig(os.path.join(plot_dir, f"fwhm_{band}.png"))
     plt.close()
+    fwhm_ratio += [fwhm_data[bmsk]/(nominal_fwhm[band]*60)]
+    ts += [tdelt[bmsk]]
+    sids += [stream_ids[bmsk]]
+    bs += [band] * np.sum(bmsk)
 
     plt.hist(eps[bmsk], bins=50)
     plt.xlabel("Ellipticity")
@@ -106,11 +117,11 @@ for band in np.unique(bands[msk]):
     plt.savefig(os.path.join(plot_dir, f"ellipticity_time_{band}.png"))
     plt.close()
 
-    plt.hist(solid_angle[bmsk], alpha=0.5, bins=100, label="Model")
-    plt.hist(solid_angle_data[bmsk], alpha=0.5, bins=100, label="Data")
+    plt.hist(solid_angle[bmsk], alpha=0.5, bins=20, label="Model")
+    plt.hist(solid_angle_data[bmsk], alpha=0.5, bins=20, label="Data")
     plt.legend()
     exp = 2 * np.pi * (np.deg2rad(nominal_fwhm[band] / 2.355 / 60) ** 2)
-    plt.xlim((exp / 3, 3 * exp))
+    # plt.xlim((exp / 3, 3 * exp))
     plt.axvline(exp)
     plt.title(f"Solid Angle at {band}")
     plt.xlabel("Solid Angle (sr)")
@@ -129,6 +140,29 @@ for band in np.unique(bands[msk]):
     plt.savefig(os.path.join(plot_dir, f"fwhm_snr_{band}.png"))
     plt.close()
 
+plt.scatter(np.hstack(ts), np.hstack(fwhm_ratio), alpha=.3)
+plt.xlabel("Time of Day (UTC)")
+plt.ylabel("FWHM/Nominal FWHM")
+plt.axvline(21, color="red", label="Approximate Sunset")
+plt.legend()
+plt.savefig(os.path.join(plot_dir, f"fwhm_ratio_time.png"), bbox_inches="tight")
+plt.close()
+
+sids = np.hstack(sids)
+fwhm_ratio = np.hstack(fwhm_ratio)
+data = {"ufm": sids, "fwhm_ratio": fwhm_ratio, "band": bs}
+sns.boxplot(data=data, x="ufm", y="fwhm_ratio", hue="band")
+# plt.scatter(sids, fwhm_ratio)
+# for sid in np.unique(sids):
+#     plt.hist(fwhm_ratio[sids == sid], histtype="step", label=sid, cumulative=True)
+# plt.xlabel("FWHM/Nominal FWHM")
+# plt.ylabel("Beam Maps")
+# plt.ylabel("FWHM/Nominal FWHM")
+# plt.xlabel("UFM")
+# plt.xticks(rotation=90)
+# plt.legend()
+plt.savefig(os.path.join(plot_dir, f"fwhm_ratio_ufm.png"))
+plt.close()
 
 meds = {
     band: {
