@@ -21,6 +21,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit, minimize
 from scipy.stats import binned_statistic, binned_statistic_2d
+from scipy.signal import detrend
 from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.core.context import AxisManager
@@ -343,6 +344,11 @@ def fit_tod_pointing(
     aman.wrap("xi", xi, [(0, "samps")])
     aman.wrap("eta", eta, [(0, "samps")])
 
+    az_d = detrend(aman.boresight.az)
+    d_az = np.sign(np.diff(az_d, prepend=az_d[0]))
+    turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
+    turnarounds = ~Ranges.from_mask(turnarounds) # Invert for convenience
+
     filt = identity_filter()
     if bandpass_range[0] is not None:
         filt *= high_pass_sine2(cutoff=bandpass_range[0])
@@ -520,9 +526,11 @@ def fit_tod_pointing(
         delta_eta = eta - np.array(focal_plane.eta[i])
 
         # Lets calculate hits
+        # TODO: instead of 3 sigma pick n_signa based on SNR
         xi_msk = np.abs(delta_xi) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
         eta_msk = np.abs(delta_eta) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
-        hits = Ranges.from_mask(xi_msk * eta_msk)
+        # We null out the mask where we turnaround so they count as seperate hits 
+        hits = Ranges.from_mask((xi_msk * eta_msk)) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings
