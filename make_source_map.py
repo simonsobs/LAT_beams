@@ -16,8 +16,8 @@ from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.obs_ops.utils import correct_iir_params
+from sotodlib.coords.pointing_model import apply_pointing_model
 
-from lat_beams.pointing_model import apply_pointing_model
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -70,12 +70,18 @@ buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-8)
 plot_smooth = cfg.get("plot_smooth", False)
 norm = LogNorm() #vmin=10**0.0001)
+pointing_type = cfg.get("pointing_type", "pointing_model")
+
+# Check pointing_type
+if pointing_type not in ["pointing_model", "per_obs", "raw"]:
+    raise ValueError(f"Invalid pointing_type {pointing_type}")
+per_obs = pointing_type in ["per_obs", "raw"]
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(root_dir, "plots", project_dir, "source_maps", source)
-data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", source)
+plot_dir = os.path.join(root_dir, "plots", project_dir, "source_maps", pointing_type, source)
+data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type, source)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 
@@ -96,7 +102,6 @@ else:
 print(f"Found {len(obslist)} observations to map")
 
 # Keep only the ones with a focal plane
-per_obs = cfg.get("per_obs_point", True)
 if per_obs:
     dbs = [md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")]
     if len(dbs) > 1:
@@ -109,12 +114,6 @@ if per_obs:
     obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
     obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
     print(f"Only {len(obslist)} observations with pointing metadata")
-
-# Load nominal pointing
-nominal_path = os.path.expanduser(
-    cfg.get("nominal", "~/data/pointing/lat/nominal/focal_plane.h5")
-)
-nominal = h5py.File(nominal_path)
 
 # Get settings for source mask
 res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
@@ -243,12 +242,7 @@ for i, obs in enumerate(obslist):
 
             # Pointing model
             if not per_obs:
-                az, el, roll = apply_pointing_model(
-                    {}, aman.boresight.az, aman.boresight.el, aman.boresight.roll
-                )
-                aman.boresight.az[:] = az
-                aman.boresight.el[:] = el
-                aman.boresight.roll[:] = roll
+                aman = apply_pointing_model(aman)
 
             # Its map time!
             cuts = RangesMatrix.zeros(aman.signal.shape)
@@ -459,39 +453,6 @@ for i, obs in enumerate(obslist):
                     bbox_inches="tight",
                 )
 
-nominal.close()
-
-
 # Splits stuff to implement later
 # TODO: Bin in annuli
 # TODO: Per det maps?
-# xi_off = np.mean(aman.focal_plane.xi) - ws_cent[0]
-# eta_off = np.mean(aman.focal_plane.xi) - ws_cent[1]
-# ot_cent -= np.array([xi_off, eta_off])
-# dist = np.sqrt((ot_cent[0] - aman.focal_plane.xi)**2 + (ot_cent[1] - aman.focal_plane.eta)**2)
-# msk = dist > np.deg2rad(.5)
-# msk = np.repeat(msk, int(aman.samps.count)).reshape(len(msk), -1)
-# ranges = RangesMatrix.from_mask(msk)
-# splits = {"Within .5 deg" : ranges, "Outside .5 deg" : ~ranges}
-# out = cp.make_map(aman, center_on='mars', res=res, cuts=cuts, data_splits=splits, source_flags=source_flags, comps="T")
-#
-# for split in out["splits"].keys():
-#     dat = out["splits"][split]
-#     title = split.lower().replace(" ", "_")
-#     plt.close()
-#     plt.title(split)
-#     plt.imshow(dat["solved"][0])
-#     plt.xlim((cent[1]-50, cent[1]+50))
-#     plt.ylim((cent[0]-50, cent[0]+50))
-#     plt.colorbar()
-#     plt.grid()
-#     plt.savefig(os.path.join(plot_dir, f"map_{title}.png"))
-#
-#     plt.close()
-#     plt.title(split)
-#     plt.imshow(dat["solved"][0], norm=SymLogNorm(1e-6))
-#     plt.xlim((cent[1]-50, cent[1]+50))
-#     plt.ylim((cent[0]-50, cent[0]+50))
-#     plt.colorbar()
-#     plt.grid()
-#     plt.savefig(os.path.join(plot_dir, f"map_{title}_log10.png"))
