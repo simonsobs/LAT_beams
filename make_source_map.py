@@ -64,6 +64,9 @@ eta_off = cfg.get("eta_off", np.nan)
 min_dets = cfg.get("min_dets", 50)
 min_hits = cfg.get("min_hits", 5)
 min_det_secs = cfg.get("min_det_secs", 5000)
+min_snr = cfg.get("min_snr", 5)
+n_modes = cfg.get("n_modes", 10)
+del_map = cfg.get("del_map", True)
 extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
@@ -197,19 +200,13 @@ for i, obs in enumerate(obslist):
 
             # Load and process the TOD
             aman = ctx.get_obs(meta_band)
-            filt = tod_ops.filters.iir_filter(invert=True)
             try:
-                aman.signal = tod_ops.filters.fourier_filter(
-                    aman, filt, signal_name="signal"
-                )
+                filt = tod_ops.filters.iir_filter(invert=True)
             except ValueError:
                 print("\t\tNo iir params! Adding defaults...")
                 correct_iir_params(aman, True, 5)
                 filt = tod_ops.filters.iir_filter(invert=True)
-                aman.signal = tod_ops.filters.fourier_filter(
-                    aman, filt, signal_name="signal"
-                )
-            filt = tod_ops.filters.timeconst_filter(
+            filt = filt * tod_ops.filters.timeconst_filter(
                 timeconst=aman.det_cal.tau_eff, invert=True
             )
             aman.signal = tod_ops.filters.fourier_filter(
@@ -256,8 +253,7 @@ for i, obs in enumerate(obslist):
             if not per_obs:
                 aman = apply_pointing_model(aman)
 
-            # Its map time!
-            cuts = RangesMatrix.zeros(aman.signal.shape)
+            # Get source_flags
             source_flags = cp.compute_source_flags(
                 tod=aman,
                 P=None,
@@ -267,13 +263,31 @@ for i, obs in enumerate(obslist):
                 max_pix=4e8,
                 wrap=None,
             )
-            det_secs = np.sum(source_flags.get_stats()["samples"]) * np.mean(
+
+            # Do an aggressive filter and flag dets without the source
+            sig_filt = cp.filter_for_sources(tod=aman, signal=aman.signal.copy(), source_flags=source_flags, n_modes="all")
+            smsk = source_flags.mask()
+            sig_filt_src = sig_filt.copy()
+            sig_filt_src[~smsk] = np.nan
+            sig_filt[smsk] = np.nan
+            peak_snr = np.nanmax(sig_filt_src, axis=-1)/np.nanstd(sig_filt, axis=-1)
+            to_cut = (peak_snr < min_snr)
+            cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
+            print(f"\t\tCutting {np.sum(to_cut)} detectors from map")
+            if np.sum(~to_cut) < min_dets:
+                print(f"\t\tNot enough detectors! Skipping...")
+                continue
+
+            # Get time on source
+            det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
                 np.diff(aman.timestamps)
             )
             print(f"\t\t{det_secs} detector seconds on source")
             if det_secs < min_det_secs:
                 print(f"\t\tNot enough time on source. Skipping...")
                 continue
+
+            # Its map time!
             out = cp.make_map(
                 aman,
                 center_on="mars",
@@ -284,6 +298,7 @@ for i, obs in enumerate(obslist):
                 filename=os.path.join(
                     obs_data_dir, "{obs_id}_{ufm}_{band_name}_{map}.fits"
                 ),
+                n_modes=n_modes,
                 info={"obs_id": obs["obs_id"], "ufm": ufm, "band_name": band_name},
             )
             [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
@@ -295,11 +310,26 @@ for i, obs in enumerate(obslist):
 
             # Smooth and find the center
             smoothed = gaussian_filter(out["solved"][0], sigma=1)
-            smoothed[:buf] = 0
-            smoothed[-1 * buf :] = 0
-            smoothed[:, :buf] = 0
-            smoothed[:, -1 * buf :] = 0
-            cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
+            smoothed[:buf] = np.nan
+            smoothed[-1 * buf :] = np.nan
+            smoothed[:, :buf] = np.nan
+            smoothed[:, -1 * buf :] = np.nan
+            cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
+            
+            # Estimate SNR
+            snr = smoothed[cent]/tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+            print(f"\t\tMap SNR approximately {snr}")
+            if snr < min_snr * np.sqrt(np.sum(~to_cut))/2:
+                print(f"\t\tMap SNR too low! Skipping...")
+                if not del_map:
+                    continue
+                print("\t\tDeleting fits files")
+                glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*.fits")
+                flist = glob.glob(glob_path)
+                for fname in flist:
+                    if os.path.isfile(fname):
+                        os.remove(fname)
+                continue
 
             # Plot
             plt.close()
