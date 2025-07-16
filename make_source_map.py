@@ -17,12 +17,34 @@ from sotodlib.core import Context, metadata
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.coords.pointing_model import apply_pointing_model
+import mpi4py.rc
 
+mpi4py.rc.threads = False
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+myrank = comm.Get_rank()
+nproc = comm.Get_size()
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
 N_FILES = 4
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
+
+
+def print_once(*args):
+    """
+    Helper function to print only once when running with MPI.
+    Only the rank 0 process will print.
+
+    Parameters
+    ----------
+    *args : Unpack[tuple[Any, ...]]
+        Arguments to pass to print.
+    """
+    if comm.Get_rank() == 0:
+        print(*args)
+        sys.stdout.flush()
 
 
 def radial_profile(data, center):
@@ -40,7 +62,7 @@ def radial_profile(data, center):
 def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp="T", log=False, log_thresh=1e-3):
     _norm = None
     label = f"_{comp}"
-    rprof = radial_profile(data, cent[::-1])
+    rprof = radial_profile(data, cent[::-1])[:int(.5*min(*data.shape))]
     if log:
         _norm = SymLogNorm(linthresh=log_thresh*np.max(data), clip=True)
         label = f"_{comp}_log10"
@@ -67,7 +89,8 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, 
     )
 
     plt.close()
-    plt.plot(np.linspace(0, pixsize * len(rprof), len(rprof)), rprof)
+    x =np.linspace(0, pixsize * len(rprof), len(rprof))
+    plt.plot(x, rprof)
     plt.xlabel('Radius (")')
     plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
     plt.xlim((0, extent))
@@ -78,6 +101,9 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, 
         bbox_inches="tight",
     )
     plt.xlim((0, extent / zoom))
+    lims = plt.gca().get_xlim()
+    i = np.where( (x >= lims[0]) &  (x <= lims[1]) )[0]
+    plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
     plt.savefig(
         os.path.join(
             ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
@@ -124,7 +150,7 @@ pointing_type = cfg.get("pointing_type", "pointing_model")
 if pointing_type not in ["pointing_model", "per_obs", "raw"]:
     raise ValueError(f"Invalid pointing_type {pointing_type}")
 if pointing_type == "raw" and comps != "T":
-    print(f"Running with raw pointing, changing comps from {comps} to T")
+    print_once(f"Running with raw pointing, changing comps from {comps} to T")
 per_obs = pointing_type in ["per_obs", "raw"]
 
 # Setup folders
@@ -156,19 +182,22 @@ print(f"Found {len(obslist)} observations to map")
 if per_obs:
     dbs = [md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")]
     if len(dbs) > 1:
-        print("Multiple pointing metadata entries found, using the first one")
+        print_once("Multiple pointing metadata entries found, using the first one")
     elif len(dbs) == 0:
-        print("No pointing metadata entries found")
+        print_once("No pointing metadata entries found")
         sys.exit()
-    print(f"Using ManifestDb at {dbs[0]}")
+    print_once(f"Using ManifestDb at {dbs[0]}")
     db = metadata.ManifestDb(dbs[0])
     obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
     obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
-    print(f"Only {len(obslist)} observations with pointing metadata")
+    print_once(f"Only {len(obslist)} observations with pointing metadata")
 
 # Get settings for source mask
 res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
 mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
+
+# Split for MPI
+obslist = np.array_split(obslist, nproc)[myrank]
 
 # Mapping loop
 source_list = set(source_list)
@@ -337,7 +366,7 @@ for i, obs in enumerate(obslist):
             # Its map time!
             out = cp.make_map(
                 aman,
-                center_on="mars",
+                center_on=src_name,
                 res=res,
                 cuts=cuts,
                 source_flags=source_flags,
@@ -386,8 +415,10 @@ for i, obs in enumerate(obslist):
             plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
             for i, comp in enumerate(comps):
                 map_norm = peak/out["solved"][i][cent]
-                plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, log_thresh)
+                plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, False, log_thresh)
                 plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, True, log_thresh)
+
+    sys.stdout.flush()
 
 # Splits stuff to implement later
 # TODO: Bin in annuli
