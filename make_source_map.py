@@ -37,6 +37,54 @@ def radial_profile(data, center):
     return radialprofile
 
 
+def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, comp="T", log=False):
+    _norm = None
+    label = f"_{comp}"
+    rprof = radial_profile(data, cent[::-1])
+    if log:
+        _norm = LogNorm(vmin=0.001*np.max(data), clip=True)
+        label = f"_{comp}_log10"
+        with np.errstate(divide='ignore', invalid='ignore'):
+            rprof = np.log10(rprof)
+    plt.close()
+    plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
+    plt.colorbar()
+    plt.grid()
+    plt.xlabel('RA (")')
+    plt.ylabel('Dec (")')
+    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}")
+    plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
+    plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
+    plt.savefig(
+        os.path.join(obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
+    )
+    plt.xlim((plt_cent[0] - extent/zoom, plt_cent[0] + extent/zoom))
+    plt.ylim((plt_cent[1] - extent/zoom, plt_cent[1] + extent/zoom))
+    plt.savefig(
+        os.path.join(
+            obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
+        )
+    )
+
+    plt.close()
+    plt.plot(np.linspace(0, pixsize * len(rprof), len(rprof)), rprof)
+    plt.xlabel('Radius (")')
+    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}")
+    plt.xlim((0, extent))
+    plt.savefig(
+        os.path.join(
+            obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}.png"
+        ),
+        bbox_inches="tight",
+    )
+    plt.xlim((0, extent / zoom))
+    plt.savefig(
+        os.path.join(
+            obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
+        ),
+        bbox_inches="tight",
+    )
+
 parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
 parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
@@ -71,8 +119,7 @@ extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-8)
-plot_smooth = cfg.get("plot_smooth", False)
-norm = LogNorm() #vmin=10**0.0001)
+norm = LogNorm()
 pointing_type = cfg.get("pointing_type", "pointing_model")
 
 # Check pointing_type
@@ -265,13 +312,14 @@ for i, obs in enumerate(obslist):
             )
 
             # Do an aggressive filter and flag dets without the source
-            sig_filt = cp.filter_for_sources(tod=aman, signal=aman.signal.copy(), source_flags=source_flags, n_modes="all")
+            sig_filt = cp.filter_for_sources(tod=aman, signal=aman.signal.copy(), source_flags=source_flags, n_modes=2*n_modes)
             smsk = source_flags.mask()
             sig_filt_src = sig_filt.copy()
             sig_filt_src[~smsk] = np.nan
             sig_filt[smsk] = np.nan
-            peak_snr = np.nanmax(sig_filt_src, axis=-1)/np.nanstd(sig_filt, axis=-1)
-            to_cut = (peak_snr < min_snr)
+            with np.errstate(divide='ignore'):
+                peak_snr = np.nanmax(sig_filt_src, axis=-1)/np.nanstd(sig_filt, axis=-1)
+            to_cut = (peak_snr < min_snr) + ~np.isfinite(peak_snr)
             cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
             print(f"\t\tCutting {np.sum(to_cut)} detectors from map")
             if np.sum(~to_cut) < min_dets:
@@ -306,7 +354,6 @@ for i, obs in enumerate(obslist):
             )
             plt_extent = [ra_min, ra_max, dec_min, dec_max]
             pixsize = 3600 * out["solved"].wcs.wcs.cdelt[1]
-            extent_pix = int(extent / pixsize)
 
             # Smooth and find the center
             smoothed = gaussian_filter(out["solved"][0], sigma=1)
@@ -332,168 +379,9 @@ for i, obs in enumerate(obslist):
                 continue
 
             # Plot
-            plt.close()
-            plt.imshow(out["solved"][0], origin="lower", extent=plt_extent)
-            plt.colorbar()
-            plt.grid()
-            plt.xlabel('RA (")')
-            plt.ylabel('Dec (")')
-            plt.title(f"{obs['obs_id']}_{ufm}_{band_name}")
-            plt.xlim(
-                (
-                    ra_min - pixsize * cent[1] - extent,
-                    ra_min - pixsize * cent[1] + extent,
-                )
-            )
-            plt.ylim(
-                (
-                    dec_min + pixsize * cent[0] - extent,
-                    dec_min + pixsize * cent[0] + extent,
-                )
-            )
-            plt.savefig(
-                os.path.join(obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map.png")
-            )
-            plt.xlim(
-                (
-                    ra_min - pixsize * cent[1] - extent / zoom,
-                    ra_min - pixsize * cent[1] + extent / zoom,
-                )
-            )
-            plt.ylim(
-                (
-                    dec_min + pixsize * cent[0] - extent / zoom,
-                    dec_min + pixsize * cent[0] + extent / zoom,
-                )
-            )
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map_zoom.png"
-                )
-            )
-
-            plt.close()
-            rprof = radial_profile(out["solved"][0], cent[::-1])
-            plt.plot(np.linspace(0, pixsize * len(rprof), len(rprof)), rprof)
-            plt.xlabel('Radius (")')
-            plt.title(f"{obs['obs_id']}_{ufm}_{band_name}")
-            plt.xlim((0, extent))
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof.png"
-                ),
-                bbox_inches="tight",
-            )
-            plt.xlim((0, extent / zoom))
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof_zoom.png"
-                ),
-                bbox_inches="tight",
-            )
-
-            plt.close()
-            lognormed = out["solved"][0].copy()
-            # lognormed[lognormed < log_thresh] = 0
-            # _ = norm(lognormed)
-            _norm = LogNorm(vmin=0.01*np.max(lognormed), clip=True)
-            # cmap = plt.get_cmap("RdGy_r")
-            # colors = cmap(np.linspace(0.0001, 1, cmap.N))
-            # color_map = matplotlib.colors.LinearSegmentedColormap.from_list('cut', colors)
-            plt.imshow(lognormed, origin="lower", norm=_norm, extent=plt_extent) #, cmap=color_map)
-            plt.xlim(
-                (
-                    ra_min - pixsize * cent[1] - extent,
-                    ra_min - pixsize * cent[1] + extent,
-                )
-            )
-            plt.ylim(
-                (
-                    dec_min + pixsize * cent[0] - extent,
-                    dec_min + pixsize * cent[0] + extent,
-                )
-            )
-            plt.colorbar()
-            plt.grid()
-            plt.xlabel('RA (")')
-            plt.ylabel('Dec (")')
-            plt.title(f"{obs['obs_id']}_{ufm}_{band_name} log")
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map_log10.png"
-                )
-            )
-            plt.xlim(
-                (
-                    ra_min - pixsize * cent[1] - extent / zoom,
-                    ra_min - pixsize * cent[1] + extent / zoom,
-                )
-            )
-            plt.ylim(
-                (
-                    dec_min + pixsize * cent[0] - extent / zoom,
-                    dec_min + pixsize * cent[0] + extent / zoom,
-                )
-            )
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir,
-                    f"{obs['obs_id']}_{ufm}_{band_name}_map_log10_zoom.png",
-                )
-            )
-
-            plt.close()
-            rprof = radial_profile(np.log10(lognormed), cent[::-1])
-            plt.plot(np.linspace(0, pixsize * len(rprof), len(rprof)), rprof)
-            plt.xlabel('Radius (")')
-            plt.title(f"{obs['obs_id']}_{ufm}_{band_name} log")
-            plt.xlim((0, extent))
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof_log10.png"
-                ),
-                bbox_inches="tight",
-            )
-            plt.xlim((0, extent / zoom))
-            plt.savefig(
-                os.path.join(
-                    obs_plot_dir,
-                    f"{obs['obs_id']}_{ufm}_{band_name}_prof_log10_zoom.png",
-                ),
-                bbox_inches="tight",
-            )
-
-            if plot_smooth:
-                rprof = radial_profile(smoothed, cent[::-1])
-                rlen = len(rprof)
-                rprof = np.hstack([np.flip(rprof), rprof])
-                plt.close()
-                fig, axd = plt.subplot_mosaic(
-                    [
-                        ["A", "A", "A"],
-                        ["A", "A", "A"],
-                        ["A", "A", "A"],
-                        ["B", "B", "B"],
-                    ],
-                    layout="constrained",
-                    figsize=(7, 10),
-                )
-                axd["A"].imshow(
-                    smoothed[
-                        cent[0] - extent_pix : cent[0] + extent_pix,
-                        cent[1] - extent_pix : cent[1] + extent_pix,
-                    ],
-                    origin="lower",
-                )
-                axd["B"].plot(rprof[rlen - extent_pix : rlen + extent_pix])
-                plt.title(f"{obs['obs_id']}_{ufm}_{band_name} smooth")
-                plt.savefig(
-                    os.path.join(
-                        obs_plot_dir,
-                        f"{obs['obs_id']}_{ufm}_{band_name}_map_smooth.png",
-                    ),
-                    bbox_inches="tight",
-                )
+            plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
+            plot_map(out["solved"][0], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, "T")
+            plot_map(out["solved"][0], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, "T", True)
 
 # Splits stuff to implement later
 # TODO: Bin in annuli
