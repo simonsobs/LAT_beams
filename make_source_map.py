@@ -52,7 +52,7 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, 
     plt.grid()
     plt.xlabel('RA (")')
     plt.ylabel('Dec (")')
-    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}")
+    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
     plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
     plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
     plt.savefig(
@@ -69,7 +69,7 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, 
     plt.close()
     plt.plot(np.linspace(0, pixsize * len(rprof), len(rprof)), rprof)
     plt.xlabel('Radius (")')
-    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}")
+    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
     plt.xlim((0, extent))
     plt.savefig(
         os.path.join(
@@ -107,8 +107,7 @@ with open(args.cfg, "r") as f:
 
 # Get some global settings
 source_list = cfg.get("source", ["mars", "saturn", "jupiter"])
-xi_off = cfg.get("xi_off", np.nan)
-eta_off = cfg.get("eta_off", np.nan)
+comps = cfg.get("comps", "TQU")
 min_dets = cfg.get("min_dets", 50)
 min_hits = cfg.get("min_hits", 5)
 min_det_secs = cfg.get("min_det_secs", 5000)
@@ -125,6 +124,8 @@ pointing_type = cfg.get("pointing_type", "pointing_model")
 # Check pointing_type
 if pointing_type not in ["pointing_model", "per_obs", "raw"]:
     raise ValueError(f"Invalid pointing_type {pointing_type}")
+if pointing_type == "raw" and comps != "T":
+    print(f"Running with raw pointing, changing comps from {comps} to T")
 per_obs = pointing_type in ["per_obs", "raw"]
 
 # Setup folders
@@ -342,7 +343,7 @@ for i, obs in enumerate(obslist):
                 res=res,
                 cuts=cuts,
                 source_flags=source_flags,
-                comps="T",
+                comps=comps,
                 filename=os.path.join(
                     obs_data_dir, "{obs_id}_{ufm}_{band_name}_{map}.fits"
                 ),
@@ -363,25 +364,27 @@ for i, obs in enumerate(obslist):
             smoothed[:, -1 * buf :] = np.nan
             cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
             
-            # Estimate SNR
-            snr = smoothed[cent]/tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
-            print(f"\t\tMap SNR approximately {snr}")
-            if snr < min_snr * np.sqrt(np.sum(~to_cut))/2:
-                print(f"\t\tMap SNR too low! Skipping...")
-                if not del_map:
+            # Estimate SNR, but only if we have a T map
+            if "T" in comps:
+                snr = smoothed[cent]/tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+                print(f"\t\tMap SNR approximately {snr}")
+                if snr < min_snr * np.sqrt(np.sum(~to_cut))/2:
+                    print(f"\t\tMap SNR too low! Skipping...")
+                    if not del_map:
+                        continue
+                    print("\t\tDeleting fits files")
+                    glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*.fits")
+                    flist = glob.glob(glob_path)
+                    for fname in flist:
+                        if os.path.isfile(fname):
+                            os.remove(fname)
                     continue
-                print("\t\tDeleting fits files")
-                glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*.fits")
-                flist = glob.glob(glob_path)
-                for fname in flist:
-                    if os.path.isfile(fname):
-                        os.remove(fname)
-                continue
 
             # Plot
             plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-            plot_map(out["solved"][0], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, "T")
-            plot_map(out["solved"][0], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, "T", True)
+            for i, comp in enumerate(comps):
+                plot_map(out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, comp)
+                plot_map(out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, comp, True)
 
 # Splits stuff to implement later
 # TODO: Bin in annuli
