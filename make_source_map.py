@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 import yaml
-from matplotlib.colors import LogNorm
+from matplotlib.colors import SymLogNorm
 from scipy.ndimage import gaussian_filter
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
@@ -37,15 +37,15 @@ def radial_profile(data, center):
     return radialprofile
 
 
-def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, comp="T", log=False):
+def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp="T", log=False, log_thresh=1e-3):
     _norm = None
     label = f"_{comp}"
     rprof = radial_profile(data, cent[::-1])
     if log:
-        _norm = LogNorm(vmin=0.001*np.max(data), clip=True)
+        _norm = SymLogNorm(linthresh=log_thresh*np.max(data), clip=True)
         label = f"_{comp}_log10"
         with np.errstate(divide='ignore', invalid='ignore'):
-            rprof = np.log10(rprof)
+            rprof = np.sign(rprof)*np.log10(np.abs(rprof))
     plt.close()
     plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
     plt.colorbar()
@@ -56,13 +56,13 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, 
     plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
     plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
     plt.savefig(
-        os.path.join(obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
+        os.path.join(ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
     )
     plt.xlim((plt_cent[0] - extent/zoom, plt_cent[0] + extent/zoom))
     plt.ylim((plt_cent[1] - extent/zoom, plt_cent[1] + extent/zoom))
     plt.savefig(
         os.path.join(
-            obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
+            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
         )
     )
 
@@ -73,14 +73,14 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, 
     plt.xlim((0, extent))
     plt.savefig(
         os.path.join(
-            obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}.png"
+            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}.png"
         ),
         bbox_inches="tight",
     )
     plt.xlim((0, extent / zoom))
     plt.savefig(
         os.path.join(
-            obs_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
+            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
         ),
         bbox_inches="tight",
     )
@@ -117,8 +117,7 @@ del_map = cfg.get("del_map", True)
 extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
-log_thresh = cfg.get("log_thresh", 1e-8)
-norm = LogNorm()
+log_thresh = cfg.get("log_thresh", 1e-3)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 
 # Check pointing_type
@@ -148,7 +147,7 @@ else:
     if args.lookback is not None:
         start_time = time.time() - 3600 * args.lookback
     obslist = ctx.obsdb.query(
-        f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {cfg['stop_time']} and ({source_str})",
+        f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {cfg['stop_time']} and ({src_str})",
         tags=source_list,
     )
 print(f"Found {len(obslist)} observations to map")
@@ -217,7 +216,6 @@ for i, obs in enumerate(obslist):
 
     obs_plot_dir = os.path.join(plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
     obs_data_dir = os.path.join(data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
-    os.makedirs(obs_plot_dir, exist_ok=True)
     os.makedirs(obs_data_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
     for ufm in ufms:
@@ -306,7 +304,7 @@ for i, obs in enumerate(obslist):
                 tod=aman,
                 P=None,
                 mask=mask,
-                center_on="mars",
+                center_on=src_name,
                 res=res,
                 max_pix=4e8,
                 wrap=None,
@@ -357,7 +355,7 @@ for i, obs in enumerate(obslist):
             pixsize = 3600 * out["solved"].wcs.wcs.cdelt[1]
 
             # Smooth and find the center
-            smoothed = gaussian_filter(out["solved"][0], sigma=1)
+            smoothed = gaussian_filter(out["solved"][0], sigma=60/pixsize)
             smoothed[:buf] = np.nan
             smoothed[-1 * buf :] = np.nan
             smoothed[:, :buf] = np.nan
@@ -365,8 +363,10 @@ for i, obs in enumerate(obslist):
             cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
             
             # Estimate SNR, but only if we have a T map
+            peak = 1.
             if "T" in comps:
-                snr = smoothed[cent]/tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+                peak = out["solved"][0][cent]
+                snr = peak/tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
                 print(f"\t\tMap SNR approximately {snr}")
                 if snr < min_snr * np.sqrt(np.sum(~to_cut))/2:
                     print(f"\t\tMap SNR too low! Skipping...")
@@ -381,10 +381,13 @@ for i, obs in enumerate(obslist):
                     continue
 
             # Plot
+            ufm_plot_dir = os.path.join(obs_plot_dir, ufm)
+            os.makedirs(ufm_plot_dir, exist_ok=True)
             plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
             for i, comp in enumerate(comps):
-                plot_map(out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, comp)
-                plot_map(out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, obs_plot_dir, obs, ufm, band_name, comp, True)
+                map_norm = peak/out["solved"][i][cent]
+                plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, log_thresh)
+                plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, True, log_thresh)
 
 # Splits stuff to implement later
 # TODO: Bin in annuli
