@@ -58,7 +58,7 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-source = cfg.get("source", "mars")
+source_list = cfg.get("source", ["mars", "saturn", "jupiter"])
 xi_off = cfg.get("xi_off", np.nan)
 eta_off = cfg.get("eta_off", np.nan)
 min_dets = cfg.get("min_dets", 50)
@@ -80,8 +80,8 @@ per_obs = pointing_type in ["per_obs", "raw"]
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(root_dir, "plots", project_dir, "source_maps", pointing_type, source)
-data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type, source)
+plot_dir = os.path.join(root_dir, "plots", project_dir, "source_maps", pointing_type)
+data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 
@@ -92,12 +92,13 @@ if ctx.obsdb is None:
 if args.obs_ids is not None:
     obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
 else:
+    src_str = "==1 or ".join(source_list)+"==1"
     start_time = cfg["start_time"]
     if args.lookback is not None:
         start_time = time.time() - 3600 * args.lookback
     obslist = ctx.obsdb.query(
-        f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {cfg['stop_time']}",
-        tags=[f"{source}=1"],
+        f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {cfg['stop_time']} and ({source_str})",
+        tags=source_list,
     )
 print(f"Found {len(obslist)} observations to map")
 
@@ -120,6 +121,7 @@ res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
 mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
 
 # Mapping loop
+source_list = set(source_list)
 for i, obs in enumerate(obslist):
     if i < args.start_from:
         continue
@@ -129,9 +131,19 @@ for i, obs in enumerate(obslist):
     meta = ctx.get_meta(obs["obs_id"])
     if meta.dets.count == 0:
         print(
-            f"Looks like we don't have real metadata for this observation. Skipping..."
+            f"\tLooks like we don't have real metadata for this observation. Skipping..."
         )
         continue
+
+    src_names = list(source_list & set(obs["tags"]))
+    if len(src_names) > 1:
+        print("\tObservation tagged for multiple sources!")
+    elif len(src_names) == 0:
+        print("\tObservation somehow not tagged for any sources in source_list! Skipping!")
+        print(f"\t\tTags were: {obs['tags']}")
+        continue
+    src_name = "_".join(src_names)
+    print(f"\tMapping {src_name}")
 
     meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
     db_flag = tod_ops.flags.get_det_bias_flags(meta)
@@ -152,8 +164,8 @@ for i, obs in enumerate(obslist):
         * np.isfinite(meta.focal_plane.gamma),
     )
 
-    obs_plot_dir = os.path.join(plot_dir, str(obs["timestamp"])[:5], obs["obs_id"])
-    obs_data_dir = os.path.join(data_dir, str(obs["timestamp"])[:5], obs["obs_id"])
+    obs_plot_dir = os.path.join(plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
+    obs_data_dir = os.path.join(data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
     os.makedirs(obs_plot_dir, exist_ok=True)
     os.makedirs(obs_data_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)

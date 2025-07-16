@@ -1,5 +1,7 @@
-source: "mars"
-per_obs_point: True 
+source_list:
+  - "mars"
+  - "saturn"
+pointing_type: "per_obs" 
 min_samps: 20000
 min_dets: 50
 min_hits: 1
