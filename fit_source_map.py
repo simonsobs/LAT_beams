@@ -164,8 +164,8 @@ if len(flist) < max_maps:
     bands = np.hstack([bands, lo*[""]])
 
 
-par_names = ["amp", "dec0", "ra0", "fwhm_dec", "fwhm_ra", "theta", "offset"]
-par_units = [u.pW, u.arcsec, u.arcsec, u.arcsec, u.arcsec, u.radian, u.pW]
+par_names = ["amp", "dec0", "ra0", "fwhm_dec", "fwhm_ra", "theta", "offset", "amp_outer", "fwhm_dec_outer", "fwhm_ra_outer", "theta_outer"]
+par_units = [u.pW, u.arcsec, u.arcsec, u.arcsec, u.arcsec, u.radian, u.pW, u.pW, u.radian]
 to_save = (None, None)
 skipped = []
 for i, (fname, obs_id, stream_id, band) in enumerate(
@@ -381,7 +381,7 @@ comm.barrier()
 skipped = comm.gather(skipped, root=0)
 if myrank == 0:
     print("\nSkipped maps:")
-    print("\t" + "\n\t".join(np.ravel(skipped)))
+    print("\t" + "\n\t".join(np.ravel(np.hstack(skipped))))
 to_save = comm.gather(to_save, root=0)
 if myrank == 0 and to_save is not None and outfile is not None:
     for aman, path in to_save:

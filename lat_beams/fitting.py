@@ -85,7 +85,6 @@ def get_xieta_src_centered(
     return xi, eta
 
 
-# TOOO: Add gradient function
 def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
     Stolen from analyze_bright_ptsrc
@@ -117,6 +116,12 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     eta_coef = -0.5 * (eta_rot) ** 2 / (fwhm_eta / factor) ** 2
     sim_data = a * np.exp(xi_coef + eta_coef)
     return sim_data + off
+
+def double_gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off, a_outer, fwhm_xi_outer, fwhm_eta_outer, phi_outer):
+    inner = gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
+    outer = gaussian2d(xieta, a_outer, xi0, eta0, fwhm_xi_outer, fwhm_eta_outer, phi_outer, 0)
+
+    return inner + outer
 
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
@@ -660,19 +665,23 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
         60 / res,
         0,
         0,
+        0,
+        300 / res,
+        300 / res,
+        0,
     ]
 
-    #  amp, x0, y0, fwhm_x, fwhm_y, phi, off
+    #  amp, x0, y0, fwhm_x, fwhm_y, phi, off, amp_outer, fwhm_xi_outer, fwhm_eta_outer, phi_outer
     bounds = (
-        [min(0, np.min(imap)), 0, 0, 20 / res, 20 / res, 0, -np.inf],
-        [5*np.max(imap), nx, ny, 300 / res, 300 / res, 2 * np.pi, np.inf],
+        [min(0, np.min(imap)), 0, 0, 20 / res, 20 / res, 0, -np.inf, 0, 20 / res, 20 / res, 0],
+        [5*np.max(imap), nx, ny, 300 / res, 300 / res, 2 * np.pi, np.inf, np.max(imap), 900 / res, 900 / res, 2 * np.pi],
     )
 
     pixmap = (pixmap[0].ravel().astype(float), pixmap[1].ravel().astype(float))
 
     try:
         popt, pcov = curve_fit(
-            gaussian2d,
+            double_gaussian2d,
             pixmap,
             imap.ravel(),
             p0=guess,
@@ -683,7 +692,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
         return None
     perr = np.sqrt(np.diag(pcov))
 
-    model = gaussian2d(pixmap, *popt).reshape(imap.shape)
+    model = double_gaussian2d(pixmap, *popt).reshape(imap.shape)
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
     if popt[0] < min_sigma * perr[0] or model[c] == 0:
         return None
@@ -691,6 +700,8 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     # convert units of pixels to arcsecs
     popt[1:5] *= res
     perr[1:5] *= res
+    popt[8:10] *= res
+    perr[8:10] *= res
 
     # Get FWHM from data
     rprof = radial_profile(imap, c[::-1])
@@ -705,13 +716,14 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
     x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
     kern = Gaussian2DKernel((data_fwhm / 2.3548) / res, (data_fwhm / 2.3548) / res)
-    imap_smooth = convolve_fft(imap - popt[-1], kern)
-    model_smooth = convolve_fft(model - popt[-1], kern)
+    imap_smooth = convolve_fft(imap - popt[6], kern)
+    model_smooth = convolve_fft(model - popt[6], kern)
     norm = np.max(imap_smooth[max(0, c[0] - fwhm_pix):min(imap_smooth.shape[0], c[0] + fwhm_pix), max(0, c[1] - fwhm_pix):min(imap_smooth.shape[1], c[1] + fwhm_pix)])
-    data_solid_angle_meas = solid_angle(x, y, imap_smooth - popt[-1], c, min_sigma * (data_fwhm / 2.355), norm)
-    model_solid_angle_meas = solid_angle(x, y, model_smooth - popt[-1], c, min_sigma * (data_fwhm / 2.355), norm)
-    model_solid_angle_true = 2*np.pi*(np.deg2rad(popt[3]/3600)/ 2.355 * np.deg2rad(popt[4]/3600)/ 2.355)
+    data_solid_angle_meas = solid_angle(x, y, imap_smooth, c, min_sigma * (data_fwhm / 2.355), norm)
+    model_solid_angle_meas = solid_angle(x, y, model_smooth, c, min_sigma * (data_fwhm / 2.355), norm)
+    model_solid_angle_true = 2*np.pi*((popt[0] * (np.deg2rad(popt[3]/3600)/ 2.355) * (np.deg2rad(popt[4]/3600)/ 2.355)) + (popt[7] * (np.deg2rad(popt[8]/3600)/ 2.355) * (np.deg2rad(popt[9]/3600)/ 2.355)))/(popt[0] + popt[8])
     data_solid_angle_corr = data_solid_angle_meas*model_solid_angle_true/model_solid_angle_meas
+    print(data_solid_angle_corr/model_solid_angle_true)
 
     return (
         popt,
