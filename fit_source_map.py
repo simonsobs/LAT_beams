@@ -18,6 +18,7 @@ import time
 
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.pointing_model import apply_pointing_model
+from lat_beams.utils import print_once
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -26,8 +27,9 @@ comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
+fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
-def get_cent(imap, buf=30, sigma=1):
+def get_cent(imap, buf=30, sigma=5):
     smoothed = gaussian_filter(imap, sigma=sigma)
     smoothed[:buf] = 0
     smoothed[-1 * buf :] = 0
@@ -70,18 +72,19 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-source = cfg.get("source", "mars")
 extent = cfg.get("extent", 900)
 snr_extent = cfg.get("snr_extent", 360)
 min_sigma = cfg.get("min_sigma_fit", 3)
 min_snr = cfg.get("min_snr", 10)
+fwhm_tol = cfg.get("fwhm_tol", .25)
+pointing_type = cfg.get("pointing_type", "pointing_model")
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(root_dir, "plots", project_dir, "source_map_fits", source)
-data_dir = os.path.join(root_dir, "data", project_dir, "source_map_fits", source)
-map_dir = os.path.join(root_dir, "data", project_dir, "source_maps_per_obs", source)
+plot_dir = os.path.join(root_dir, "plots", project_dir, "source_maps", pointing_type, "fits")
+data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type, "fits")
+map_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 outfile = None
@@ -89,7 +92,7 @@ if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, "beam_pars.h5"), "a")
 
 # Get the list of files
-flist = sorted(glob.glob(map_dir + "/*/*/*_solved.fits"))
+flist = sorted(glob.glob(map_dir + "/*/*/*/*_solved.fits"))
 
 # Get the obs_id, stream id, and band
 obs_ids = []
@@ -128,8 +131,8 @@ stream_ids = stream_ids[msk]
 bands = bands[msk]
 flist = flist[msk]
 
-print(f"{len(flist)} maps found")
-print(f"Starting from {args.start_from}")
+print_once(f"{len(flist)} maps found")
+print_once(f"Starting from {args.start_from}")
 obs_ids = obs_ids[args.start_from :]
 stream_ids = stream_ids[args.start_from :]
 bands = bands[args.start_from :]
@@ -144,25 +147,6 @@ if not args.overwrite and myrank == 0:
             already_have += [fname]
 already_have = comm.bcast(already_have, root=0)
 
-# max_split = int(len(flist) // nproc) * nproc
-#
-# lo_flist = flist[max_split:]
-# lo_obs_ids = obs_ids[max_split:]
-# lo_stream_ids = stream_ids[max_split:]
-# lo_bands = bands[max_split:]
-#
-# flist = np.array_split(flist[:max_split], nproc)[myrank]
-# obs_ids = np.array_split(obs_ids[:max_split], nproc)[myrank]
-# stream_ids = np.array_split(stream_ids[:max_split], nproc)[myrank]
-# bands = np.array_split(bands[:max_split], nproc)[myrank]
-#
-# nmaps = len(flist)
-# # Shove all the leftovers into rank 0 for now
-# if myrank == 0:
-#     flist = np.hstack([flist, lo_flist])
-#     obs_ids = np.hstack([obs_ids, lo_obs_ids])
-#     stream_ids = np.hstack([stream_ids, lo_stream_ids])
-#     bands = np.hstack([bands, lo_bands])
 flist = np.array_split(flist, nproc)[myrank]
 obs_ids = np.array_split(obs_ids, nproc)[myrank]
 stream_ids = np.array_split(stream_ids, nproc)[myrank]
@@ -178,12 +162,12 @@ if len(flist) < max_maps:
     obs_ids = np.hstack([obs_ids, lo*[""]])
     stream_ids = np.hstack([stream_ids, lo*[""]])
     bands = np.hstack([bands, lo*[""]])
-print(len(flist))
 
 
 par_names = ["amp", "dec0", "ra0", "fwhm_dec", "fwhm_ra", "theta", "offset"]
 par_units = [u.pW, u.arcsec, u.arcsec, u.arcsec, u.arcsec, u.radian, u.pW]
 to_save = (None, None)
+skipped = []
 for i, (fname, obs_id, stream_id, band) in enumerate(
     zip(flist, obs_ids, stream_ids, bands)
 ):
@@ -214,6 +198,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     if not os.path.isfile(wpath):
         print("\tNo weights map found! Skipping...")
         to_save = (None, None)
+        skipped += [fname + " - no_weights"]
         continue
 
     # Load the maps
@@ -225,6 +210,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     if np.sum(~(weights == 0)) == 0:
         print("\tWeights all 0. Skipping...")
         to_save = (None, None)
+        skipped += [fname + " - zero_weights"]
         continue
 
     # Estimate SNR
@@ -237,12 +223,13 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     ymin = max(0, cent[1] - snr_extent_pix)
     ymax = min(solved.shape[1], cent[1] + snr_extent_pix)
     noise[xmin:xmax, ymin:ymax] = np.nan
-    noise = np.nanstd(noise)
+    noise = np.nanstd(np.diff(noise))
     snr = sig / noise
 
     if snr < min_snr:
         print("\tSNR too low! Skipping")
         to_save = (None, None)
+        skipped += [fname + " - data_snr"]
         continue
 
     # Slice things
@@ -250,11 +237,12 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     pixmap = enmap.pixmap(solved.shape, solved.wcs)
 
     # Fit
-    cent = get_cent(solved)
+    cent = get_cent(solved, sigma=60/pixsize)
     res = fit_gauss_beam(solved, weights, pixmap, cent, min_sigma)
     if res is None:
         print("\tFit failed! Probably not a good map?")
         to_save = (None, None)
+        skipped += [fname + " - fit_failed"]
         continue
     (
         popt,
@@ -269,6 +257,26 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         rprof,
         mprof,
     ) = res
+
+    # Check SNR again
+    if popt[0]/noise < min_snr:
+        print("\tSNR too low! Skipping")
+        to_save = (None, None)
+        skipped += [fname + " - fit_snr"]
+        continue
+
+    # FWHM check
+    if abs(1 - data_fwhm/(60*fwhm[band])) > fwhm_tol:
+        print("\tData FWHM out of tolerance! Skipping")
+        to_save = (None, None)
+        skipped += [fname + " - data_fwhm"]
+        continue
+    fwhm_x, fwhm_y = popt[3], popt[4]
+    if abs(1 - fwhm_x/fwhm_y) > fwhm_tol or abs(1 - .5*(fwhm_x + fwhm_y)/(60*fwhm[band])) > fwhm_tol:
+        print("\tFit FWHM out of tolerance! Skipping")
+        to_save = (None, None)
+        skipped += [fname + " - fit_fwhm"]
+        continue
 
     # Adjust shift
     dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))
@@ -365,10 +373,15 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
     aman.wrap("model_solid_angle_true", model_solid_angle_true* u.sr)
     aman.wrap("noise", noise * u.pW)
+    aman.wrap("rpof", rprof * u.pW)
     aman_path = os.path.join(obs_id, stream_id, band)
     to_save = (aman, aman_path)
 
 comm.barrier()
+skipped = comm.gather(skipped, root=0)
+if myrank == 0:
+    print("\nSkipped maps:")
+    print("\t" + "\n\t".join(np.ravel(skipped)))
 to_save = comm.gather(to_save, root=0)
 if myrank == 0 and to_save is not None and outfile is not None:
     for aman, path in to_save:

@@ -612,12 +612,10 @@ def solid_angle(az, el, beam, cent, r1, r2, norm):
     _integrand = integrand.copy()
     _integrand[r > r1] = 0
     integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
-    print(integral_inner)
     
     _integrand = integrand.copy()
     _integrand[(r < r1) + (r > r2)] = 0
     integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
-    print(integral_outer)
     return integral_inner - integral_outer
 
 
@@ -634,6 +632,10 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
         Inverse-variance map.
     pixmap : (2, ny, nx) array
         X and Y pixel indices for each pixel.
+    cent : tuple
+        The index of the map center
+    min_sigma : int, default: 5
+        The minimum significance of the fit gaussian
 
     Returns
     -------
@@ -647,7 +649,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
         Fitted FWHM of Gaussian
     """
     res = imap.wcs.wcs.cdelt[1] * (60 * 60)
-    ny, nx = imap.shape[-2:]
+    nx, ny = imap.shape[-2:]
 
     sigma = np.sqrt(ivar)
     sigma = np.divide(1, sigma, where=sigma != 0)
@@ -665,10 +667,10 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
         0,
     ]
 
-    #  amp, x0, y0, fwhm_x, fwhm_y, phi
+    #  amp, x0, y0, fwhm_x, fwhm_y, phi, off
     bounds = (
-        [0, 0, 20 / res, 20 / res, 0, 0, -np.inf],
-        [np.inf, nx, ny, 300 / res, 300 / res, 2 * np.pi, np.inf],
+        [min(0, np.min(imap)), 0, 0, 20 / res, 20 / res, 0, -np.inf],
+        [5*np.max(imap), nx, ny, 300 / res, 300 / res, 2 * np.pi, np.inf],
     )
 
     pixmap = (pixmap[0].ravel().astype(float), pixmap[1].ravel().astype(float))
@@ -700,11 +702,13 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     mprof = radial_profile(model, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * res
     data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
+    fwhm_pix = int(data_fwhm/res)
+    if fwhm_pix == 0:
+        return None
 
     # Get solid angles
     y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
     x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
-    fwhm_pix = int(data_fwhm/res)
     norm = np.max(imap[max(0, c[0] - fwhm_pix):min(imap.shape[0], c[0] + fwhm_pix), max(0, c[1] - fwhm_pix):min(imap.shape[1], c[1] + fwhm_pix)])
     data_solid_angle_meas = solid_angle(x, y, imap, c, min_sigma * (data_fwhm / 2.355), np.sqrt(2)*min_sigma * (data_fwhm / 2.355), norm) #model[c])
     model_solid_angle_meas = solid_angle(x, y, model, c, min_sigma * (data_fwhm / 2.355), np.sqrt(2)*min_sigma * (data_fwhm / 2.355), norm) #model[c])
