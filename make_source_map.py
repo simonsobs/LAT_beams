@@ -19,6 +19,8 @@ from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.coords.pointing_model import apply_pointing_model
 import mpi4py.rc
 
+from lat_beams.utils import print_once
+
 mpi4py.rc.threads = False
 from mpi4py import MPI
 
@@ -30,21 +32,6 @@ plt.rcParams["image.cmap"] = "RdGy_r"
 
 N_FILES = 4
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
-
-
-def print_once(*args):
-    """
-    Helper function to print only once when running with MPI.
-    Only the rank 0 process will print.
-
-    Parameters
-    ----------
-    *args : Unpack[tuple[Any, ...]]
-        Arguments to pass to print.
-    """
-    if comm.Get_rank() == 0:
-        print(*args)
-        sys.stdout.flush()
 
 
 def radial_profile(data, center):
@@ -176,7 +163,7 @@ else:
         f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {cfg['stop_time']} and ({src_str})",
         tags=source_list,
     )
-print(f"Found {len(obslist)} observations to map")
+print_once(f"Found {len(obslist)} observations to map")
 
 # Keep only the ones with a focal plane
 if per_obs:
@@ -204,7 +191,7 @@ source_list = set(source_list)
 for i, obs in enumerate(obslist):
     if i < args.start_from:
         continue
-    print(f"Mapping {obs['obs_id']} ({i+1}/{len(obslist)})")
+    print(f"(rank {myrank}) Mapping {obs['obs_id']} ({i+1}/{len(obslist)})")
 
     obs = ctx.obsdb.get(obs["obs_id"], tags=True)
     meta = ctx.get_meta(obs["obs_id"])
@@ -248,6 +235,7 @@ for i, obs in enumerate(obslist):
     os.makedirs(obs_data_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
     for ufm in ufms:
+        sys.stdout.flush()
         meta_ufm = meta.copy().restrict("dets", meta.det_info.stream_id == ufm)
         bp = (meta_ufm.det_cal.bg % 4) // 2
         tube_band = ufm[4]
@@ -275,6 +263,9 @@ for i, obs in enumerate(obslist):
 
             # Load and process the TOD
             aman = ctx.get_obs(meta_band)
+            if "boresight" not in aman:
+                print("\t\tNo boresight in TOD! Skipping...")
+                continue
             try:
                 filt = tod_ops.filters.iir_filter(invert=True)
             except ValueError:
@@ -326,7 +317,7 @@ for i, obs in enumerate(obslist):
 
             # Pointing model
             if not per_obs:
-                aman = apply_pointing_model(aman)
+                aman.boresight = apply_pointing_model(aman)
 
             # Get source_flags
             source_flags = cp.compute_source_flags(
@@ -345,9 +336,14 @@ for i, obs in enumerate(obslist):
             sig_filt_src = sig_filt.copy()
             sig_filt_src[~smsk] = np.nan
             sig_filt[smsk] = np.nan
+            all_src = np.all(smsk, axis=-1)
+            no_src = ~np.any(smsk, axis=-1)
+            sdets = ~(all_src + no_src)
+            peak_snr = np.zeros(len(sig_filt))
             with np.errstate(divide='ignore'):
-                peak_snr = np.nanmax(sig_filt_src, axis=-1)/np.nanstd(sig_filt, axis=-1)
+                peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1)/np.nanstd(sig_filt[sdets], axis=-1)
             to_cut = (peak_snr < min_snr) + ~np.isfinite(peak_snr)
+            to_cut[~sdets] = False
             cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
             print(f"\t\tCutting {np.sum(to_cut)} detectors from map")
             if np.sum(~to_cut) < min_dets:

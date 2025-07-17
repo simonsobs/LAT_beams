@@ -25,6 +25,7 @@ from typing_extensions import cast
 
 from lat_beams import beam as lb
 from lat_beams.fitting import fit_tod_pointing
+from lat_beams.utils import print_once
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -38,21 +39,6 @@ nproc = comm.Get_size()
 
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
-
-
-def print_once(*args):
-    """
-    Helper function to print only once when running with MPI.
-    Only the rank 0 process will print.
-
-    Parameters
-    ----------
-    *args : Unpack[tuple[Any, ...]]
-        Arguments to pass to print.
-    """
-    if comm.Get_rank() == 0:
-        print(*args)
-        sys.stdout.flush()
 
 
 parser = argparse.ArgumentParser()
