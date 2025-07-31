@@ -117,11 +117,13 @@ def main():
     block_size = cfg.get("block_size", 5000) // ds
     min_dets = cfg.get("min_dets", 30)
     trim_samps = cfg.get("time_samps", 200) // ds
-    min_hits = cfg.get("min_hits", 0)
-    fwhm_tol = cfg.get("fwhm_tol", .3)
+    min_hits = cfg.get("min_hits", 1)
+    fwhm_tol = cfg.get("fwhm_tol", .2)
     fit_pars = cfg.get("fit_pars", {})
     src_msk = cfg.get("src_msk", True)
     fwhm = cfg.get("fwhm", None)
+    pad = cfg.get("pad", True)
+    max_chisq = cfg.get("max_chisq", 2.5)
 
     if fwhm is None:
         raise ValueError("FWHM not found in config file.")
@@ -616,7 +618,7 @@ def main():
                 )
 
                 # Do a quick cut based on FWHM tol
-                focal_plane.restrict("dets", np.abs(1 - focal_plane.fwhm/(fwhm[band_name] * 60)))
+                focal_plane.restrict("dets", np.abs(1 - focal_plane.fwhm/np.deg2rad(fwhm[band_name] / 60)) < fwhm_tol)
     
                 # Convert to rset [results set]
                 sarray = np.fromiter(
@@ -667,6 +669,8 @@ def main():
                 focal_plane = rset.to_axismanager(axis_key="dets:readout_id")
                 # Source should be positive in pW 
                 msk = np.array(focal_plane.amp) > 0
+                # Kill fits that are statistically bad
+                msk *= np.array(focal_plane.reduced_chisq < max_chisq)
                 # TODO: needs to be changed for SAT or put in config file. Checks if source is far from median of dets
                 # Right now it is set for LAT UFM diamater.
                 med_xi = np.median(np.array(focal_plane.xi[msk]))
@@ -696,38 +700,38 @@ def main():
                 plt.close()
                 
                 plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
-                plt.xlabel('xi')
-                plt.ylabel('eta')
+                plt.xlabel('Xi (rad)')
+                plt.ylabel('Eta (rad)')
                 plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
                 plt.close()
                 
                 plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
-                plt.xlabel('az')
-                plt.ylabel('el')
+                plt.xlabel('Az (rad)')
+                plt.ylabel('El (rad)')
                 plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
                 plt.close()
                 
                 plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
-                plt.xlabel('amp')
-                plt.ylabel('dets')
+                plt.xlabel('Amp (pW)')
+                plt.ylabel('Dets (#)')
                 plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
                 plt.close()
                 
                 plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
-                plt.xlabel('fwhm')
-                plt.ylabel('dets')
+                plt.xlabel('FWHM (rad)')
+                plt.ylabel('Dets (#)')
                 plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
                 plt.close()
                 
                 plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
-                plt.xlabel('hits')
-                plt.ylabel('dets')
+                plt.xlabel('Hits (#)')
+                plt.ylabel('Dets (#)')
                 plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
                 plt.close()
                 
                 plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
-                plt.xlabel('reduced chi sq')
-                plt.ylabel('dets')
+                plt.xlabel('Reduced Chi Squared')
+                plt.ylabel('Dets (#)')
                 plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
                 plt.close()
                 
@@ -736,9 +740,19 @@ def main():
                     rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
             # Save to database
             if fake_res:
-                print_once("\tNo valid fits! Writing a fake entry!")
+                print_once("\tNo valid fits! Writing a null entry!")
             else:
                 print_once(f"\tSaving {len(rset)} fits.")
+            if pad and not fake_res:
+                all_dets = ctx.get_det_info(obs["obs_id"], dets={"stream_id":ufm})["readout_id"]
+                pad_dets = all_dets[~np.isin(all_dets, rset["dets:readout_id"])]
+                pad = np.zeros(len(pad_dets), dtype=outdt)
+                pad["dets:readout_id"] = pad_dets
+                for (field, dtype) in outdt:
+                    if np.issubdtype(dtype, np.floating): 
+                        pad[field][:] = np.nan
+                rset = rset + metadata.ResultSet.from_friend(pad)
+
             write_dataset(rset, h5_file, f"{obs['obs_id']}/{ufm}", True)
             db.add_entry(
                 params={
