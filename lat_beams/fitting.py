@@ -1,3 +1,4 @@
+# TODO: UPDATE DOCSTRING
 """
 Just fitting a single TOD for now, can genralize later (but maybe just do a WITCH interface for that)
 Maybe should add priors
@@ -201,10 +202,12 @@ def _empty_fp(aman: AxisManager) -> AxisManager:
     focal_plane.wrap(
         "reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")]
     )
+    focal_plane.wrap("R2", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
 
     return focal_plane
 
-
+# TODO: NEED DOCSTRING
+# Smoothening stuff
 def _bin_priors_1d(
     fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
 ) -> tuple[float, float]:
@@ -231,7 +234,7 @@ def _bin_priors_1d(
 
     return xi0, eta0
 
-
+# TODO: NEED DOCSTRING
 def _bin_priors_2d(
     fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
 ) -> tuple[float, float]:
@@ -259,6 +262,20 @@ def _bin_priors_2d(
         eta0 = eta_cents[max_idx[1]]
     return xi0, eta0
 
+def filter_tod(am, filt, signal_name="resid", rfft=None):
+    sig_filt_name = f"{signal_name}_filt"
+    am[sig_filt_name] = am[signal_name].copy()
+    filt_kw = dict(
+        detrend="linear",
+        resize=None,
+        axis_name="samps",
+        signal_name=sig_filt_name,
+        time_name="timestamps",
+        rfft=rfft,
+    )
+    am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
+    return am
+
 
 def fit_tod_pointing(
     aman: AxisManager,
@@ -272,9 +289,10 @@ def fit_tod_pointing(
     n_err: float = 5,
     pos_priors: Optional[NDArray[np.floating]] = None,
     show_tqdm: bool = False,
+    min_snr: float = 5.0
 ) -> AxisManager:
     """
-    Fit detector offsets from a TOD of a source observation.
+    Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.
 
     Arguments:
 
@@ -310,6 +328,8 @@ def fit_tod_pointing(
 
         show_tqdm: If True show a progress bar.
 
+        min_snr: Calculates hits out to min_snr compared to white noise level. 
+
     Returns:
 
         focal_plane: An AxisManager with the same detectors as the input aman.
@@ -326,6 +346,10 @@ def fit_tod_pointing(
                      * roll (in radians), the roll at the detector crossing
                      * reduced_chisq
     """
+    # TODO: Can use full detector map to fit the array at once. This hasnt been written.
+    # Right now det maps for LAT not good; SAT will be ok to test with though. Should provide both options here,
+    # since doing full det maps fit is faster than per det.
+    # Either way, want to do per TOD because per TOD would be a refinement to the full det maps fit.
     if pos_priors is not None and len(pos_priors) != aman.dets.count:
         raise ValueError(
             f"{len(pos_priors)} positional priors given for {aman.dets.count} detectors"
@@ -338,7 +362,9 @@ def fit_tod_pointing(
 
     focal_plane = _empty_fp(aman)
     mean_el = np.mean(np.array(aman.boresight.el))
-
+    
+    # getting xi eta in a coordinate system where (0, 0) is the planet youre fitting. Expecting trimmed TOD for source.
+    # Cannot include both rising and setting (ie a sign change). Note that a transit is flat -- so is ok.
     xi, eta = get_xieta_src_centered(
         np.array(aman.timestamps),
         np.array(aman.boresight.az),
@@ -354,62 +380,58 @@ def fit_tod_pointing(
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
     turnarounds = ~Ranges.from_mask(turnarounds) # Invert for convenience
 
+    
+    # 0 is the highpass part, 1 lowpass part.
     filt = identity_filter()
     if bandpass_range[0] is not None:
         filt *= high_pass_sine2(cutoff=bandpass_range[0])
     if bandpass_range[1] is not None:
         filt *= low_pass_sine2(cutoff=bandpass_range[1])
 
-    def filter_tod(am, signal_name="resid", rfft=None):
-        sig_filt_name = f"{signal_name}_filt"
-        am[sig_filt_name] = am[signal_name].copy()
-        filt_kw = dict(
-            detrend="linear",
-            resize=None,
-            axis_name="samps",
-            signal_name=sig_filt_name,
-            time_name="timestamps",
-            rfft=rfft,
-        )
-        am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
-        return am
-
-    def fit_func(x, fit_am, rfft):
+    def fit_func(x, fit_am, filt, rfft):
         xi0, eta0, amp, fwhm, offset = x
         model = gaussian2d(
-            (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
+                (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
-        fit_am = filter_tod(fit_am, signal_name="resid", rfft=rfft)
+        fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
-
+    
+    # Loop through all detectors and fit them one at a time.
     it = np.array(aman.dets.vals)
     if show_tqdm:
         it = tqdm(np.array(aman.dets.vals))
     for i, det in enumerate(it):
         if show_tqdm:
             sys.stderr.flush()
+        # Make a temporary restricted axis manager with just the one desired detector.
         fit_am = aman.restrict("dets", [det], in_place=False)
+        # Containers for residual of fit and the filtered residual.
         fit_am.wrap("resid", fit_am.signal.copy(), [(0, "dets"), (1, "samps")])
         fit_am.wrap(
             "resid_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
         )
-        fit_am = filter_tod(fit_am)
+        # Estimateing white noise by taking the standard deviation of the filtered TOD.
+        fit_am = filter_tod(fit_am, filt)
         std = np.std(np.array(fit_am.resid_filt))
         if std == 0:
             focal_plane.amp[i] = -np.inf
             continue
         fit_am.wrap("wn", 1.0 / std.item() ** 2)
 
+        # Get starting guess for where the detector is looking. Bad guess = bad pointing final fit. Descends into a local instead of global minima.
+        # Get xi, eta at maximum sample, but this is not a very good guess.
         max_idx = np.argmax(np.array(fit_am.resid_filt[0]))
         xi_max = xi[max_idx]
         eta_max = eta[max_idx]
         xi0, eta0 = float(xi_max), float(eta_max)
         _bin_priors = bin_priors
+        # If it has a det map fit then can use given positional prior
         if np.all(np.isfinite(pos_priors[i])):
             xi0, eta0 = pos_priors[i]
             _bin_priors = False
-
+        
+        # Determine if 1d or 2d binning used.
         # Bin in xi and eta
         if _bin_priors and not bin_2d:
             xi0, eta0 = _bin_priors_1d(fit_am, xi0, eta0, fwhm)
@@ -469,7 +491,7 @@ def fit_tod_pointing(
                 fit_func,
                 init_pars,
                 bounds=_bounds,
-                args=(fit_am, rfft),
+                args=(fit_am, filt, rfft),
                 method="L-BFGS-B",
             )
             init_pars = res.x
@@ -487,7 +509,7 @@ def fit_tod_pointing(
                     fit_func,
                     res.x,
                     bounds=_bounds,
-                    args=(fit_am, rfft),
+                    args=(fit_am, filt, rfft),
                     method="L-BFGS-B",
                 )
                 if res.success:
@@ -503,15 +525,17 @@ def fit_tod_pointing(
                         fit_func,
                         res.x,
                         bounds=_bounds,
-                        args=(fit_am, rfft),
+                        args=(fit_am, filt, rfft),
                         method="L-BFGS-B",
                     )
         else:
+            # OPTIMIZE FITS HERE.
+            # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
             res = minimize(
                 fit_func,
                 init_pars,
                 bounds=bounds,
-                args=(fit_am, rfft),
+                args=(fit_am, filt, rfft),
                 method="Nelder-Mead",
             )
 
@@ -521,7 +545,12 @@ def fit_tod_pointing(
         focal_plane.fwhm[i] = res.x[3]
 
         if not res.success:
-            focal_plane.amp[i] = -np.inf
+            focal_plane.R2[i] = 0.
+        else:
+            fit_am.resid = (fit_am.signal.ravel() - np.mean(fit_am.signal)).reshape(fit_am.resid.shape)
+            fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
+            ss_tot = np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
+            focal_plane.R2[i] = 1 - (res.fun/ss_tot)
 
         focal_plane.dist[i] = np.sqrt(
             (np.array(focal_plane.xi[i]) - xi0) ** 2
@@ -531,11 +560,19 @@ def fit_tod_pointing(
         delta_eta = eta - np.array(focal_plane.eta[i])
 
         # Lets calculate hits
-        # TODO: instead of 3 sigma pick n_signa based on SNR
-        xi_msk = np.abs(delta_xi) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
-        eta_msk = np.abs(delta_eta) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
+        # solved for delta(x) in gaussian eqn ie 
+        # f(x)/wnl = A/wnl * e^(-.5 * delta(x) ^ 2 / sigma ^ 2)
+        sigma = focal_plane.fwhm[i] / 2.3548
+        snr_peak = np.abs(focal_plane.amp[i])/(min_snr * std)
+        if snr_peak >= 1:
+            snr_rad = sigma * np.sqrt(2) * np.sqrt( np.log(snr_peak) )
+        else: 
+            snr_rad = -1
+            focal_plane.R2[i] = 0
+        radius = np.sqrt(delta_xi**2 + delta_eta**2)
+        
         # We null out the mask where we turnaround so they count as seperate hits 
-        hits = Ranges.from_mask((xi_msk * eta_msk)) * turnarounds
+        hits = Ranges.from_mask((radius <= snr_rad)) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings
@@ -548,7 +585,7 @@ def fit_tod_pointing(
         weights = xi_weights * eta_weights
         tot_weight = np.sum(weights)
         if tot_weight == 0:
-            focal_plane.amp[i] = -np.inf
+            focal_plane.R2[i] = 0
         else:
             focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
             focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
