@@ -183,6 +183,7 @@ def main():
         ("el", np.float32),
         ("roll", np.float32),
         ("reduced_chisq", np.float32),
+        ("R2", np.float32),
     ]
     
     # Load nominal pointing [i.e. template pointing from the zemax model
@@ -635,6 +636,7 @@ def main():
                         np.array(focal_plane.el, dtype=np.float32),
                         np.array(focal_plane.roll, dtype=np.float32),
                         np.array(focal_plane.reduced_chisq, dtype=np.float32),
+                        np.array(focal_plane.R2, dtype=np.float32),
                     ),
                     dtype=outdt,
                     count=focal_plane.dets.count,
@@ -691,58 +693,69 @@ def main():
                     > np.median(np.array(focal_plane.amp[msk])) / n_med**2
                 )
                 # How many times it saw the source (ie. hits). 
-                # TODO: This needs to be fixed. Right now, min_hits is set to zero until debugged.
                 msk *= np.array(focal_plane.hits) >= min_hits
-                focal_plane.restrict("dets", msk)
-                rset = rset.subset(rows=msk)
-                # Plot focal plane, encoders, and a histrogram of fhwp, amp, hits 
-                # TODO: Split by band?
-                plt.close()
-                
-                plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
-                plt.xlabel('Xi (rad)')
-                plt.ylabel('Eta (rad)')
-                plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
-                plt.close()
-                
-                plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
-                plt.xlabel('Az (rad)')
-                plt.ylabel('El (rad)')
-                plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
-                plt.close()
-                
-                plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
-                plt.xlabel('Amp (pW)')
-                plt.ylabel('Dets (#)')
-                plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
-                plt.close()
-                
-                plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
-                plt.xlabel('FWHM (rad)')
-                plt.ylabel('Dets (#)')
-                plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
-                plt.close()
-                
-                plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
-                plt.xlabel('Hits (#)')
-                plt.ylabel('Dets (#)')
-                plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
-                plt.close()
-                
-                plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
-                plt.xlabel('Reduced Chi Squared')
-                plt.ylabel('Dets (#)')
-                plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
-                plt.close()
-                
-                if len(rset) == 0:
+
+                # Instead of cutting the rset we set R2 to 0
+                rset = rset.asarray()
+                rset[~msk]["R2"] = 0.
+                rset = metadata.ResultSet.from_friend(rset)
+                focal_plane.restrict("dets", msk) # Only used for plotting
+
+                if len(rset) == 0 or np.sum(msk) < min_dets:
                     fake_res = True
                     rset = metadata.ResultSet.from_friend(np.zeros(1, dtype=outdt))
+                else:
+                    # Plot focal plane, encoders, and a histrogram of fhwp, amp, hits 
+                    # TODO: Split by band?
+                    plt.close()
+                    
+                    plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
+                    plt.xlabel('Xi (rad)')
+                    plt.ylabel('Eta (rad)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
+                    plt.close()
+                    
+                    plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
+                    plt.xlabel('Az (rad)')
+                    plt.ylabel('El (rad)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
+                    plt.close()
+                    
+                    plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
+                    plt.xlabel('Amp (pW)')
+                    plt.ylabel('Dets (#)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
+                    plt.close()
+                    
+                    plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
+                    plt.xlabel('FWHM (rad)')
+                    plt.ylabel('Dets (#)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
+                    plt.close()
+                    
+                    plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
+                    plt.xlabel('Hits (#)')
+                    plt.ylabel('Dets (#)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
+                    plt.close()
+                    
+                    plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
+                    plt.xlabel('Reduced Chi Squared')
+                    plt.ylabel('Dets (#)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
+                    plt.close()
+                    
+                    plt.hist(np.array(focal_plane.R2), bins=30, alpha=0.25)
+                    plt.xlabel('R2')
+                    plt.ylabel('Dets (#)')
+                    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_r2.png"))
+                    plt.close()
+                
             # Save to database
             if fake_res:
                 print_once("\tNo valid fits! Writing a null entry!")
             else:
-                print_once(f"\tSaving {len(rset)} fits.")
+                print_once(f"\tSaving {len(rset)} fits ({np.sum(msk)} good).")
             if pad and not fake_res:
                 all_dets = ctx.get_det_info(obs["obs_id"], dets={"stream_id":ufm})["readout_id"]
                 pad_dets = all_dets[~np.isin(all_dets, rset["dets:readout_id"])]

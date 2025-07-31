@@ -197,6 +197,7 @@ def _empty_fp(aman: AxisManager) -> AxisManager:
     focal_plane.wrap(
         "reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")]
     )
+    focal_plane.wrap("R2", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
 
     return focal_plane
 
@@ -539,6 +540,14 @@ def fit_tod_pointing(
         focal_plane.amp[i] = res.x[2]
         focal_plane.fwhm[i] = res.x[3]
 
+        if not res.success:
+            focal_plane.R2[i] = 0.
+        else:
+            fit_am.resid = (fit_am.signal.ravel() - np.mean(fit_am.signal)).reshape(fit_am.resid.shape)
+            fit_am = filter_tod(fit_am, signal_name="resid", rfft=rfft)
+            ss_tot = np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
+            focal_plane.R2[i] = 1 - (res.fun/ss_tot)
+
         focal_plane.dist[i] = np.sqrt(
             (np.array(focal_plane.xi[i]) - xi0) ** 2
             + (np.array(focal_plane.eta[i]) - eta0) ** 2
@@ -555,7 +564,7 @@ def fit_tod_pointing(
             snr_rad = sigma * np.sqrt(2) * np.sqrt( np.log(snr_peak) )
         else: 
             snr_rad = -1
-            focal_plane.amp[i] = -np.inf
+            focal_plane.R2[i] = 0
         radius = np.sqrt(delta_xi**2 + delta_eta**2)
         
         # We null out the mask where we turnaround so they count as seperate hits 
@@ -571,8 +580,8 @@ def fit_tod_pointing(
         )
         weights = xi_weights * eta_weights
         tot_weight = np.sum(weights)
-        if tot_weight == 0 or res.success is False:
-            focal_plane.amp[i] = -np.inf
+        if tot_weight == 0:
+            focal_plane.R2[i] = 0
         else:
             focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
             focal_plane.el[i] = np.sum(aman.boresight.el * weights) / tot_weight
