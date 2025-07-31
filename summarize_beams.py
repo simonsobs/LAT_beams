@@ -9,9 +9,25 @@ import numpy as np
 from sotodlib.core import AxisManager
 import seaborn as sns
 
+def avg_prof(aman_list, prof="rprof", r="r"):
+    all_rs = np.unique(np.hstack([aman[r].value for aman in aman_list]))
+    all_profs = np.vstack([np.interp(all_rs, aman[r].value, aman[prof].value/aman[prof][0].value, left=np.nan, right=np.nan) for aman in aman_list])
+    avg_prof = np.nanmedian(all_profs, axis=0)
+
+    # msk = abs(1 - all_profs[:, 0]/avg_prof[0]) < .2
+    # all_profs = all_profs[msk]
+    avg_prof = np.nanmedian(all_profs, axis=0)
+    err_prof = np.nanstd(all_profs, axis=0)
+    n_vals = np.sum(np.isfinite(all_profs), axis=0).astype(float)
+
+    return np.column_stack((all_rs, avg_prof, err_prof, n_vals))#, msk
+
 nominal_fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
-fpath = "/so/home/saianeesh/data/beams/lat/source_map_fits/mars/beam_pars.h5"
-plot_dir = "/so/home/saianeesh/plots/beams/lat/source_map_fits/summary"
+# fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/per_obs/fits/beam_pars.h5"
+# plot_dir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/beams/lat/source_maps/per_obs/fits/summary"
+fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/pointing_model/fits/beam_pars.h5"
+plot_dir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/beams/lat/source_maps/pointing_model/fits/summary"
+data_dir = os.path.dirname(fpath)
 os.makedirs(plot_dir, exist_ok=True)
 
 f = h5py.File(fpath, mode="r")
@@ -45,10 +61,10 @@ tdelt = (
     / 3600
 )
 
-amans = [
+amans = np.array([
     AxisManager.load(f[os.path.join(o, s, b)])
     for o, s, b in zip(obs_ids, stream_ids, bands)
-]
+])
 amp = u.Quantity([aman.amp for aman in amans])
 amp_err = u.Quantity([aman.amp_err for aman in amans])
 noise = u.Quantity([aman.noise for aman in amans])
@@ -57,7 +73,6 @@ fwhm_y = u.Quantity([aman.fwhm_dec for aman in amans])
 fwhm_data = u.Quantity([aman.data_fwhm for aman in amans])
 solid_angle = u.Quantity([aman.model_solid_angle_true for aman in amans])
 solid_angle_data = u.Quantity([aman.data_solid_angle_corr for aman in amans])
-# solid_angle_data = 2*np.pi * (fwhm_data.to(u.rad)/2.355)**2
 eps = np.abs(fwhm_x - fwhm_y) / (fwhm_x + fwhm_y)
 snr = amp / noise
 
@@ -73,10 +88,36 @@ ts = []
 sids = []
 bs = []
 for band in np.unique(bands[msk]):
+    sang_exp = 2 * np.pi * (np.deg2rad(nominal_fwhm[band] / 2.355 / 60) ** 2)
     bmsk = msk * (bands == band)
     bmsk *= fwhm_data < 2 * nominal_fwhm[band] * 60 * u.arcsec
     bmsk *= fwhm_data < np.percentile(fwhm_data[bmsk], 95)
+    bmsk *= solid_angle < 3 * sang_exp * u.sr
     print(f"{band}: {np.mean(fwhm_data[bmsk])} +- {np.std(fwhm_data[bmsk])}")
+
+    profile = avg_prof(amans[bmsk])
+    np.savetxt(os.path.join(data_dir, f"profile_{band}.txt"), profile)
+    profile = profile[profile[:, 0] < 300]
+    plt.plot(profile[:, 0], profile[:, 1], label="Average profile", color="b", marker="x")
+    plt.fill_between(profile[:, 0], profile[:, 1] - profile[:, 2],profile[:, 1] + profile[:, 2], alpha=.25, color="b")
+    plt.plot(profile[:, 0], np.exp(-.5*(profile[:, 0]**2)/((nominal_fwhm[band]*60/2.355)**2)), linestyle="--", label="Nominal", color="r")
+    plt.legend()
+    plt.title(f"{band} Profile")
+    plt.xlabel('r (")')
+    plt.ylabel("Profile")
+    plt.savefig(os.path.join(plot_dir, f"profile_{band}.png"))
+    plt.close()
+
+    plt.plot(profile[:, 0], profile[:, 1], label="Average profile", color="b", marker="x")
+    plt.plot(profile[:, 0], np.exp(-.5*(profile[:, 0]**2)/((nominal_fwhm[band]*60/2.355)**2)), linestyle="--", label="Nominal", color="r")
+    plt.ylim((.9*np.min(profile[:, 1]), 1.1*np.max(profile[:, 1])))
+    plt.legend()
+    plt.yscale("log")
+    plt.title(f"{band} Log Profile")
+    plt.xlabel('r (")')
+    plt.ylabel("Log Profile")
+    plt.savefig(os.path.join(plot_dir, f"profile_{band}_log.png"))
+    plt.close()
 
     plt.hist(fwhm_x[bmsk], alpha=0.5, bins=20, label="FWHM_x")
     plt.hist(fwhm_y[bmsk], alpha=0.5, bins=20, label="FWHM_y")
@@ -120,9 +161,8 @@ for band in np.unique(bands[msk]):
     plt.hist(solid_angle[bmsk], alpha=0.5, bins=20, label="Model")
     plt.hist(solid_angle_data[bmsk], alpha=0.5, bins=20, label="Data")
     plt.legend()
-    exp = 2 * np.pi * (np.deg2rad(nominal_fwhm[band] / 2.355 / 60) ** 2)
     # plt.xlim((exp / 3, 3 * exp))
-    plt.axvline(exp)
+    plt.axvline(sang_exp)
     plt.title(f"Solid Angle at {band}")
     plt.xlabel("Solid Angle (sr)")
     plt.ylabel("Beam Maps")
@@ -151,17 +191,9 @@ plt.close()
 sids = np.hstack(sids)
 fwhm_ratio = np.hstack(fwhm_ratio)
 data = {"ufm": sids, "fwhm_ratio": fwhm_ratio, "band": bs}
-sns.boxplot(data=data, x="ufm", y="fwhm_ratio", hue="band")
-# plt.scatter(sids, fwhm_ratio)
-# for sid in np.unique(sids):
-#     plt.hist(fwhm_ratio[sids == sid], histtype="step", label=sid, cumulative=True)
-# plt.xlabel("FWHM/Nominal FWHM")
-# plt.ylabel("Beam Maps")
-# plt.ylabel("FWHM/Nominal FWHM")
-# plt.xlabel("UFM")
-# plt.xticks(rotation=90)
-# plt.legend()
-plt.savefig(os.path.join(plot_dir, f"fwhm_ratio_ufm.png"))
+splt = sns.boxplot(data=data, x="ufm", y="fwhm_ratio", hue="band")
+splt.set_xticklabels(splt.get_xticklabels(), rotation=45)
+plt.savefig(os.path.join(plot_dir, f"fwhm_ratio_ufm.png"), bbox_inches="tight")
 plt.close()
 
 meds = {
@@ -174,8 +206,10 @@ meds = {
 for stream_id in np.unique(stream_ids[msk]):
     smsk = msk * (stream_ids == stream_id)
     for band in np.unique(bands[smsk]):
+        sang_exp = 2 * np.pi * (np.deg2rad(nominal_fwhm[band] / 2.355 / 60) ** 2)
         bmsk = smsk * (bands == band)
         bmsk *= fwhm_data < 2 * nominal_fwhm[band] * 60 * u.arcsec
+        bmsk *= solid_angle < 3 * sang_exp * u.sr
         meds[band][stream_id] = [
             np.median(fwhm_x[bmsk]),
             np.median(fwhm_y[bmsk]),
@@ -223,9 +257,7 @@ for stream_id in np.unique(stream_ids[msk]):
         plt.hist(solid_angle[bmsk], alpha=0.5, bins=20, label="Model")
         plt.hist(solid_angle_data[bmsk], alpha=0.5, bins=20, label="Data")
         plt.legend()
-        exp = 2 * np.pi * (np.deg2rad(nominal_fwhm[band] / 2.355 / 60) ** 2)
-        plt.xlim((exp / 3, 3 * exp))
-        plt.axvline(exp)
+        plt.axvline(sang_exp)
         plt.title(f"Solid Angle at {band}")
         plt.xlabel("Solid Angle (sr)")
         plt.ylabel("Beam Maps")
