@@ -269,6 +269,7 @@ def fit_tod_pointing(
     n_err: float = 5,
     pos_priors: Optional[NDArray[np.floating]] = None,
     show_tqdm: bool = False,
+    min_snr: float = 5.0
 ) -> AxisManager:
     """
     Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.
@@ -306,6 +307,8 @@ def fit_tod_pointing(
                     the row to (nan, nan).
 
         show_tqdm: If True show a progress bar.
+
+        min_snr: Calculates hits out to min_snr compared to white noise level. 
 
     Returns:
 
@@ -536,9 +539,6 @@ def fit_tod_pointing(
         focal_plane.amp[i] = res.x[2]
         focal_plane.fwhm[i] = res.x[3]
 
-        if not res.success:
-            focal_plane.amp[i] = -np.inf
-
         focal_plane.dist[i] = np.sqrt(
             (np.array(focal_plane.xi[i]) - xi0) ** 2
             + (np.array(focal_plane.eta[i]) - eta0) ** 2
@@ -547,11 +547,19 @@ def fit_tod_pointing(
         delta_eta = eta - np.array(focal_plane.eta[i])
 
         # Lets calculate hits
-        # TODO: instead of 3 sigma pick n_signa based on SNR
-        xi_msk = np.abs(delta_xi) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
-        eta_msk = np.abs(delta_eta) <= 3 * np.array(focal_plane.fwhm[i]) / 2.3548
+        # solved for delta(x) in gaussian eqn ie 
+        # f(x)/wnl = A/wnl * e^(-.5 * delta(x) ^ 2 / sigma ^ 2)
+        sigma = focal_plane.fwhm[i] / 2.3548
+        snr_peak = np.abs(focal_plane.amp[i])/(min_snr * std)
+        if snr_peak >= 1:
+            snr_rad = sigma * np.sqrt(2) * np.sqrt( np.log(snr_peak) )
+        else: 
+            snr_rad = -1
+            focal_plane.amp[i] = -np.inf
+        radius = np.sqrt(delta_xi**2 + delta_eta**2)
+        
         # We null out the mask where we turnaround so they count as seperate hits 
-        hits = Ranges.from_mask((xi_msk * eta_msk)) * turnarounds
+        hits = Ranges.from_mask((radius <= snr_rad)) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings
@@ -563,7 +571,7 @@ def fit_tod_pointing(
         )
         weights = xi_weights * eta_weights
         tot_weight = np.sum(weights)
-        if tot_weight == 0:
+        if tot_weight == 0 or res.success is False:
             focal_plane.amp[i] = -np.inf
         else:
             focal_plane.az[i] = np.sum(aman.boresight.az * weights) / tot_weight
