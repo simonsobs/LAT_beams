@@ -1,4 +1,7 @@
 import argparse
+from copy import deepcopy
+import logging
+import time
 import glob
 import os
 import sys
@@ -33,6 +36,7 @@ plt.rcParams["image.cmap"] = "RdGy_r"
 N_FILES = 4
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 
+cp.logger.setLevel(logging.WARNING)
 
 def radial_profile(data, center):
     msk = np.isfinite(data.ravel())
@@ -119,11 +123,11 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-source_list = cfg.get("source", ["mars", "saturn", "jupiter"])
+source_list = cfg.get("source_list", ["mars", "saturn", "jupiter"])
 comps = cfg.get("comps", "TQU")
 min_dets = cfg.get("min_dets", 50)
 min_hits = cfg.get("min_hits", 5)
-min_det_secs = cfg.get("min_det_secs", 5000)
+min_det_secs = cfg.get("min_det_secs", 3000)
 min_snr = cfg.get("min_snr", 5)
 n_modes = cfg.get("n_modes", 10)
 del_map = cfg.get("del_map", True)
@@ -181,7 +185,7 @@ if per_obs:
 
 # Get settings for source mask
 res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
-mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
+mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.3)})
 
 # Split for MPI
 obslist = np.array_split(obslist, nproc)[myrank]
@@ -189,6 +193,7 @@ obslist = np.array_split(obslist, nproc)[myrank]
 # Mapping loop
 source_list = set(source_list)
 for i, obs in enumerate(obslist):
+    sys.stdout.flush()
     if i < args.start_from:
         continue
     print(f"(rank {myrank}) Mapping {obs['obs_id']} ({i+1}/{len(obslist)})")
@@ -234,8 +239,11 @@ for i, obs in enumerate(obslist):
     obs_data_dir = os.path.join(data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
     os.makedirs(obs_data_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
+
+    src_to_map = src_name.split("_")[0]
+    if src_to_map == "taua":
+        src_to_map = ('tauA', 83.6272579, 22.02159891) 
     for ufm in ufms:
-        sys.stdout.flush()
         meta_ufm = meta.copy().restrict("dets", meta.det_info.stream_id == ufm)
         bp = (meta_ufm.det_cal.bg % 4) // 2
         tube_band = ufm[4]
@@ -268,11 +276,17 @@ for i, obs in enumerate(obslist):
                 continue
             try:
                 filt = tod_ops.filters.iir_filter(invert=True)
+                aman.signal = tod_ops.filters.fourier_filter(
+                    aman, filt, signal_name="signal"
+                )
             except ValueError:
                 print("\t\tNo iir params! Adding defaults...")
-                correct_iir_params(aman, True, 5)
+                correct_iir_params(aman, True)
                 filt = tod_ops.filters.iir_filter(invert=True)
-            filt = filt * tod_ops.filters.timeconst_filter(
+                aman.signal = tod_ops.filters.fourier_filter(
+                    aman, filt, signal_name="signal"
+                )
+            filt = tod_ops.filters.timeconst_filter(
                 timeconst=aman.det_cal.tau_eff, invert=True
             )
             aman.signal = tod_ops.filters.fourier_filter(
@@ -320,11 +334,13 @@ for i, obs in enumerate(obslist):
                 aman.boresight = apply_pointing_model(aman)
 
             # Get source_flags
+            _mask = deepcopy(mask) 
+            _mask["xyr"] = _mask["xyr"][:-1] + [_mask["xyr"][-1] * 90.0/float(band_name[1:]),]
             source_flags = cp.compute_source_flags(
                 tod=aman,
                 P=None,
-                mask=mask,
-                center_on=src_name,
+                mask=_mask,
+                center_on=src_to_map,
                 res=res,
                 max_pix=4e8,
                 wrap=None,
@@ -362,7 +378,7 @@ for i, obs in enumerate(obslist):
             # Its map time!
             out = cp.make_map(
                 aman,
-                center_on=src_name,
+                center_on=src_to_map,
                 res=res,
                 cuts=cuts,
                 source_flags=source_flags,
