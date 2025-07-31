@@ -118,6 +118,7 @@ def main():
     min_dets = cfg.get("min_dets", 30)
     trim_samps = cfg.get("time_samps", 200) // ds
     min_hits = cfg.get("min_hits", 0)
+    fwhm_tol = cfg.get("fwhm_tol", .3)
     fit_pars = cfg.get("fit_pars", {})
     src_msk = cfg.get("src_msk", True)
     fwhm = cfg.get("fwhm", None)
@@ -228,7 +229,6 @@ def main():
         meta.restrict("dets", np.isin(meta.det_info.wafer_slot, wafers))
         meta.restrict("dets", meta.det_cal.bg > -1)
         # TODO: If incorporating time constant stuff, might not want to do this here.
-        # 
         meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
     
         tod_plot_dir = os.path.join(
@@ -378,9 +378,7 @@ def main():
                     source_name = "J134.78-47.509"
     
                 # See how much of the source we saw...
-                # TODO: This can be made optional.
                 # Mask is made massive. This ONLY helps if you have prior knowledge of where source is.
-                # See how much of the source we saw...
                 if src_msk:
                     aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
                     fp = AxisManager(aman_dummy.dets)
@@ -575,8 +573,6 @@ def main():
     
                 # Plot the TOD
                 if myrank == max_det_rank:
-                    #plt.close()
-                    
                     plt.plot(np.array(aman.signal).T, alpha=0.3)
                     plt.xlabel('samples')
                     plt.ylabel('signal')
@@ -618,6 +614,9 @@ def main():
                     show_tqdm=(myrank == max_det_rank),
                     **fit_pars,
                 )
+
+                # Do a quick cut based on FWHM tol
+                focal_plane.restrict("dets", np.abs(1 - focal_plane.fwhm/(fwhm[band_name] * 60)))
     
                 # Convert to rset [results set]
                 sarray = np.fromiter(
@@ -686,13 +685,6 @@ def main():
                 msk *= (
                     np.array(focal_plane.amp)
                     > np.median(np.array(focal_plane.amp[msk])) / n_med**2
-                )
-                msk *= np.array(focal_plane.fwhm) < n_med * np.median(
-                    np.array(focal_plane.fwhm[msk])
-                )
-                msk *= (
-                    np.array(focal_plane.fwhm)
-                    > np.median(np.array(focal_plane.fwhm[msk])) / n_med**2
                 )
                 # How many times it saw the source (ie. hits). 
                 # TODO: This needs to be fixed. Right now, min_hits is set to zero until debugged.
