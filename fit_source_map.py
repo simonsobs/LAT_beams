@@ -373,7 +373,9 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
     aman.wrap("model_solid_angle_true", model_solid_angle_true* u.sr)
     aman.wrap("noise", noise * u.pW)
-    aman.wrap("rpof", rprof * u.pW)
+    aman.wrap("r", r * u.arcsec)
+    aman.wrap("rprof", rprof * u.pW)
+    aman.wrap("mprof", rprof * u.pW)
     aman_path = os.path.join(obs_id, stream_id, band)
     to_save = (aman, aman_path)
 

@@ -704,8 +704,8 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     perr[8:10] *= res
 
     # Get FWHM from data
-    rprof = radial_profile(imap, c[::-1])
-    mprof = radial_profile(model, c[::-1])
+    rprof = radial_profile(imap - popt[6], c[::-1])
+    mprof = radial_profile(model - popt[6], c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * res
     data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
     fwhm_pix = int(data_fwhm/res)
@@ -721,7 +721,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     norm = np.max(imap_smooth[max(0, c[0] - fwhm_pix):min(imap_smooth.shape[0], c[0] + fwhm_pix), max(0, c[1] - fwhm_pix):min(imap_smooth.shape[1], c[1] + fwhm_pix)])
     data_solid_angle_meas = solid_angle(x, y, imap_smooth, c, min_sigma * (data_fwhm / 2.355), norm)
     model_solid_angle_meas = solid_angle(x, y, model_smooth, c, min_sigma * (data_fwhm / 2.355), norm)
-    model_solid_angle_true = 2*np.pi*((popt[0] * (np.deg2rad(popt[3]/3600)/ 2.355) * (np.deg2rad(popt[4]/3600)/ 2.355)) + (popt[7] * (np.deg2rad(popt[8]/3600)/ 2.355) * (np.deg2rad(popt[9]/3600)/ 2.355)))/(popt[0] + popt[8])
+    model_solid_angle_true = 2*np.pi*((popt[0] * (np.deg2rad(popt[3]/3600)/ 2.355) * (np.deg2rad(popt[4]/3600)/ 2.355)) + (popt[7] * (np.deg2rad(popt[8]/3600)/ 2.355) * (np.deg2rad(popt[9]/3600)/ 2.355)))/(popt[0] + popt[7])
     data_solid_angle_corr = data_solid_angle_meas*model_solid_angle_true/model_solid_angle_meas
     print(data_solid_angle_corr/model_solid_angle_true)
 
