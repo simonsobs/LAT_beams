@@ -257,6 +257,20 @@ def _bin_priors_2d(
         eta0 = eta_cents[max_idx[1]]
     return xi0, eta0
 
+def filter_tod(am, filt, signal_name="resid", rfft=None):
+    sig_filt_name = f"{signal_name}_filt"
+    am[sig_filt_name] = am[signal_name].copy()
+    filt_kw = dict(
+        detrend="linear",
+        resize=None,
+        axis_name="samps",
+        signal_name=sig_filt_name,
+        time_name="timestamps",
+        rfft=rfft,
+    )
+    am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
+    return am
+
 
 def fit_tod_pointing(
     aman: AxisManager,
@@ -369,28 +383,13 @@ def fit_tod_pointing(
     if bandpass_range[1] is not None:
         filt *= low_pass_sine2(cutoff=bandpass_range[1])
 
-    # TODO: Get this shit outta here
-    def filter_tod(am, signal_name="resid", rfft=None):
-        sig_filt_name = f"{signal_name}_filt"
-        am[sig_filt_name] = am[signal_name].copy()
-        filt_kw = dict(
-            detrend="linear",
-            resize=None,
-            axis_name="samps",
-            signal_name=sig_filt_name,
-            time_name="timestamps",
-            rfft=rfft,
-        )
-        am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
-        return am
-
-    def fit_func(x, fit_am, rfft):
+    def fit_func(x, fit_am, filt, rfft):
         xi0, eta0, amp, fwhm, offset = x
         model = gaussian2d(
                 (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
-        fit_am = filter_tod(fit_am, signal_name="resid", rfft=rfft)
+        fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
     
     # Loop through all detectors and fit them one at a time.
@@ -408,7 +407,7 @@ def fit_tod_pointing(
             "resid_filt", np.zeros_like(fit_am.signal), [(0, "dets"), (1, "samps")]
         )
         # Estimateing white noise by taking the standard deviation of the filtered TOD.
-        fit_am = filter_tod(fit_am)
+        fit_am = filter_tod(fit_am, filt)
         std = np.std(np.array(fit_am.resid_filt))
         if std == 0:
             focal_plane.amp[i] = -np.inf
@@ -487,7 +486,7 @@ def fit_tod_pointing(
                 fit_func,
                 init_pars,
                 bounds=_bounds,
-                args=(fit_am, rfft),
+                args=(fit_am, filt, rfft),
                 method="L-BFGS-B",
             )
             init_pars = res.x
@@ -505,7 +504,7 @@ def fit_tod_pointing(
                     fit_func,
                     res.x,
                     bounds=_bounds,
-                    args=(fit_am, rfft),
+                    args=(fit_am, filt, rfft),
                     method="L-BFGS-B",
                 )
                 if res.success:
@@ -521,7 +520,7 @@ def fit_tod_pointing(
                         fit_func,
                         res.x,
                         bounds=_bounds,
-                        args=(fit_am, rfft),
+                        args=(fit_am, filt, rfft),
                         method="L-BFGS-B",
                     )
         else:
@@ -531,7 +530,7 @@ def fit_tod_pointing(
                 fit_func,
                 init_pars,
                 bounds=bounds,
-                args=(fit_am, rfft),
+                args=(fit_am, filt, rfft),
                 method="Nelder-Mead",
             )
 
@@ -544,7 +543,7 @@ def fit_tod_pointing(
             focal_plane.R2[i] = 0.
         else:
             fit_am.resid = (fit_am.signal.ravel() - np.mean(fit_am.signal)).reshape(fit_am.resid.shape)
-            fit_am = filter_tod(fit_am, signal_name="resid", rfft=rfft)
+            fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
             ss_tot = np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
             focal_plane.R2[i] = 1 - (res.fun/ss_tot)
 

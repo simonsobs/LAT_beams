@@ -67,7 +67,6 @@ def print_once(*args):
         print(*args)
         sys.stdout.flush()
 
-# NEW: made this primary code into a main function to chop up the rest into smaller functions
 def main():
     # Only the config is necessary; the rest are just for ease of use.
     # TODO: can refine these or add to them. 
@@ -291,7 +290,6 @@ def main():
                     )
                     aman = ctx.get_obs(meta_band)
                 # Anticipate all dets being cut by making fake aman. This allows all processes to end at roughly same time.
-                # TODO: Can check if there is cleaner way to do this, but Saianeesh said that there is high chance of that failing/being stuck in infinite loop.
                 fake_aman = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
                 fake_aman.signal[:] = 0
     
@@ -451,9 +449,7 @@ def main():
                 std = np.std(sig_filt, axis=-1)
                 std_all = np.hstack(comm.allgather(std))
                 # Threshold determined from config file n_med
-                # TODO: Should do better rather than pic a number by eye like Saianeesh since not all of us are gods. He normally sets it to like 5.
-                # He says that 2-3sigma like I want sometimes wont be consistent because the noise is not gaussian and is more like a block. Need to investigate this further.
-                # These numbers are true for LAT; unclear for SAT. TODO ASK MATTHEW ABOUT THIS TODO Saianeesh said he got this thing from Sigurd method but us mere mortals like equations.
+                # These numbers are true for LAT; unclear for SAT.
                 # TODO: Make histograms of std and how much is getting cut as a part of diagnostic outputs [from talking to Matthew]. Otherwise this is a good way to cut outliers.
                 # Since boxy instead of gaussians, so quantiles are cool. Pseudo sigma is e.g. ~33%-50% [median based thing so that outliers are not included]. Then can do e.g. a 4sigma cut or whatever (but shouldnt have a high percentage of outliers).
                 thresh = n_med * np.median(std_all[std_all > 0])
@@ -476,7 +472,7 @@ def main():
                 flagged = sig_filt > n_std * std_all
                 samp_idx = np.where(np.any(flagged, 0))[0]
                 
-                # Commented stuff here is Saianeesh wanting to be clever but giving up and doing the simpler method
+                # Commented stuff here is trying to be clever but giving up and doing the simpler method
                 # ptp = np.array(
                 #     np.atleast_2d(np.ptp(sig_filt, axis=0)), dtype=np.float32, order="C"
                 # )
@@ -603,9 +599,8 @@ def main():
                     continue
     
                 # Fit
-                # The type ignore is just for saianeesh ...... smh.
                 aman.signal *= aman.det_cal.phase_to_pW[..., None]  # type: ignore
-                # this is just to make the fft a fast length (ie like a prime number)
+                # Make the fft a fast length (ie like a prime number)
                 _ = tod_ops.filters.fft_trim(aman, prefer="center")
                 # if aman.dets.count > 10:
                 #     aman.restrict("dets", aman.dets.vals[:10])
@@ -677,7 +672,6 @@ def main():
                 # Right now it is set for LAT UFM diamater.
                 med_xi = np.median(np.array(focal_plane.xi[msk]))
                 med_eta = np.median(np.array(focal_plane.eta[msk]))
-                # TODO: All equations below should be re-tuned for SAT. Comparative FWHM and amps can be put in config file.
                 msk *= (
                     np.sqrt(
                         (np.array(focal_plane.xi) - med_xi) ** 2
