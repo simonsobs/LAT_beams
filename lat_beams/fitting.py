@@ -7,6 +7,7 @@ Maybe should add priors
 import sys
 import warnings
 from copy import deepcopy
+import logging
 
 import numpy as np
 import so3g
@@ -37,9 +38,11 @@ from sotodlib.tod_ops.filters import (
     identity_filter,
     low_pass_sine2,
 )
+from sotodlib.tod_ops.filters import logger as flog
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
+flog.setLevel(logging.ERROR)
 
 def get_xieta_src_centered(
     ctime: NDArray[np.floating],
@@ -401,6 +404,7 @@ def fit_tod_pointing(
     it = np.array(aman.dets.vals)
     if show_tqdm:
         it = tqdm(np.array(aman.dets.vals))
+    aman.signal = aman.signal.astype(np.float32)
     for i, det in enumerate(it):
         if show_tqdm:
             sys.stderr.flush()

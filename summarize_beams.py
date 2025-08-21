@@ -23,10 +23,10 @@ def avg_prof(aman_list, prof="rprof", r="r"):
     return np.column_stack((all_rs, avg_prof, err_prof, n_vals))#, msk
 
 nominal_fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
-# fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/per_obs/fits/beam_pars.h5"
-# plot_dir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/beams/lat/source_maps/per_obs/fits/summary"
-fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/pointing_model/fits/beam_pars.h5"
-plot_dir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/beams/lat/source_maps/pointing_model/fits/summary"
+fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/per_obs/fits/beam_pars.h5"
+plot_dir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/beams/lat/source_maps/per_obs/fits/summary"
+# fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/pointing_model/fits/beam_pars.h5"
+# plot_dir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/beams/lat/source_maps/pointing_model/fits/summary"
 data_dir = os.path.dirname(fpath)
 os.makedirs(plot_dir, exist_ok=True)
 

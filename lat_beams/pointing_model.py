@@ -1,88 +1,115 @@
 import numpy as np
+import pprint
 from so3g.proj import quat
+from scipy.optimize import minimize
 
-# lat_params = {
-#     "az_offset": 1.49788300e-08,
-#     "el_offset": -2.08882807e-01,
-#     "roll_offset": 3.40844271e-02,
-#     "xi_offset": 1.21677030e-01,
-#     "eta_offset": -2.08870814e-01,
-# }
-lat_params_simple = {
-    "az_offset": 4.03704816e-08,
-    "el_offset": -1.39564042e-01,
-    "cr_offset": -1.75482402e-01,
-    "xi_offset": 1.40683504e-01,
-    "eta_offset": -3.15087378e-01,
+default_params = {
+    'enc_offset_az': 0, 
+    'enc_offset_el': 0,
+    'enc_offset_cr': 0,
+    'el_axis_center_xi0': 0,
+    'el_axis_center_eta0': 0,
+    'cr_center_xi0': 0,
+    'cr_center_eta0': 0,
+    'mir_center_xi0': 0,
+    'mir_center_eta0': 0,
 }
 
-lat_params = {
-    "az_offset": 4.03704816e-08,
-    "el_offset": -1.39564042e-01,
-    "cr_offset": -1.75482402e-01,
-    "el_xi_offset": 1.40683504e-01,
-    "el_eta_offset": -3.15087378e-01,
-    "rx_xi_offset": 1.40683504e-01,
-    "rx_eta_offset": -3.15087378e-01,
-}
+def _to_deg(pars):
+    return {key: np.rad2deg(val) for key, val in  pars.items()}
 
-lat_params = {
-    "az_offset": -6.431949463522369e-07,
-    "el_offset": 0.10784213916209494,
-    "cr_offset": 0.1068009204473848,
-    "el_xi_offset": 0.07524197484976551,
-    "el_eta_offset": 0.13704409641376075,
-    "rx_xi_offset": -0.03523515856319279,
-    "rx_eta_offset": -0.005858421274865713,
-    "mir_xi_offset": -0.17792288910750848,
-    "mir_eta_offset": 0.21440894087003562,
-}
+def transform(x, az, el, roll, q_data):
+    enc_offset_az, enc_offset_el, enc_offset_cr, el_axis_center_xi0, el_axis_center_eta0, cr_center_xi0, cr_center_eta0, mir_center_xi0, mir_center_eta0 = x
+    _el = np.deg2rad(el)
+    _az = np.deg2rad(az)
+    _cr = np.deg2rad(el - roll - 60)
 
+    q_lonlat = quat.rotation_lonlat(-(_az + enc_offset_az), enc_offset_el + _el, 0)
+    q_lonlat_nom = quat.rotation_lonlat(-_az, _el)
+    q_roll = quat.rotation_xieta(0, 0, 1 * np.deg2rad(roll))
 
-def apply_pointing_model(params, az, el, roll):
-    cr = el - roll - np.deg2rad(60)
-    _params = lat_params.copy()
-    _params.update(params)
-    params = _params
-    for key, val in params.items():
-        params[key] = 1 * np.deg2rad(val)
-    q_enc = quat.rotation_lonlat(
-        -1 * (az.copy() + params["az_offset"]), el.copy() + params["el_offset"]
+    q_mir_center = ~quat.rotation_xieta(mir_center_xi0, mir_center_eta0)
+    q_el_roll = quat.euler(2, _el + enc_offset_el - np.deg2rad(60))
+    q_el_axis_center = ~quat.rotation_xieta(el_axis_center_xi0, el_axis_center_eta0)
+    q_cr_roll = quat.euler(2, -1 * (_cr + enc_offset_cr))
+    q_cr_center = ~quat.rotation_xieta(cr_center_xi0, cr_center_eta0)
+
+    rhs = (
+        q_lonlat
+        * q_mir_center
+        * q_el_roll 
+        * q_el_axis_center
+        * q_cr_roll
+        * q_cr_center
     )
-    q_mir = quat.rotation_xieta(params["mir_xi_offset"], params["mir_eta_offset"])
-    q_el_roll = quat.euler(2, el.copy() + params["el_offset"] - np.deg2rad(60))
-    q_tel = quat.rotation_xieta(params["el_xi_offset"], params["el_eta_offset"])
-    q_cr_roll = quat.euler(2, -1 * cr - params["cr_offset"])
-    q_rx = quat.rotation_xieta(params["rx_xi_offset"], params["rx_eta_offset"])
-    new_az, el, roll = (
-        quat.decompose_lonlat(q_enc * q_mir * q_el_roll * q_tel * q_cr_roll * q_rx)
-        * np.array([-1, 1, 1])[..., None]
-    )
+    lhs = q_lonlat_nom * q_roll
+    rot = lhs * q_data * ~rhs
+    xi0, eta0, _ = quat.decompose_xieta(rot)
+    return xi0, eta0
 
-    # Stolen from elle
-    change = ((new_az - az) + np.pi) % (2 * np.pi) - np.pi
-    az = az.copy() + change
+def joint_transform(x, tmsks, pmsks, az, el, roll, q_data):
+    xi0 = np.zeros(len(q_data)) + np.nan
+    eta0 = np.zeros(len(q_data)) + np.nan
+    for tmsk, pmsk in zip(tmsks, pmsks):
+        if len(pmsk) == 0:
+            continue
+        xi0[tmsk], eta0[tmsk] = transform(x[pmsk], az[tmsk], el[tmsk], roll[tmsk], quat.G3VectorQuat(np.array(q_data)[tmsk]))
+    return xi0, eta0
 
-    return az, el, roll
+def fit_func(x, tmsks, pmsks, az, el, roll, q_data):
+    xi0, eta0 = joint_transform(x, tmsks, pmsks, az, el, roll, q_data)
+    rms = 3600*np.sqrt(np.nanmean(np.hstack([np.rad2deg(xi0), np.rad2deg(eta0)]) ** 2))
+    return rms
 
 
-def apply_pointing_model_simple(params, az, el, roll):
-    _params = lat_params_simple.copy()
-    _params.update(params)
-    params = _params
-    for key, val in params.items():
-        params[key] = -1 * np.deg2rad(val)
-    q_enc = quat.rotation_lonlat(
-        -1 * (az.copy() + params["az_offset"]), el.copy() + params["el_offset"]
-    )
-    q_tel = quat.rotation_xieta(params["xi_offset"], params["eta_offset"])
-    q_roll = quat.euler(2, roll + params["el_offset"] - params["cr_offset"])
-    new_az, el, roll = (
-        quat.decompose_lonlat(q_enc * q_tel * q_roll) * np.array([-1, 1, 1])[..., None]
-    )
+def fit(time_ranges, ctime, az, el, roll, q_data, d):
+    # Make masks
+    tmsks = []
+    pmsks = []
+    q_datas = []
+    orig_pars = np.array(list(default_params.keys()))
+    par_mapping = np.argsort(np.argsort(orig_pars))
+    par_list = orig_pars.copy()
+    for t0, t1, to_fit, indep_list in time_ranges:
+        tmsk = (ctime >= t0) * (ctime < t1)
+        if not to_fit:
+            tmsks += [tmsk]
+            continue
+        tmsk *= np.abs(d - np.median(d[tmsk])) < np.deg2rad(.25)
+        tmsks += [tmsk]
+        if np.sum(np.isin(indep_list, par_list)) != len(indep_list):
+            raise ValueError(f"Invalid independant parameters in time range starting with {t0}")
+        indep_list = [f"{n}+{t0}" for n in indep_list]
+        par_list = np.hstack((par_list, indep_list))
+    for t0, t1, to_fit, indep_list in time_ranges:
+        if not to_fit:
+            pmsks += [[]]
+            continue
+        pmsk = np.zeros(len(par_list), bool)
+        pmsk[:len(orig_pars)] = True
+        pmsk[np.isin(par_list, indep_list)] = False
+        pmsk += np.array([str(t0) in par for par in par_list])
+        if np.sum(pmsk) != len(default_params):
+            raise ValueError(f"Time range starting with {t0} somehow has the wrong number of parameters!")
+        # A boolean may have the wrong order, lets make it indexes and get it in order
+        pmsk = np.where(pmsk)[0]
+        mypars = np.array([par.split(f"+{t0}")[0] for par in par_list[pmsk]])
+        srt = np.argsort(mypars)
+        pmsks += [pmsk[srt][par_mapping]]
 
-    # Stolen from elle
-    change = ((new_az - az) + np.pi) % (2 * np.pi) - np.pi
-    az = az.copy() + change
-
-    return az, el, roll
+    x = np.zeros(len(par_list))
+    bounds = [(-np.inf, np.inf)]*len(x)
+    # bounds[3] = (0, 0)
+    # bounds[4] = (0, 0)
+    res = minimize(fit_func, x, args=(tmsks, pmsks, az, el, roll, q_data), bounds=bounds, method="Nelder-Mead", options={"adaptive": True}) #jac="3-point", method="trust-constr") #, ) #, method="TNC", options={"maxfun":10000})
+    print(res)
+    xi0, eta0 = joint_transform(res.x, tmsks, pmsks, az, el, roll, q_data)
+    params = []
+    for pmsk, (t0, t1, to_fit, _) in zip(pmsks, time_ranges):
+        if not to_fit:
+            params += [default_params]
+            continue
+        params += [{name.item() : val for name, val in zip(orig_pars, res.x[pmsk])}]
+        print(f"{t0} to {t1}")
+        pprint.pp(_to_deg(params[-1]))
+    return params, xi0, eta0, tmsks 

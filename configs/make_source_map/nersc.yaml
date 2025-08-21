@@ -2,14 +2,14 @@ source_list:
   - "mars"
   - "saturn"
   - "taua"
-# pointing_type: "pointing_model" 
-pointing_type: "per_obs" 
-min_samps: 20000
-min_dets: 100
+pointing_type: "pointing_model" 
+# pointing_type: "per_obs" 
+min_samps: 800
+min_dets: 50
 min_hits: 1
-min_snr: 10
-context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc_per_obs.yaml'
-# context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc_pointing_model.yaml'
+min_snr: 1
+# context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc_per_obs.yaml'
+context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc_pointing_model.yaml'
 # start_time: 1749600000 # Realigned 
 start_time: 1744848000 # Everything aligned
 stop_time: 2748476800
@@ -19,4 +19,4 @@ mask:
   xyr:
     - 0.
     - 0.
-    - .1 
+    - .2 

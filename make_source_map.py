@@ -21,12 +21,16 @@ from sotodlib.core.flagman import has_any_cuts
 from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.coords.pointing_model import apply_pointing_model
 import mpi4py.rc
+import logging
 
 from lat_beams.utils import print_once
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
 
+mpi4py.rc.threads = False
+from mpi4py import MPI
+tod_ops.filters.logger.setLevel(logging.ERROR)
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
@@ -123,11 +127,11 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-source_list = cfg.get("source_list", ["mars", "saturn", "jupiter"])
+source_list = cfg.get("source_list", ["mars", "saturn"])
 comps = cfg.get("comps", "TQU")
 min_dets = cfg.get("min_dets", 50)
-min_hits = cfg.get("min_hits", 5)
-min_det_secs = cfg.get("min_det_secs", 3000)
+min_hits = cfg.get("min_hits", 1)
+min_det_secs = cfg.get("min_det_secs", 600)
 min_snr = cfg.get("min_snr", 5)
 n_modes = cfg.get("n_modes", 10)
 del_map = cfg.get("del_map", True)
@@ -244,6 +248,8 @@ for i, obs in enumerate(obslist):
     if src_to_map == "taua":
         src_to_map = ('tauA', 83.6272579, 22.02159891) 
     for ufm in ufms:
+        if ufm !="ufm_uv42":
+            continue
         meta_ufm = meta.copy().restrict("dets", meta.det_info.stream_id == ufm)
         bp = (meta_ufm.det_cal.bg % 4) // 2
         tube_band = ufm[4]
@@ -357,8 +363,8 @@ for i, obs in enumerate(obslist):
             sdets = ~(all_src + no_src)
             peak_snr = np.zeros(len(sig_filt))
             with np.errstate(divide='ignore'):
-                peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1)/np.nanstd(sig_filt[sdets], axis=-1)
-            to_cut = (peak_snr < min_snr) + ~np.isfinite(peak_snr)
+                peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1)/np.nanstd(np.diff(sig_filt[sdets], axis=-1))
+            to_cut = (peak_snr < min_snr) # + ~np.isfinite(peak_snr)
             to_cut[~sdets] = False
             cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
             print(f"\t\tCutting {np.sum(to_cut)} detectors from map")

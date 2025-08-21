@@ -17,7 +17,6 @@ from sotodlib.core import AxisManager, Context, metadata
 import time
 
 from lat_beams.fitting import fit_gauss_beam
-from lat_beams.pointing_model import apply_pointing_model
 from lat_beams.utils import print_once
 
 plt.rcParams["image.cmap"] = "RdGy_r"
@@ -272,11 +271,11 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         skipped += [fname + " - data_fwhm"]
         continue
     fwhm_x, fwhm_y = popt[3], popt[4]
-    if abs(1 - fwhm_x/fwhm_y) > fwhm_tol or abs(1 - .5*(fwhm_x + fwhm_y)/(60*fwhm[band])) > fwhm_tol:
-        print("\tFit FWHM out of tolerance! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - fit_fwhm"]
-        continue
+    # if abs(1 - fwhm_x/fwhm_y) > fwhm_tol or abs(1 - .5*(fwhm_x + fwhm_y)/(60*fwhm[band])) > fwhm_tol:
+    #     print("\tFit FWHM out of tolerance! Skipping")
+    #     to_save = (None, None)
+    #     skipped += [fname + " - fit_fwhm"]
+    #     continue
 
     # Adjust shift
     dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))

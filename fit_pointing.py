@@ -21,6 +21,7 @@ import sqlite3
 import sys
 import time
 from functools import reduce
+import logging
 
 import h5py
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ from lat_beams.utils import print_once
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
+tod_ops.filters.logger.setLevel(logging.ERROR)
 
 # TODO: Add optional argument to profile
 # from pyinstrument import Profiler
@@ -280,6 +282,10 @@ def main():
     
                 # TODO: Give option to take in preprocessing if it exists.
                 # TODO: If preprocessing doesnt exist, then this should have different default SAT and LAT params (config option + default option)
+                if aman.samps.count < min_samps*ds:
+                    print_once(f"\t\tNot enough samples! Skipping...")
+                    continue
+                aman.signal = aman.signal.astype(np.float32)
                 try:
                     filt = tod_ops.filters.iir_filter(invert=True)
                     aman.signal = tod_ops.filters.fourier_filter(
@@ -302,7 +308,7 @@ def main():
                 )
     
                 tod_ops.detrend_tod(aman, "median", in_place=True)
-                tf = tod_ops.flags.get_trending_flags(aman, max_trend=5, t_piece=30)
+                tf = tod_ops.flags.get_trending_flags(aman, max_trend=5, t_piece=min(30, aman.obs_info.duration/2)) 
                 tdets = has_any_cuts(tf)
                 aman.restrict("dets", ~tdets)
     
@@ -735,15 +741,20 @@ def main():
                 print_once("\tNo valid fits! Writing a null entry!")
             else:
                 print_once(f"\tSaving {len(rset)} fits ({np.sum(msk)} good).")
-            if pad and not fake_res:
+            if pad:
                 all_dets = ctx.get_det_info(obs["obs_id"], dets={"stream_id":ufm})["readout_id"]
                 pad_dets = all_dets[~np.isin(all_dets, rset["dets:readout_id"])]
-                pad = np.zeros(len(pad_dets), dtype=outdt)
-                pad["dets:readout_id"] = pad_dets
+                if outdt[0][1] is None:
+                    outdt[0][1] = pad_dets.dtype
+                pad_res = np.zeros(len(pad_dets), dtype=outdt)
+                pad_res["dets:readout_id"] = pad_dets
                 for (field, dtype) in outdt:
                     if np.issubdtype(dtype, np.floating): 
-                        pad[field][:] = np.nan
-                rset = rset + metadata.ResultSet.from_friend(pad)
+                        pad_res[field][:] = np.nan
+                if not fake_res:
+                    rset = rset + metadata.ResultSet.from_friend(pad_res)
+                else:
+                    rset = metadata.ResultSet.from_friend(pad_res)
 
             write_dataset(rset, h5_file, f"{obs['obs_id']}/{ufm}", True)
             db.add_entry(
