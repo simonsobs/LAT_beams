@@ -9,9 +9,21 @@ import numpy as np
 from sotodlib.core import AxisManager
 import seaborn as sns
 
+
 def avg_prof(aman_list, prof="rprof", r="r"):
     all_rs = np.unique(np.hstack([aman[r].value for aman in aman_list]))
-    all_profs = np.vstack([np.interp(all_rs, aman[r].value, aman[prof].value/aman[prof][0].value, left=np.nan, right=np.nan) for aman in aman_list])
+    all_profs = np.vstack(
+        [
+            np.interp(
+                all_rs,
+                aman[r].value,
+                aman[prof].value / aman[prof][0].value,
+                left=np.nan,
+                right=np.nan,
+            )
+            for aman in aman_list
+        ]
+    )
     avg_prof = np.nanmedian(all_profs, axis=0)
 
     # msk = abs(1 - all_profs[:, 0]/avg_prof[0]) < .2
@@ -20,7 +32,8 @@ def avg_prof(aman_list, prof="rprof", r="r"):
     err_prof = np.nanstd(all_profs, axis=0)
     n_vals = np.sum(np.isfinite(all_profs), axis=0).astype(float)
 
-    return np.column_stack((all_rs, avg_prof, err_prof, n_vals))#, msk
+    return np.column_stack((all_rs, avg_prof, err_prof, n_vals))  # , msk
+
 
 nominal_fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 fpath = "/global/cfs/cdirs/sobs/users/skh/data/beams/lat/source_maps/per_obs/fits/beam_pars.h5"
@@ -61,10 +74,12 @@ tdelt = (
     / 3600
 )
 
-amans = np.array([
-    AxisManager.load(f[os.path.join(o, s, b)])
-    for o, s, b in zip(obs_ids, stream_ids, bands)
-])
+amans = np.array(
+    [
+        AxisManager.load(f[os.path.join(o, s, b)])
+        for o, s, b in zip(obs_ids, stream_ids, bands)
+    ]
+)
 amp = u.Quantity([aman.amp for aman in amans])
 amp_err = u.Quantity([aman.amp_err for aman in amans])
 noise = u.Quantity([aman.noise for aman in amans])
@@ -98,9 +113,23 @@ for band in np.unique(bands[msk]):
     profile = avg_prof(amans[bmsk])
     np.savetxt(os.path.join(data_dir, f"profile_{band}.txt"), profile)
     profile = profile[profile[:, 0] < 300]
-    plt.plot(profile[:, 0], profile[:, 1], label="Average profile", color="b", marker="x")
-    plt.fill_between(profile[:, 0], profile[:, 1] - profile[:, 2],profile[:, 1] + profile[:, 2], alpha=.25, color="b")
-    plt.plot(profile[:, 0], np.exp(-.5*(profile[:, 0]**2)/((nominal_fwhm[band]*60/2.355)**2)), linestyle="--", label="Nominal", color="r")
+    plt.plot(
+        profile[:, 0], profile[:, 1], label="Average profile", color="b", marker="x"
+    )
+    plt.fill_between(
+        profile[:, 0],
+        profile[:, 1] - profile[:, 2],
+        profile[:, 1] + profile[:, 2],
+        alpha=0.25,
+        color="b",
+    )
+    plt.plot(
+        profile[:, 0],
+        np.exp(-0.5 * (profile[:, 0] ** 2) / ((nominal_fwhm[band] * 60 / 2.355) ** 2)),
+        linestyle="--",
+        label="Nominal",
+        color="r",
+    )
     plt.legend()
     plt.title(f"{band} Profile")
     plt.xlabel('r (")')
@@ -108,9 +137,17 @@ for band in np.unique(bands[msk]):
     plt.savefig(os.path.join(plot_dir, f"profile_{band}.png"))
     plt.close()
 
-    plt.plot(profile[:, 0], profile[:, 1], label="Average profile", color="b", marker="x")
-    plt.plot(profile[:, 0], np.exp(-.5*(profile[:, 0]**2)/((nominal_fwhm[band]*60/2.355)**2)), linestyle="--", label="Nominal", color="r")
-    plt.ylim((.9*np.min(profile[:, 1]), 1.1*np.max(profile[:, 1])))
+    plt.plot(
+        profile[:, 0], profile[:, 1], label="Average profile", color="b", marker="x"
+    )
+    plt.plot(
+        profile[:, 0],
+        np.exp(-0.5 * (profile[:, 0] ** 2) / ((nominal_fwhm[band] * 60 / 2.355) ** 2)),
+        linestyle="--",
+        label="Nominal",
+        color="r",
+    )
+    plt.ylim((0.9 * np.min(profile[:, 1]), 1.1 * np.max(profile[:, 1])))
     plt.legend()
     plt.yscale("log")
     plt.title(f"{band} Log Profile")
@@ -129,7 +166,7 @@ for band in np.unique(bands[msk]):
     plt.ylabel("Beam Maps")
     plt.savefig(os.path.join(plot_dir, f"fwhm_{band}.png"))
     plt.close()
-    fwhm_ratio += [fwhm_data[bmsk]/(nominal_fwhm[band]*60)]
+    fwhm_ratio += [fwhm_data[bmsk] / (nominal_fwhm[band] * 60)]
     ts += [tdelt[bmsk]]
     sids += [stream_ids[bmsk]]
     bs += [band] * np.sum(bmsk)
@@ -180,7 +217,7 @@ for band in np.unique(bands[msk]):
     plt.savefig(os.path.join(plot_dir, f"fwhm_snr_{band}.png"))
     plt.close()
 
-plt.scatter(np.hstack(ts), np.hstack(fwhm_ratio), alpha=.3)
+plt.scatter(np.hstack(ts), np.hstack(fwhm_ratio), alpha=0.3)
 plt.xlabel("Time of Day (UTC)")
 plt.ylabel("FWHM/Nominal FWHM")
 plt.axvline(21, color="red", label="Approximate Sunset")

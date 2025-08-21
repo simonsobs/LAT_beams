@@ -28,6 +28,7 @@ nproc = comm.Get_size()
 
 fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
+
 def get_cent(imap, buf=30, sigma=5):
     smoothed = gaussian_filter(imap, sigma=sigma)
     smoothed[:buf] = 0
@@ -75,14 +76,18 @@ extent = cfg.get("extent", 900)
 snr_extent = cfg.get("snr_extent", 360)
 min_sigma = cfg.get("min_sigma_fit", 3)
 min_snr = cfg.get("min_snr", 10)
-fwhm_tol = cfg.get("fwhm_tol", .25)
+fwhm_tol = cfg.get("fwhm_tol", 0.25)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(root_dir, "plots", project_dir, "source_maps", pointing_type, "fits")
-data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type, "fits")
+plot_dir = os.path.join(
+    root_dir, "plots", project_dir, "source_maps", pointing_type, "fits"
+)
+data_dir = os.path.join(
+    root_dir, "data", project_dir, "source_maps", pointing_type, "fits"
+)
 map_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
@@ -157,14 +162,36 @@ if n_maps[0] != max_maps:
     raise ValueError("Root doesn't have max maps!")
 if len(flist) < max_maps:
     lo = max_maps - len(flist)
-    flist = np.hstack([flist, lo*[""]])
-    obs_ids = np.hstack([obs_ids, lo*[""]])
-    stream_ids = np.hstack([stream_ids, lo*[""]])
-    bands = np.hstack([bands, lo*[""]])
+    flist = np.hstack([flist, lo * [""]])
+    obs_ids = np.hstack([obs_ids, lo * [""]])
+    stream_ids = np.hstack([stream_ids, lo * [""]])
+    bands = np.hstack([bands, lo * [""]])
 
 
-par_names = ["amp", "dec0", "ra0", "fwhm_dec", "fwhm_ra", "theta", "offset", "amp_outer", "fwhm_dec_outer", "fwhm_ra_outer", "theta_outer"]
-par_units = [u.pW, u.arcsec, u.arcsec, u.arcsec, u.arcsec, u.radian, u.pW, u.pW, u.radian]
+par_names = [
+    "amp",
+    "dec0",
+    "ra0",
+    "fwhm_dec",
+    "fwhm_ra",
+    "theta",
+    "offset",
+    "amp_outer",
+    "fwhm_dec_outer",
+    "fwhm_ra_outer",
+    "theta_outer",
+]
+par_units = [
+    u.pW,
+    u.arcsec,
+    u.arcsec,
+    u.arcsec,
+    u.arcsec,
+    u.radian,
+    u.pW,
+    u.pW,
+    u.radian,
+]
 to_save = (None, None)
 skipped = []
 for i, (fname, obs_id, stream_id, band) in enumerate(
@@ -203,7 +230,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     # Load the maps
     solved = enmap.read_map(fname)[0]
     weights = enmap.read_map(wpath)[0][0]
-    pixsize = 3600 * solved.wcs.wcs.cdelt[1] # type: ignore
+    pixsize = 3600 * solved.wcs.wcs.cdelt[1]  # type: ignore
 
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
@@ -236,7 +263,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     pixmap = enmap.pixmap(solved.shape, solved.wcs)
 
     # Fit
-    cent = get_cent(solved, sigma=60/pixsize)
+    cent = get_cent(solved, sigma=60 / pixsize)
     res = fit_gauss_beam(solved, weights, pixmap, cent, min_sigma)
     if res is None:
         print("\tFit failed! Probably not a good map?")
@@ -258,14 +285,14 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     ) = res
 
     # Check SNR again
-    if popt[0]/noise < min_snr:
+    if popt[0] / noise < min_snr:
         print("\tSNR too low! Skipping")
         to_save = (None, None)
         skipped += [fname + " - fit_snr"]
         continue
 
     # FWHM check
-    if abs(1 - data_fwhm/(60*fwhm[band])) > fwhm_tol:
+    if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
         print("\tData FWHM out of tolerance! Skipping")
         to_save = (None, None)
         skipped += [fname + " - data_fwhm"]
@@ -368,9 +395,9 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         aman.wrap(f"{name}_err", err * unit)
     aman.wrap("data_fwhm", data_fwhm * u.arcsec)
     aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
-    aman.wrap("data_solid_angle_corr", data_solid_angle_corr* u.sr)
+    aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
     aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
-    aman.wrap("model_solid_angle_true", model_solid_angle_true* u.sr)
+    aman.wrap("model_solid_angle_true", model_solid_angle_true * u.sr)
     aman.wrap("noise", noise * u.pW)
     aman.wrap("r", r * u.arcsec)
     aman.wrap("rprof", rprof * u.pW)

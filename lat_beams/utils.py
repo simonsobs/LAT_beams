@@ -6,6 +6,7 @@ from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 
+
 def print_once(*args):
     """
     Helper function to print only once when running with MPI.

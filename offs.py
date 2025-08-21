@@ -108,7 +108,7 @@ q_data = quat.rotation_xieta(xi_dist, eta_dist)
 xi0, eta0, _ = quat.decompose_xieta(q_roll * q_data * ~q_roll)
 d = np.sqrt(xi0**2 + eta0**2)
 
-wmsk = (weights > 400) # * (np.abs(d - np.median(d[weights > 600])) < np.deg2rad(.25))
+wmsk = weights > 400  # * (np.abs(d - np.median(d[weights > 600])) < np.deg2rad(.25))
 
 q_roll = quat.rotation_xieta(0, 0, 1 * np.deg2rad(roll[wmsk]))
 q_data = quat.rotation_xieta(xi_dist[wmsk], eta_dist[wmsk])
@@ -136,9 +136,24 @@ if not os.path.isfile(os.path.join(outdir, "db.sqlite")):
     scheme.add_data_field("dataset")
     metadata.ManifestDb(scheme=scheme).to_file(os.path.join(outdir, "db.sqlite"))
 db = metadata.ManifestDb(os.path.join(outdir, "db.sqlite"))
-times = [(0, 1744848000, False, []), (1744848000, 1745150000, True, ['enc_offset_cr', 'el_axis_center_xi0', 'el_axis_center_eta0']), (1745150000, 1749600000, False, []), (1749600000, int(2e9), True, ['enc_offset_cr', 'el_axis_center_xi0', 'el_axis_center_eta0'])] 
+times = [
+    (0, 1744848000, False, []),
+    (
+        1744848000,
+        1745150000,
+        True,
+        ["enc_offset_cr", "el_axis_center_xi0", "el_axis_center_eta0"],
+    ),
+    (1745150000, 1749600000, False, []),
+    (
+        1749600000,
+        int(2e9),
+        True,
+        ["enc_offset_cr", "el_axis_center_xi0", "el_axis_center_eta0"],
+    ),
+]
 
-params, xi_corr, eta_corr, tmsks = fit(times, ctime, az, el, roll, q_data, d) 
+params, xi_corr, eta_corr, tmsks = fit(times, ctime, az, el, roll, q_data, d)
 d_corr = np.sqrt(xi_corr**2 + eta_corr**2)
 
 for i, time in enumerate(times):
@@ -146,12 +161,12 @@ for i, time in enumerate(times):
     aman.wrap("version", "lat_v1")
     for key, val in params[i].items():
         aman.wrap(key, val)
-    
+
     if not time[2]:
-        entries = db.inspect({'obs:timestamp': (time[0] + time[1])/2.})
+        entries = db.inspect({"obs:timestamp": (time[0] + time[1]) / 2.0})
         if len(entries) > 0:
             continue
-                             
+
     aman.save(os.path.join(outdir, "pointing_model.h5"), f"t{time[0]}", overwrite=True)
     entry = {"obs:timestamp": (time[0], time[1]), "dataset": f"t{time[0]}"}
     db.add_entry(entry, filename="pointing_model.h5", replace=True)
@@ -161,13 +176,13 @@ for i, time in enumerate(times):
 
     # With time
     tmsk = tmsks[i]
-    plt.scatter(ctime[tmsk], d_corr[tmsk]/quat.DEG)
+    plt.scatter(ctime[tmsk], d_corr[tmsk] / quat.DEG)
     plt.xlabel("ctime")
     plt.ylabel("Disagreement from Model (deg)")
     plt.title("Disagreement After Correction")
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_offs_t_corr.png"))
     plt.close()
-    plt.scatter(ctime[tmsk], d[tmsk]/quat.DEG)
+    plt.scatter(ctime[tmsk], d[tmsk] / quat.DEG)
     plt.xlabel("ctime")
     plt.ylabel("Disagreement from Model (deg)")
     plt.title("Disagreement Without Correction")
@@ -175,11 +190,14 @@ for i, time in enumerate(times):
     plt.close()
 
     # By array
-    fig, ax = plt.subplots(1, 1, layout='constrained')
+    fig, ax = plt.subplots(1, 1, layout="constrained")
     for ufm in np.unique(stream_ids):
         msk = stream_ids[tmsk] == ufm
         ax.scatter(
-            xi_corr[tmsk][msk] / quat.DEG, eta_corr[tmsk][msk] / quat.DEG, marker="+", label=ufm
+            xi_corr[tmsk][msk] / quat.DEG,
+            eta_corr[tmsk][msk] / quat.DEG,
+            marker="+",
+            label=ufm,
         )  # , c=corot[wmsk])
     plt.title("Corrected Mispointing of the Rx boresight (colored by array)")
     plt.xlabel("xi (deg)")
@@ -187,7 +205,7 @@ for i, time in enumerate(times):
     fig.legend(loc="outside right upper")
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_offs_arr_corr.png"))
     plt.close()
-    fig, ax = plt.subplots(1, 1, layout='constrained')
+    fig, ax = plt.subplots(1, 1, layout="constrained")
     for ufm in np.unique(stream_ids):
         msk = stream_ids[tmsk] == ufm
         ax.scatter(
@@ -200,8 +218,10 @@ for i, time in enumerate(times):
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_offs_arr_uncorr.png"))
     plt.clf()
 
-    # By roll 
-    plt.scatter(xi_corr[tmsk] / quat.DEG, eta_corr[tmsk] / quat.DEG, marker="+", c=el[tmsk])
+    # By roll
+    plt.scatter(
+        xi_corr[tmsk] / quat.DEG, eta_corr[tmsk] / quat.DEG, marker="+", c=el[tmsk]
+    )
     plt.title("Corrected Mispointing of the Rx boresight (colored by el)")
     plt.xlabel("xi (deg)")
     plt.ylabel("eta (deg)")
@@ -216,16 +236,19 @@ for i, time in enumerate(times):
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_offs_roll_uncorr.png"))
     plt.close()
 
-    # Get corrected centers 
+    # Get corrected centers
     xi_cent_corr = xi_cent[tmsk] + (xi_corr[tmsk] - xi0[tmsk])
     eta_cent_corr = eta_cent[tmsk] + (eta_corr[tmsk] - eta0[tmsk])
 
     # By array
-    fig, ax = plt.subplots(1, 1, layout='constrained')
+    fig, ax = plt.subplots(1, 1, layout="constrained")
     for ufm in np.unique(stream_ids):
         msk = stream_ids[tmsk] == ufm
         ax.scatter(
-            xi_cent_corr[msk] / quat.DEG, eta_cent_corr[msk] / quat.DEG, marker="+", label=ufm
+            xi_cent_corr[msk] / quat.DEG,
+            eta_cent_corr[msk] / quat.DEG,
+            marker="+",
+            label=ufm,
         )  # , c=corot[wmsk])
     plt.title("Corrected Center of the Array (colored by array)")
     plt.xlabel("xi (deg)")
@@ -233,11 +256,14 @@ for i, time in enumerate(times):
     fig.legend(loc="outside right upper")
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_cent_arr_corr.png"))
     plt.close()
-    fig, ax = plt.subplots(1, 1, layout='constrained')
+    fig, ax = plt.subplots(1, 1, layout="constrained")
     for ufm in np.unique(stream_ids):
         msk = stream_ids[tmsk] == ufm
         ax.scatter(
-            xi_cent[tmsk][msk] / quat.DEG, eta_cent[tmsk][msk] / quat.DEG, marker="+", label=ufm
+            xi_cent[tmsk][msk] / quat.DEG,
+            eta_cent[tmsk][msk] / quat.DEG,
+            marker="+",
+            label=ufm,
         )  # , c=corot[wmsk])
     plt.title("Uncorrected Center of the Array (colored by array)")
     plt.xlabel("xi (deg)")
@@ -246,16 +272,27 @@ for i, time in enumerate(times):
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_cent_arr_uncorr.png"))
     plt.clf()
 
-
     # By roll
-    plt.scatter(xi_cent_corr / quat.DEG, eta_cent_corr / quat.DEG, marker="+", label=ufm, c=roll[tmsk])
+    plt.scatter(
+        xi_cent_corr / quat.DEG,
+        eta_cent_corr / quat.DEG,
+        marker="+",
+        label=ufm,
+        c=roll[tmsk],
+    )
     plt.title("Corrected Center of the Array (colored by roll)")
     plt.xlabel("xi (deg)")
     plt.ylabel("eta (deg)")
     plt.colorbar(label="roll")
     plt.savefig(os.path.join(pltdir, f"{time[0]}_{time[1]}_cent_roll_corr.png"))
     plt.clf()
-    plt.scatter(xi_cent[tmsk] / quat.DEG, eta_cent[tmsk] / quat.DEG, marker="+", label=ufm, c=roll[tmsk])
+    plt.scatter(
+        xi_cent[tmsk] / quat.DEG,
+        eta_cent[tmsk] / quat.DEG,
+        marker="+",
+        label=ufm,
+        c=roll[tmsk],
+    )
     plt.title("Uncorrected Center of the Array (colored by roll)")
     plt.xlabel("xi (deg)")
     plt.ylabel("eta (deg)")

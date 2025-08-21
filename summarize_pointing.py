@@ -12,7 +12,7 @@ dat = h5py.File(fpath, "r")
 pdir = "/global/cfs/cdirs/sobs/users/skh/plots_raw/pointing/lat/source_fits/summary"
 os.makedirs(pdir, exist_ok=True)
 
-dat['obs_1750771728_lati3_110']['ufm_mv20'].shape[0]
+dat["obs_1750771728_lati3_110"]["ufm_mv20"].shape[0]
 times = []
 ufms = []
 n_dets = []
@@ -38,7 +38,7 @@ for start, stop in epochs:
         n = n_dets[msk * u_msk]
         print(f"\t{np.median(n)} ± {np.std(n)} median ± std fit dets for {ufm}")
 
-plt.scatter(times, ufms, c=n_dets.astype(float), alpha=.4)
+plt.scatter(times, ufms, c=n_dets.astype(float), alpha=0.4)
 plt.colorbar(label="Fit Detectors")
 elines = np.unique(np.array(epochs))[:-1]
 for el in elines:
@@ -49,4 +49,3 @@ plt.ylabel("Array")
 plt.title(f"Fit Detectors By Array (min {min_dets} dets)")
 plt.savefig(os.path.join(pdir, f"ndet_by_array.png"))
 plt.close()
-

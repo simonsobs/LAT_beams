@@ -30,6 +30,7 @@ from mpi4py import MPI
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
+
 tod_ops.filters.logger.setLevel(logging.ERROR)
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
@@ -41,6 +42,7 @@ N_FILES = 4
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 
 cp.logger.setLevel(logging.WARNING)
+
 
 def radial_profile(data, center):
     msk = np.isfinite(data.ravel())
@@ -54,15 +56,29 @@ def radial_profile(data, center):
     return radialprofile
 
 
-def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp="T", log=False, log_thresh=1e-3):
+def plot_map(
+    data,
+    extent,
+    plt_extent,
+    cent,
+    plt_cent,
+    zoom,
+    ufm_plot_dir,
+    obs,
+    ufm,
+    band_name,
+    comp="T",
+    log=False,
+    log_thresh=1e-3,
+):
     _norm = None
     label = f"_{comp}"
-    rprof = radial_profile(data, cent[::-1])[:int(.5*min(*data.shape))]
+    rprof = radial_profile(data, cent[::-1])[: int(0.5 * min(*data.shape))]
     if log:
-        _norm = SymLogNorm(linthresh=log_thresh*np.max(data), clip=True)
+        _norm = SymLogNorm(linthresh=log_thresh * np.max(data), clip=True)
         label = f"_{comp}_log10"
-        with np.errstate(divide='ignore', invalid='ignore'):
-            rprof = np.sign(rprof)*np.log10(np.abs(rprof))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rprof = np.sign(rprof) * np.log10(np.abs(rprof))
     plt.close()
     plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
     plt.colorbar()
@@ -75,8 +91,8 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, 
     plt.savefig(
         os.path.join(ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
     )
-    plt.xlim((plt_cent[0] - extent/zoom, plt_cent[0] + extent/zoom))
-    plt.ylim((plt_cent[1] - extent/zoom, plt_cent[1] + extent/zoom))
+    plt.xlim((plt_cent[0] - extent / zoom, plt_cent[0] + extent / zoom))
+    plt.ylim((plt_cent[1] - extent / zoom, plt_cent[1] + extent / zoom))
     plt.savefig(
         os.path.join(
             ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
@@ -84,7 +100,7 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, 
     )
 
     plt.close()
-    x =np.linspace(0, pixsize * len(rprof), len(rprof))
+    x = np.linspace(0, pixsize * len(rprof), len(rprof))
     plt.plot(x, rprof)
     plt.xlabel('Radius (")')
     plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
@@ -97,7 +113,7 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, 
     )
     plt.xlim((0, extent / zoom))
     lims = plt.gca().get_xlim()
-    i = np.where( (x >= lims[0]) &  (x <= lims[1]) )[0]
+    i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
     plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
     plt.savefig(
         os.path.join(
@@ -105,6 +121,7 @@ def plot_map(data, extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, 
         ),
         bbox_inches="tight",
     )
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
@@ -163,7 +180,7 @@ if ctx.obsdb is None:
 if args.obs_ids is not None:
     obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
 else:
-    src_str = "==1 or ".join(source_list)+"==1"
+    src_str = "==1 or ".join(source_list) + "==1"
     start_time = cfg["start_time"]
     if args.lookback is not None:
         start_time = time.time() - 3600 * args.lookback
@@ -214,7 +231,9 @@ for i, obs in enumerate(obslist):
     if len(src_names) > 1:
         print("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
-        print("\tObservation somehow not tagged for any sources in source_list! Skipping!")
+        print(
+            "\tObservation somehow not tagged for any sources in source_list! Skipping!"
+        )
         print(f"\t\tTags were: {obs['tags']}")
         continue
     src_name = "_".join(src_names)
@@ -239,16 +258,20 @@ for i, obs in enumerate(obslist):
         * np.isfinite(meta.focal_plane.gamma),
     )
 
-    obs_plot_dir = os.path.join(plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
-    obs_data_dir = os.path.join(data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"])
+    obs_plot_dir = os.path.join(
+        plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
+    )
+    obs_data_dir = os.path.join(
+        data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
+    )
     os.makedirs(obs_data_dir, exist_ok=True)
     ufms = np.unique(meta.det_info.stream_id)
 
     src_to_map = src_name.split("_")[0]
     if src_to_map == "taua":
-        src_to_map = ('tauA', 83.6272579, 22.02159891) 
+        src_to_map = ("tauA", 83.6272579, 22.02159891)
     for ufm in ufms:
-        if ufm !="ufm_uv42":
+        if ufm != "ufm_uv42":
             continue
         meta_ufm = meta.copy().restrict("dets", meta.det_info.stream_id == ufm)
         bp = (meta_ufm.det_cal.bg % 4) // 2
@@ -340,8 +363,10 @@ for i, obs in enumerate(obslist):
                 aman.boresight = apply_pointing_model(aman)
 
             # Get source_flags
-            _mask = deepcopy(mask) 
-            _mask["xyr"] = _mask["xyr"][:-1] + [_mask["xyr"][-1] * 90.0/float(band_name[1:]),]
+            _mask = deepcopy(mask)
+            _mask["xyr"] = _mask["xyr"][:-1] + [
+                _mask["xyr"][-1] * 90.0 / float(band_name[1:]),
+            ]
             source_flags = cp.compute_source_flags(
                 tod=aman,
                 P=None,
@@ -353,7 +378,12 @@ for i, obs in enumerate(obslist):
             )
 
             # Do an aggressive filter and flag dets without the source
-            sig_filt = cp.filter_for_sources(tod=aman, signal=aman.signal.copy(), source_flags=source_flags, n_modes=2*n_modes)
+            sig_filt = cp.filter_for_sources(
+                tod=aman,
+                signal=aman.signal.copy(),
+                source_flags=source_flags,
+                n_modes=2 * n_modes,
+            )
             smsk = source_flags.mask()
             sig_filt_src = sig_filt.copy()
             sig_filt_src[~smsk] = np.nan
@@ -362,11 +392,15 @@ for i, obs in enumerate(obslist):
             no_src = ~np.any(smsk, axis=-1)
             sdets = ~(all_src + no_src)
             peak_snr = np.zeros(len(sig_filt))
-            with np.errstate(divide='ignore'):
-                peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1)/np.nanstd(np.diff(sig_filt[sdets], axis=-1))
-            to_cut = (peak_snr < min_snr) # + ~np.isfinite(peak_snr)
+            with np.errstate(divide="ignore"):
+                peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
+                    np.diff(sig_filt[sdets], axis=-1)
+                )
+            to_cut = peak_snr < min_snr  # + ~np.isfinite(peak_snr)
             to_cut[~sdets] = False
-            cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
+            cuts = RangesMatrix.from_mask(
+                np.zeros_like(aman.signal, bool) + to_cut[..., None]
+            )
             print(f"\t\tCutting {np.sum(to_cut)} detectors from map")
             if np.sum(~to_cut) < min_dets:
                 print(f"\t\tNot enough detectors! Skipping...")
@@ -402,25 +436,32 @@ for i, obs in enumerate(obslist):
             pixsize = 3600 * out["solved"].wcs.wcs.cdelt[1]
 
             # Smooth and find the center
-            smoothed = gaussian_filter(out["solved"][0], sigma=60/pixsize)
+            smoothed = gaussian_filter(out["solved"][0], sigma=60 / pixsize)
             smoothed[:buf] = np.nan
             smoothed[-1 * buf :] = np.nan
             smoothed[:, :buf] = np.nan
             smoothed[:, -1 * buf :] = np.nan
             cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
-            
+
             # Estimate SNR, but only if we have a T map
-            peak = 1.
+            peak = 1.0
             if "T" in comps:
                 peak = out["solved"][0][cent]
-                snr = peak/tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+                snr = (
+                    peak
+                    / tod_ops.jumps.std_est(
+                        np.atleast_2d(out["solved"][0].ravel()), ds=1
+                    )[0]
+                )
                 print(f"\t\tMap SNR approximately {snr}")
-                if snr < min_snr * np.sqrt(np.sum(~to_cut))/2:
+                if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
                     print(f"\t\tMap SNR too low! Skipping...")
                     if not del_map:
                         continue
                     print("\t\tDeleting fits files")
-                    glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*.fits")
+                    glob_path = os.path.join(
+                        obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*.fits"
+                    )
                     flist = glob.glob(glob_path)
                     for fname in flist:
                         if os.path.isfile(fname):
@@ -432,9 +473,37 @@ for i, obs in enumerate(obslist):
             os.makedirs(ufm_plot_dir, exist_ok=True)
             plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
             for i, comp in enumerate(comps):
-                map_norm = peak/out["solved"][i][cent]
-                plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, False, log_thresh)
-                plot_map(map_norm * out["solved"][i], extent, plt_extent, cent, plt_cent, zoom, ufm_plot_dir, obs, ufm, band_name, comp, True, log_thresh)
+                map_norm = peak / out["solved"][i][cent]
+                plot_map(
+                    map_norm * out["solved"][i],
+                    extent,
+                    plt_extent,
+                    cent,
+                    plt_cent,
+                    zoom,
+                    ufm_plot_dir,
+                    obs,
+                    ufm,
+                    band_name,
+                    comp,
+                    False,
+                    log_thresh,
+                )
+                plot_map(
+                    map_norm * out["solved"][i],
+                    extent,
+                    plt_extent,
+                    cent,
+                    plt_cent,
+                    zoom,
+                    ufm_plot_dir,
+                    obs,
+                    ufm,
+                    band_name,
+                    comp,
+                    True,
+                    log_thresh,
+                )
 
     sys.stdout.flush()
 

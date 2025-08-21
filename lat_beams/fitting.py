@@ -44,6 +44,7 @@ from typing_extensions import Optional, cast
 
 flog.setLevel(logging.ERROR)
 
+
 def get_xieta_src_centered(
     ctime: NDArray[np.floating],
     az: NDArray[np.floating],
@@ -121,9 +122,25 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     sim_data = a * np.exp(xi_coef + eta_coef)
     return sim_data + off
 
-def double_gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off, a_outer, fwhm_xi_outer, fwhm_eta_outer, phi_outer):
+
+def double_gaussian2d(
+    xieta,
+    a,
+    xi0,
+    eta0,
+    fwhm_xi,
+    fwhm_eta,
+    phi,
+    off,
+    a_outer,
+    fwhm_xi_outer,
+    fwhm_eta_outer,
+    phi_outer,
+):
     inner = gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
-    outer = gaussian2d(xieta, a_outer, xi0, eta0, fwhm_xi_outer, fwhm_eta_outer, phi_outer, 0)
+    outer = gaussian2d(
+        xieta, a_outer, xi0, eta0, fwhm_xi_outer, fwhm_eta_outer, phi_outer, 0
+    )
 
     return inner + outer
 
@@ -209,6 +226,7 @@ def _empty_fp(aman: AxisManager) -> AxisManager:
 
     return focal_plane
 
+
 # TODO: NEED DOCSTRING
 # Smoothening stuff
 def _bin_priors_1d(
@@ -236,6 +254,7 @@ def _bin_priors_1d(
         eta0 = eta_cents[np.nanargmax(eta_binned)]
 
     return xi0, eta0
+
 
 # TODO: NEED DOCSTRING
 def _bin_priors_2d(
@@ -265,6 +284,7 @@ def _bin_priors_2d(
         eta0 = eta_cents[max_idx[1]]
     return xi0, eta0
 
+
 def filter_tod(am, filt, signal_name="resid", rfft=None):
     sig_filt_name = f"{signal_name}_filt"
     am[sig_filt_name] = am[signal_name].copy()
@@ -292,7 +312,7 @@ def fit_tod_pointing(
     n_err: float = 5,
     pos_priors: Optional[NDArray[np.floating]] = None,
     show_tqdm: bool = False,
-    min_snr: float = 5.0
+    min_snr: float = 5.0,
 ) -> AxisManager:
     """
     Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.
@@ -331,7 +351,7 @@ def fit_tod_pointing(
 
         show_tqdm: If True show a progress bar.
 
-        min_snr: Calculates hits out to min_snr compared to white noise level. 
+        min_snr: Calculates hits out to min_snr compared to white noise level.
 
     Returns:
 
@@ -365,7 +385,7 @@ def fit_tod_pointing(
 
     focal_plane = _empty_fp(aman)
     mean_el = np.mean(np.array(aman.boresight.el))
-    
+
     # getting xi eta in a coordinate system where (0, 0) is the planet youre fitting. Expecting trimmed TOD for source.
     # Cannot include both rising and setting (ie a sign change). Note that a transit is flat -- so is ok.
     xi, eta = get_xieta_src_centered(
@@ -381,9 +401,8 @@ def fit_tod_pointing(
     az_d = detrend(aman.boresight.az)
     d_az = np.sign(np.diff(az_d, prepend=az_d[0]))
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
-    turnarounds = ~Ranges.from_mask(turnarounds) # Invert for convenience
+    turnarounds = ~Ranges.from_mask(turnarounds)  # Invert for convenience
 
-    
     # 0 is the highpass part, 1 lowpass part.
     filt = identity_filter()
     if bandpass_range[0] is not None:
@@ -394,12 +413,12 @@ def fit_tod_pointing(
     def fit_func(x, fit_am, filt, rfft):
         xi0, eta0, amp, fwhm, offset = x
         model = gaussian2d(
-                (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
+            (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
         return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
-    
+
     # Loop through all detectors and fit them one at a time.
     it = np.array(aman.dets.vals)
     if show_tqdm:
@@ -434,7 +453,7 @@ def fit_tod_pointing(
         if np.all(np.isfinite(pos_priors[i])):
             xi0, eta0 = pos_priors[i]
             _bin_priors = False
-        
+
         # Determine if 1d or 2d binning used.
         # Bin in xi and eta
         if _bin_priors and not bin_2d:
@@ -465,7 +484,7 @@ def fit_tod_pointing(
             stop += start
             start = 0
         if stop > fit_am.samps.count:
-            start -= (fit_am.samps.count - stop)
+            start -= fit_am.samps.count - stop
             stop = fit_am.samps.count
         sl = slice(
             start + cast(int, fit_am.samps.offset),
@@ -549,12 +568,14 @@ def fit_tod_pointing(
         focal_plane.fwhm[i] = res.x[3]
 
         if not res.success:
-            focal_plane.R2[i] = 0.
+            focal_plane.R2[i] = 0.0
         else:
-            fit_am.resid = (fit_am.signal.ravel() - np.mean(fit_am.signal)).reshape(fit_am.resid.shape)
+            fit_am.resid = (fit_am.signal.ravel() - np.mean(fit_am.signal)).reshape(
+                fit_am.resid.shape
+            )
             fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
             ss_tot = np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
-            focal_plane.R2[i] = 1 - (res.fun/ss_tot)
+            focal_plane.R2[i] = 1 - (res.fun / ss_tot)
 
         focal_plane.dist[i] = np.sqrt(
             (np.array(focal_plane.xi[i]) - xi0) ** 2
@@ -564,18 +585,18 @@ def fit_tod_pointing(
         delta_eta = eta - np.array(focal_plane.eta[i])
 
         # Lets calculate hits
-        # solved for delta(x) in gaussian eqn ie 
+        # solved for delta(x) in gaussian eqn ie
         # f(x)/wnl = A/wnl * e^(-.5 * delta(x) ^ 2 / sigma ^ 2)
         sigma = focal_plane.fwhm[i] / 2.3548
-        snr_peak = np.abs(focal_plane.amp[i])/(min_snr * std)
+        snr_peak = np.abs(focal_plane.amp[i]) / (min_snr * std)
         if snr_peak >= 1:
-            snr_rad = sigma * np.sqrt(2) * np.sqrt( np.log(snr_peak) )
-        else: 
+            snr_rad = sigma * np.sqrt(2) * np.sqrt(np.log(snr_peak))
+        else:
             snr_rad = -1
             focal_plane.R2[i] = 0
         radius = np.sqrt(delta_xi**2 + delta_eta**2)
-        
-        # We null out the mask where we turnaround so they count as seperate hits 
+
+        # We null out the mask where we turnaround so they count as seperate hits
         hits = Ranges.from_mask((radius <= snr_rad)) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
@@ -639,10 +660,10 @@ def solid_angle(az, el, beam, cent, r1, norm):
 
     return value is in steradians  (sr)
     """
-    r2 = np.sqrt(2)*r1
+    r2 = np.sqrt(2) * r1
 
     _az, _el = np.meshgrid(az, el)
-    r = np.sqrt((_az-_az[cent])**2 + (_el-_el[cent])**2)
+    r = np.sqrt((_az - _az[cent]) ** 2 + (_el - _el[cent]) ** 2)
     # convert from arcsec to rad
     az = np.deg2rad(az / 3600)
     el = np.deg2rad(el / 3600)
@@ -653,7 +674,7 @@ def solid_angle(az, el, beam, cent, r1, norm):
     _integrand = integrand.copy()
     _integrand[r > r1] = 0
     integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
-    
+
     _integrand = integrand.copy()
     _integrand[(r < r1) + (r > r2)] = 0
     integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
@@ -714,8 +735,32 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
 
     #  amp, x0, y0, fwhm_x, fwhm_y, phi, off, amp_outer, fwhm_xi_outer, fwhm_eta_outer, phi_outer
     bounds = (
-        [min(0, np.min(imap)), 0, 0, 20 / res, 20 / res, 0, -np.inf, 0, 20 / res, 20 / res, 0],
-        [5*np.max(imap), nx, ny, 300 / res, 300 / res, 2 * np.pi, np.inf, np.max(imap), 900 / res, 900 / res, 2 * np.pi],
+        [
+            min(0, np.min(imap)),
+            0,
+            0,
+            20 / res,
+            20 / res,
+            0,
+            -np.inf,
+            0,
+            20 / res,
+            20 / res,
+            0,
+        ],
+        [
+            5 * np.max(imap),
+            nx,
+            ny,
+            300 / res,
+            300 / res,
+            2 * np.pi,
+            np.inf,
+            np.max(imap),
+            900 / res,
+            900 / res,
+            2 * np.pi,
+        ],
     )
 
     pixmap = (pixmap[0].ravel().astype(float), pixmap[1].ravel().astype(float))
@@ -749,7 +794,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     mprof = radial_profile(model - popt[6], c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * res
     data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
-    fwhm_pix = int(data_fwhm/res)
+    fwhm_pix = int(data_fwhm / res)
     if fwhm_pix == 0:
         return None
 
@@ -759,12 +804,39 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
     kern = Gaussian2DKernel((data_fwhm / 2.3548) / res, (data_fwhm / 2.3548) / res)
     imap_smooth = convolve_fft(imap - popt[6], kern)
     model_smooth = convolve_fft(model - popt[6], kern)
-    norm = np.max(imap_smooth[max(0, c[0] - fwhm_pix):min(imap_smooth.shape[0], c[0] + fwhm_pix), max(0, c[1] - fwhm_pix):min(imap_smooth.shape[1], c[1] + fwhm_pix)])
-    data_solid_angle_meas = solid_angle(x, y, imap_smooth, c, min_sigma * (data_fwhm / 2.355), norm)
-    model_solid_angle_meas = solid_angle(x, y, model_smooth, c, min_sigma * (data_fwhm / 2.355), norm)
-    model_solid_angle_true = 2*np.pi*((popt[0] * (np.deg2rad(popt[3]/3600)/ 2.355) * (np.deg2rad(popt[4]/3600)/ 2.355)) + (popt[7] * (np.deg2rad(popt[8]/3600)/ 2.355) * (np.deg2rad(popt[9]/3600)/ 2.355)))/(popt[0] + popt[7])
-    data_solid_angle_corr = data_solid_angle_meas*model_solid_angle_true/model_solid_angle_meas
-    print(data_solid_angle_corr/model_solid_angle_true)
+    norm = np.max(
+        imap_smooth[
+            max(0, c[0] - fwhm_pix) : min(imap_smooth.shape[0], c[0] + fwhm_pix),
+            max(0, c[1] - fwhm_pix) : min(imap_smooth.shape[1], c[1] + fwhm_pix),
+        ]
+    )
+    data_solid_angle_meas = solid_angle(
+        x, y, imap_smooth, c, min_sigma * (data_fwhm / 2.355), norm
+    )
+    model_solid_angle_meas = solid_angle(
+        x, y, model_smooth, c, min_sigma * (data_fwhm / 2.355), norm
+    )
+    model_solid_angle_true = (
+        2
+        * np.pi
+        * (
+            (
+                popt[0]
+                * (np.deg2rad(popt[3] / 3600) / 2.355)
+                * (np.deg2rad(popt[4] / 3600) / 2.355)
+            )
+            + (
+                popt[7]
+                * (np.deg2rad(popt[8] / 3600) / 2.355)
+                * (np.deg2rad(popt[9] / 3600) / 2.355)
+            )
+        )
+        / (popt[0] + popt[7])
+    )
+    data_solid_angle_corr = (
+        data_solid_angle_meas * model_solid_angle_true / model_solid_angle_meas
+    )
+    print(data_solid_angle_corr / model_solid_angle_true)
 
     return (
         popt,
