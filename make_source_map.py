@@ -271,8 +271,6 @@ for i, obs in enumerate(obslist):
     if src_to_map == "taua":
         src_to_map = ("tauA", 83.6272579, 22.02159891)
     for ufm in ufms:
-        if ufm != "ufm_uv42":
-            continue
         meta_ufm = meta.copy().restrict("dets", meta.det_info.stream_id == ufm)
         bp = (meta_ufm.det_cal.bg % 4) // 2
         tube_band = ufm[4]

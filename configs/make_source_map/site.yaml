@@ -1,0 +1,21 @@
+source_list:
+  - "mars"
+  - "saturn"
+  - "taua"
+pointing_type: "pointing_model" 
+# pointing_type: "per_obs" 
+min_samps: 800
+min_dets: 50
+min_hits: 1
+min_snr: 1
+context: '/so/metadata/lat/contexts/use_this.yaml'
+# start_time: 1749600000 # Realigned 
+start_time: 1744848000 # Everything aligned
+stop_time: 2748476800
+n_med: 3
+mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - .5 
