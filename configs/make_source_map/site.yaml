@@ -13,9 +13,10 @@ context: '/so/metadata/lat/contexts/use_this.yaml'
 start_time: 1744848000 # Everything aligned
 stop_time: 2748476800
 n_med: 3
+n_modes: 30
 mask:
   shape: "circle"
   xyr:
     - 0.
     - 0.
-    - .5 
+    - .15 
