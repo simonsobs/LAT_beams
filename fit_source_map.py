@@ -55,10 +55,15 @@ with open(args.cfg, "r") as f:
 
 # Get some global settings
 extent = cfg.get("extent", 900)
-snr_extent = cfg.get("snr_extent", 360)
+snr_extent = cfg.get("snr_extent", 500)
 min_sigma = cfg.get("min_sigma_fit", 3)
 min_snr = cfg.get("min_snr", 10)
-multipoles = cfg.get("multipoles", [2, 3])
+multipoles = cfg.get(
+    "multipoles",
+    [
+        3,
+    ],
+)
 fwhm_tol = cfg.get("fwhm_tol", 0.25)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 
@@ -213,7 +218,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         continue
 
     # Slice things
-    solved, weights = crop_maps([solved, weights], int(extent // pixsize))
+    solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
     pixmap = enmap.pixmap(solved.shape, solved.wcs)
 
     # Fit
@@ -228,7 +233,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         continue
 
     # Check SNR again
-    if fit_params["amp"] / noise < min_snr:
+    if np.nanmax(model) / noise < min_snr:
         print("\tSNR too low! Skipping")
         to_save = (None, None)
         skipped += [fname + " - fit_snr"]
@@ -236,8 +241,8 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
 
     # Get FWHM from data
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
-    rprof = radial_profile(solved - fit_params["off"], c[::-1])
-    mprof = radial_profile(model - fit_params["off"], c[::-1])
+    rprof = radial_profile(solved - fit_params["off"].value, c[::-1])
+    mprof = radial_profile(model - fit_params["off"].value, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
     model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
@@ -248,11 +253,11 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         to_save = (None, None)
         skipped += [fname + " - data_fwhm"]
         continue
-    if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
-        print("\tModel FWHM out of tolerance! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - model_fwhm"]
-        continue
+    # if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
+    #     print("\tModel FWHM out of tolerance! Skipping")
+    #     to_save = (None, None)
+    #     skipped += [fname + " - model_fwhm"]
+    #     continue
 
     # Get solid angle
     (
@@ -266,8 +271,8 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
 
     # Adjust shift
     dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))
-    fit_params["xi0"] = ra - fit_params["xi0"]
-    fit_params["eta0"] += dec
+    fit_params["xi0"] = ra * u.arcsec - fit_params["xi0"]
+    fit_params["eta0"] += dec * u.arcsec
 
     # Save residual
     resid = solved.copy()

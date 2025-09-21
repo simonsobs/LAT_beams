@@ -512,7 +512,7 @@ def fit_tod_pointing(
     return focal_plane
 
 
-def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, min_sigma=5, map_units=u.pW):
+def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, map_units="pW"):
     """
     Fit 2d Gaussian to input map.
     This fit gaussian can include multipoles to capture extra structure (ie a cross).
@@ -530,9 +530,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, min_sigma=5, map_units=
     multipoles : tuple
         The multipoles to include in the fit.
         1 is the dipole, 2 the quadropole, 3 the octopole, etc.
-    min_sigma : int, default: 5
-        The minimum significance of the fit gaussian
-    map_units : Quantity, default: u.pW
+    map_units : str, default: pW
         The units of the map.
 
     Returns
@@ -544,7 +542,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, min_sigma=5, map_units=
         where the 0 or 1 is 0 for the sin term and 1 for the cos term.
     """
     res = imap.wcs.wcs.cdelt[1] * (60 * 60)
-    pixmap(pixmap[0] * res, pixmap[1] * res)  # convert to arcsec
+    pixmap = (pixmap[0] * res, pixmap[1] * res)  # convert to arcsec
     nx, ny = imap.shape[-2:]
 
     sigma = np.sqrt(ivar)
@@ -562,20 +560,18 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, min_sigma=5, map_units=
 
     bounds = [
         [0, 0, -5 * np.max(np.abs(imap)), 0, 20, 20, 0],
-        [nx, ny, 5 * np.max(imap), 5 * np.max(imap), 300, 300, 2 * np.pi],
+        [nx * res, ny * res, 5 * np.max(imap), 5 * np.max(imap), 300, 300, 2 * np.pi],
     ]
     bounds[0] += np.tile(bounds[0][3:], len(multipoles) * 2).tolist()
     bounds[1] += np.tile(bounds[1][3:], len(multipoles) * 2).tolist()
+    bounds = [(lb, ub) for lb, ub in zip(*bounds)]
 
-    pixmap = (pixmap[0].ravel().astype(float), pixmap[1].ravel().astype(float))
+    pixmap = (pixmap[0].astype(float), pixmap[1].astype(float))
 
     def _beam_mod(coeffs):
         n_multipole = len(multipoles)
         dx, dy, off = coeffs[:3]
-        amps = coeffs[3 :: n_multipole + 1]
-        fwhm_xis = coeffs[4 :: n_multipole + 1]
-        fwhm_etas = coeffs[5 :: n_multipole + 1]
-        phis = coeffs[6 :: n_multipole + 1]
+        amps, fwhm_xis, fwhm_etas, phis = coeffs[3:].reshape((-1, 4)).T
         beam = guass_multipole_beam(
             pixmap[0],
             pixmap[1],
@@ -598,16 +594,15 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, min_sigma=5, map_units=
         chisq = np.nansum((diff * sigma) ** 2)
         return chisq
 
-    res = minimize(_objective, guess, options={"gtol": 1e-7 * np.prod(imap.shape)})
+    res = minimize(_objective, guess, bounds=bounds, options={"gtol": 1e-4})
     if not res.success:
         return None, None
 
     model = _beam_mod(res.x)
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
-    if model[c] < min_sigma * np.nanstd(np.diff(model - imap)):
-        return None, None
 
     # Convert to a dict
+    map_units = u.Unit(map_units)
     par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
     par_units = [u.arcsec, u.arcsec, map_units, map_units, u.arcsec, u.arcsec, u.radian]  # type: ignore
     for m in multipoles:
