@@ -2,20 +2,24 @@ import argparse
 import glob
 import os
 import sys
+import time
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from astropy import units as u
-from matplotlib.colors import LogNorm
 from mpi4py import MPI
 from pixell import enmap
-from scipy.ndimage import gaussian_filter
-from so3g.proj import RangesMatrix
-from sotodlib.core import AxisManager, Context, metadata
-import time
+from sotodlib.core import AxisManager, Context
 
+from lat_beams.beam_utils import (
+    crop_maps,
+    estimate_solid_angle,
+    get_cent,
+    get_fwhm_radial_bins,
+    radial_profile,
+)
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.utils import print_once
 
@@ -27,28 +31,6 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
-
-
-def get_cent(imap, buf=30, sigma=5):
-    smoothed = gaussian_filter(imap, sigma=sigma)
-    smoothed[:buf] = 0
-    smoothed[-1 * buf :] = 0
-    smoothed[:, :buf] = 0
-    smoothed[:, -1 * buf :] = 0
-    cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
-
-    return cent
-
-
-def crop_maps(solved, weights, extent, buf=30, sigma=1):
-    cent = get_cent(solved, buf, sigma)
-    xmin = max(0, cent[0] - extent)
-    xmax = min(solved.shape[0], cent[0] + extent)
-    ymin = max(0, cent[1] - extent)
-    ymax = min(solved.shape[1], cent[1] + extent)
-    solved = solved[xmin:xmax, ymin:ymax]
-    weights = weights[xmin:xmax, ymin:ymax]
-    return solved, weights
 
 
 parser = argparse.ArgumentParser()
@@ -76,6 +58,7 @@ extent = cfg.get("extent", 900)
 snr_extent = cfg.get("snr_extent", 360)
 min_sigma = cfg.get("min_sigma_fit", 3)
 min_snr = cfg.get("min_snr", 10)
+multipoles = cfg.get("multipoles", [2, 3])
 fwhm_tol = cfg.get("fwhm_tol", 0.25)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 
@@ -168,41 +151,12 @@ if len(flist) < max_maps:
     bands = np.hstack([bands, lo * [""]])
 
 
-par_names = [
-    "amp",
-    "dec0",
-    "ra0",
-    "fwhm_dec",
-    "fwhm_ra",
-    "theta",
-    "offset",
-    "amp_outer",
-    "fwhm_dec_outer",
-    "fwhm_ra_outer",
-    "theta_outer",
-]
-par_units = [
-    u.pW,
-    u.arcsec,
-    u.arcsec,
-    u.arcsec,
-    u.arcsec,
-    u.radian,
-    u.pW,
-    u.pW,
-    u.radian,
-]
 to_save = (None, None)
 skipped = []
 for i, (fname, obs_id, stream_id, band) in enumerate(
     zip(flist, obs_ids, stream_ids, bands)
 ):
     comm.barrier()
-    # if i < nmaps:
-    #     comm.barrier()
-    #     to_save = comm.gather(to_save, root=0)
-    # else:
-    #     to_save = [to_save]
     to_save = comm.gather(to_save, root=0)
     if myrank == 0 and to_save is not None and outfile is not None:
         for aman, path in to_save:
@@ -259,37 +213,34 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         continue
 
     # Slice things
-    solved, weights = crop_maps(solved, weights, int(extent // pixsize))
+    solved, weights = crop_maps([solved, weights], int(extent // pixsize))
     pixmap = enmap.pixmap(solved.shape, solved.wcs)
 
     # Fit
     cent = get_cent(solved, sigma=60 / pixsize)
-    res = fit_gauss_beam(solved, weights, pixmap, cent, min_sigma)
-    if res is None:
-        print("\tFit failed! Probably not a good map?")
+    fit_params, model = fit_gauss_beam(
+        solved, weights, pixmap, cent, multipoles, min_sigma
+    )
+    if fit_params is None or model is None:
+        print("\tFit failed! Skipping")
         to_save = (None, None)
-        skipped += [fname + " - fit_failed"]
+        skipped += [fname + " - fit failed"]
         continue
-    (
-        popt,
-        perr,
-        model,
-        data_fwhm,
-        data_solid_angle_meas,
-        data_solid_angle_corr,
-        model_solid_angle_meas,
-        model_solid_angle_true,
-        r,
-        rprof,
-        mprof,
-    ) = res
 
     # Check SNR again
-    if popt[0] / noise < min_snr:
+    if fit_params["amp"] / noise < min_snr:
         print("\tSNR too low! Skipping")
         to_save = (None, None)
         skipped += [fname + " - fit_snr"]
         continue
+
+    # Get FWHM from data
+    c = np.unravel_index(np.argmax(model, axis=None), model.shape)
+    rprof = radial_profile(solved - fit_params["off"], c[::-1])
+    mprof = radial_profile(model - fit_params["off"], c[::-1])
+    r = np.linspace(0, len(rprof), len(rprof)) * pixsize
+    data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
+    model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
 
     # FWHM check
     if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
@@ -297,17 +248,36 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         to_save = (None, None)
         skipped += [fname + " - data_fwhm"]
         continue
-    fwhm_x, fwhm_y = popt[3], popt[4]
-    # if abs(1 - fwhm_x/fwhm_y) > fwhm_tol or abs(1 - .5*(fwhm_x + fwhm_y)/(60*fwhm[band])) > fwhm_tol:
-    #     print("\tFit FWHM out of tolerance! Skipping")
-    #     to_save = (None, None)
-    #     skipped += [fname + " - fit_fwhm"]
-    #     continue
+    if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
+        print("\tModel FWHM out of tolerance! Skipping")
+        to_save = (None, None)
+        skipped += [fname + " - model_fwhm"]
+        continue
+
+    # Get solid angle
+    (
+        data_solid_angle_meas,
+        model_solid_angle_meas,
+        model_solid_angle_true,
+        data_solid_angle_corr,
+    ) = estimate_solid_angle(
+        solved, model, pixsize, data_fwhm, c, fit_params["off"], min_sigma
+    )
 
     # Adjust shift
     dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))
-    popt[2] = ra - popt[2]
-    popt[1] += dec
+    fit_params["xi0"] = ra - fit_params["xi0"]
+    fit_params["eta0"] += dec
+
+    # Save residual
+    resid = solved.copy()
+    resid -= model
+    enmap.write_map(
+        f"{'_'.join(fname.split('_')[:-1])}_resid.fits",
+        resid,
+        "fits",
+        allow_modify=True,
+    )
 
     # Plot
     os.makedirs(
@@ -333,7 +303,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     )
     plt.clf()
 
-    plt.imshow(solved - model, origin="lower", extent=plt_extent)
+    plt.imshow(resid, origin="lower", extent=plt_extent)
     plt.xlabel('RA (")')
     plt.ylabel('Dec (")')
     plt.title(f"{obs_id}_{stream_id}_{band} Residual")
@@ -358,7 +328,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         r,
         mprof,
         alpha=0.6,
-        label=f'Model \nFWHM=({popt[3]:.2f}, {popt[4]:.2f})", Ω={model_solid_angle_true:.2f} sr',
+        label=f'Model \nFWHM=({fit_params["fwhm_xi"]:.2f}, {fit_params["fwhm_eta"]:.2f})", Ω={model_solid_angle_true:.2f} sr',
     )
     plt.xlabel('Radius (")')
     plt.ylabel("Power (pW)")
@@ -390,9 +360,8 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
 
     # Save
     aman = AxisManager()
-    for name, unit, par, err in zip(par_names, par_units, popt, perr):
-        aman.wrap(name, par * unit)
-        aman.wrap(f"{name}_err", err * unit)
+    for name, par in fit_params.items():
+        aman.wrap(name, par)
     aman.wrap("data_fwhm", data_fwhm * u.arcsec)
     aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
     aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
@@ -407,7 +376,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
 
 comm.barrier()
 skipped = comm.gather(skipped, root=0)
-if myrank == 0:
+if myrank == 0 and skipped is not None:
     print("\nSkipped maps:")
     print("\t" + "\n\t".join(np.ravel(np.hstack(skipped))))
 to_save = comm.gather(to_save, root=0)

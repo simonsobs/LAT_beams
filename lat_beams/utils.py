@@ -1,4 +1,5 @@
 import sys
+
 import mpi4py.rc
 
 mpi4py.rc.threads = False

@@ -6,8 +6,8 @@ import astropy.units as u
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from sotodlib.core import AxisManager
 import seaborn as sns
+from sotodlib.core import AxisManager
 
 
 def avg_prof(aman_list, prof="rprof", r="r"):

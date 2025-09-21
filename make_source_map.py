@@ -1,14 +1,15 @@
 import argparse
-from copy import deepcopy
-import logging
-import time
 import glob
+import logging
 import os
 import sys
+import time
+from copy import deepcopy
 
 import h5py
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.pyplot as plt
+import mpi4py.rc
 import numpy as np
 import yaml
 from matplotlib.colors import SymLogNorm
@@ -16,12 +17,10 @@ from scipy.ndimage import gaussian_filter
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
+from sotodlib.coords.pointing_model import apply_pointing_model
 from sotodlib.core import Context, metadata
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.obs_ops.utils import correct_iir_params
-from sotodlib.coords.pointing_model import apply_pointing_model
-import mpi4py.rc
-import logging
 
 from lat_beams.utils import print_once
 

@@ -4,14 +4,15 @@ Just fitting a single TOD for now, can genralize later (but maybe just do a WITC
 Maybe should add priors
 """
 
+import logging
 import sys
 import warnings
 from copy import deepcopy
-import logging
 
 import numpy as np
 import so3g
 import sotodlib.coords.planets as planets
+from astropy import units as u
 from astropy.convolution import (
     Gaussian1DKernel,
     Gaussian2DKernel,
@@ -19,11 +20,9 @@ from astropy.convolution import (
     convolve_fft,
 )
 from numpy.typing import NDArray
-from scipy.interpolate import interp1d
-from scipy.ndimage import gaussian_filter
-from scipy.optimize import curve_fit, minimize
-from scipy.stats import binned_statistic, binned_statistic_2d
+from scipy.optimize import minimize
 from scipy.signal import detrend
+from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.core.context import AxisManager
@@ -32,15 +31,13 @@ from sotodlib.tod_ops.fft_ops import (
     find_inferior_integer,
     find_superior_integer,
 )
-from sotodlib.tod_ops.filters import (
-    fourier_filter,
-    high_pass_sine2,
-    identity_filter,
-    low_pass_sine2,
-)
+from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, identity_filter
 from sotodlib.tod_ops.filters import logger as flog
+from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
+
+from .models import gaussian2d, guass_multipole_beam
 
 flog.setLevel(logging.ERROR)
 
@@ -88,119 +85,6 @@ def get_xieta_src_centered(
     xi, eta, _ = quat.decompose_xieta(q_total)
 
     return xi, eta
-
-
-def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
-    """
-    Stolen from analyze_bright_ptsrc
-
-    Simulate a time stream with an Gaussian beam model
-    Args
-    ------
-    xi, eta: cordinates in the detector's system
-    a: float
-        amplitude of the Gaussian beam model
-    xi0, eta0: float, float
-        center position of the Gaussian beam model
-    fwhm_xi, fwhm_eta, phi: float, float, float
-        fwhm along the xi, eta axis (rotated)
-        and the rotation angle (in radians)
-
-    Ouput:
-    ------
-    sim_data: 1d array of float
-        Time stream at sampling points given by xieta
-    """
-    xi, eta = xieta
-    xi_sft = xi - xi0
-    eta_sft = eta - eta0
-    xi_rot = xi_sft * np.cos(phi) - eta_sft * np.sin(phi)
-    eta_rot = xi_sft * np.sin(phi) + eta_sft * np.cos(phi)
-    factor = 2 * np.sqrt(2 * np.log(2))
-    xi_coef = -0.5 * (xi_rot) ** 2 / (fwhm_xi / factor) ** 2
-    eta_coef = -0.5 * (eta_rot) ** 2 / (fwhm_eta / factor) ** 2
-    sim_data = a * np.exp(xi_coef + eta_coef)
-    return sim_data + off
-
-
-def double_gaussian2d(
-    xieta,
-    a,
-    xi0,
-    eta0,
-    fwhm_xi,
-    fwhm_eta,
-    phi,
-    off,
-    a_outer,
-    fwhm_xi_outer,
-    fwhm_eta_outer,
-    phi_outer,
-):
-    inner = gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
-    outer = gaussian2d(
-        xieta, a_outer, xi0, eta0, fwhm_xi_outer, fwhm_eta_outer, phi_outer, 0
-    )
-
-    return inner + outer
-
-
-def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
-    factor = 2 * np.sqrt(2 * np.log(2))
-    xi, eta = xieta
-    gauss = gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
-    xi_sft = xi - xi0
-    eta_sft = eta - eta0
-
-    da = gauss - off
-    dxi0 = (
-        -1
-        * (factor**2)
-        * da
-        * (
-            (-1 * eta_sft) * (fwhm_xi**2 - fwhm_eta**2) * np.sin(phi) * np.cos(phi)
-            + (-1 * xi_sft)
-            * ((fwhm_xi * np.sin(phi)) ** 2 + (fwhm_eta * np.cos(phi)) ** 2)
-        )
-        / ((fwhm_xi * fwhm_eta) ** 2)
-    )
-    deta0 = (
-        -1
-        * (factor**2)
-        * da
-        * (
-            (-1 * xi_sft) * (fwhm_xi**2 - fwhm_eta**2) * np.sin(phi) * np.cos(phi)
-            + (-1 * eta_sft)
-            * ((fwhm_xi * np.cos(phi)) ** 2 + (fwhm_eta * np.sin(phi)) ** 2)
-        )
-        / ((fwhm_xi * fwhm_eta) ** 2)
-    )
-    dfwhm_xi = (
-        (factor**2)
-        * da
-        * (((-1 * xi_sft) * np.cos(phi) - (-1 * eta_sft) * np.sin(phi)) ** 2)
-        / (fwhm_xi**3)
-    )
-    dfwhm_eta = (
-        (factor**2)
-        * da
-        * (((-1 * xi_sft) * np.sin(phi) + (-1 * eta_sft) * np.cos(phi)) ** 2)
-        / (fwhm_eta**3)
-    )
-    dphi = (
-        -1
-        * (factor**2)
-        * da
-        * (fwhm_xi**2 + fwhm_eta**2)
-        * ((xi_sft) * np.sin(phi) - ((-1 * eta_sft) * np.cos(phi)))
-        * ((-1 * xi_sft) * np.cos(phi) + (eta_sft) * np.sin(phi))
-        / ((fwhm_xi * fwhm_eta) ** 2)
-    )
-    doff = np.ones_like(xi)
-
-    dgauss = np.vstack([da, dxi0, deta0, dfwhm_xi, dfwhm_eta, dphi, doff])
-
-    return gauss, dgauss
 
 
 def _empty_fp(aman: AxisManager) -> AxisManager:
@@ -628,63 +512,10 @@ def fit_tod_pointing(
     return focal_plane
 
 
-def radial_profile(data, center):
-    msk = np.isfinite(data.ravel())
-    y, x = np.indices((data.shape))
-    r = np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2)
-    r = r.astype(int)
-
-    tbin = np.bincount(r.ravel()[msk], data.ravel()[msk])
-    nr = np.bincount(r.ravel()[msk])
-    radialprofile = tbin / nr
-    return radialprofile
-
-
-def get_fwhm_radial_bins(r, y, interpolate=False):
-    half_point = np.max(y) * 0.5
-
-    if interpolate:
-        r_diff = r[1] - r[0]
-        interp_func = interp1d(r, y)
-        r_interp = np.arange(np.min(r), np.max(r) - r_diff, r_diff / 100)
-        y_interp = interp_func(r_interp)
-        r, y = (r_interp, y_interp)
-    d = y - half_point
-    inds = np.where(d > 0)[0]
-    fwhm = 2 * (r[inds[-1]])
-    return fwhm
-
-
-def solid_angle(az, el, beam, cent, r1, norm):
-    """Compute the integrated solid angle of a beam map.
-
-    return value is in steradians  (sr)
-    """
-    r2 = np.sqrt(2) * r1
-
-    _az, _el = np.meshgrid(az, el)
-    r = np.sqrt((_az - _az[cent]) ** 2 + (_el - _el[cent]) ** 2)
-    # convert from arcsec to rad
-    az = np.deg2rad(az / 3600)
-    el = np.deg2rad(el / 3600)
-
-    integrand = beam / norm
-
-    # perform the solid angle integral
-    _integrand = integrand.copy()
-    _integrand[r > r1] = 0
-    integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
-
-    _integrand = integrand.copy()
-    _integrand[(r < r1) + (r > r2)] = 0
-    integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
-    return integral_inner - integral_outer
-
-
-def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
+def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, min_sigma=5, map_units=u.pW):
     """
     Fit 2d Gaussian to input map.
-    Based on Tommy's code from 2024 F2F tutorial.
+    This fit gaussian can include multipoles to capture extra structure (ie a cross).
 
     Arguments
     ---------
@@ -696,158 +527,92 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, min_sigma=5):
         X and Y pixel indices for each pixel.
     cent : tuple
         The index of the map center
+    multipoles : tuple
+        The multipoles to include in the fit.
+        1 is the dipole, 2 the quadropole, 3 the octopole, etc.
     min_sigma : int, default: 5
         The minimum significance of the fit gaussian
+    map_units : Quantity, default: u.pW
+        The units of the map.
 
     Returns
     -------
-    amp : float
-        Amplitude of Gaussian.
-    shift_x : float
-        X shift needed to center the Gaussian in middle of map
-    shift_y : float
-        Y shift needed to center the Gaussian in middle of map
-    fwhm
-        Fitted FWHM of Gaussian
+    fit_params : dict
+        The fit params.
+        Base params are: xi0, eta0, off, amp, fwhm_xi, fwhm_eta, phi.
+        Multipoles will have '_m{multipole_index}_{0 or 1} appended,
+        where the 0 or 1 is 0 for the sin term and 1 for the cos term.
     """
     res = imap.wcs.wcs.cdelt[1] * (60 * 60)
+    pixmap(pixmap[0] * res, pixmap[1] * res)  # convert to arcsec
     nx, ny = imap.shape[-2:]
 
     sigma = np.sqrt(ivar)
-    sigma = np.divide(1, sigma, where=sigma != 0)
-
-    # Set to numerically large value.
-    sigma[ivar == 0] = sigma[~(ivar == 0)].max() * 1e5
 
     guess = [
-        imap[cent[0], cent[1]],
         pixmap[0][cent[0], cent[1]],
         pixmap[1][cent[0], cent[1]],
-        60 / res,
-        60 / res,
         0,
-        0,
-        0,
-        300 / res,
-        300 / res,
+        imap[cent[0], cent[1]],
+        60,
+        60,
         0,
     ]
+    guess += np.tile(guess[3:], len(multipoles) * 2).tolist()
 
-    #  amp, x0, y0, fwhm_x, fwhm_y, phi, off, amp_outer, fwhm_xi_outer, fwhm_eta_outer, phi_outer
-    bounds = (
-        [
-            min(0, np.min(imap)),
-            0,
-            0,
-            20 / res,
-            20 / res,
-            0,
-            -np.inf,
-            0,
-            20 / res,
-            20 / res,
-            0,
-        ],
-        [
-            5 * np.max(imap),
-            nx,
-            ny,
-            300 / res,
-            300 / res,
-            2 * np.pi,
-            np.inf,
-            np.max(imap),
-            900 / res,
-            900 / res,
-            2 * np.pi,
-        ],
-    )
+    bounds = [
+        [0, 0, -5 * np.max(np.abs(imap)), 0, 20, 20, 0],
+        [nx, ny, 5 * np.max(imap), 5 * np.max(imap), 300, 300, 2 * np.pi],
+    ]
+    bounds[0] += np.tile(bounds[0][3:], len(multipoles) * 2).tolist()
+    bounds[1] += np.tile(bounds[1][3:], len(multipoles) * 2).tolist()
 
     pixmap = (pixmap[0].ravel().astype(float), pixmap[1].ravel().astype(float))
 
-    try:
-        popt, pcov = curve_fit(
-            double_gaussian2d,
-            pixmap,
-            imap.ravel(),
-            p0=guess,
-            sigma=sigma.ravel(),
-            bounds=bounds,
+    def _beam_mod(coeffs):
+        n_multipole = len(multipoles)
+        dx, dy, off = coeffs[:3]
+        amps = coeffs[3 :: n_multipole + 1]
+        fwhm_xis = coeffs[4 :: n_multipole + 1]
+        fwhm_etas = coeffs[5 :: n_multipole + 1]
+        phis = coeffs[6 :: n_multipole + 1]
+        beam = guass_multipole_beam(
+            pixmap[0],
+            pixmap[1],
+            multipoles,
+            dx,
+            dy,
+            off,
+            amps,
+            fwhm_xis,
+            fwhm_etas,
+            phis,
         )
-    except RuntimeError:
-        return None
-    perr = np.sqrt(np.diag(pcov))
+        return beam
 
-    model = double_gaussian2d(pixmap, *popt).reshape(imap.shape)
+    def _objective(
+        coeffs,
+    ):
+        beam = _beam_mod(coeffs)
+        diff = imap - beam
+        chisq = np.nansum((diff * sigma) ** 2)
+        return chisq
+
+    res = minimize(_objective, guess, options={"gtol": 1e-7 * np.prod(imap.shape)})
+    if not res.success:
+        return None, None
+
+    model = _beam_mod(res.x)
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
-    if popt[0] < min_sigma * perr[0] or model[c] == 0:
-        return None
+    if model[c] < min_sigma * np.nanstd(np.diff(model - imap)):
+        return None, None
 
-    # convert units of pixels to arcsecs
-    popt[1:5] *= res
-    perr[1:5] *= res
-    popt[8:10] *= res
-    perr[8:10] *= res
-
-    # Get FWHM from data
-    rprof = radial_profile(imap - popt[6], c[::-1])
-    mprof = radial_profile(model - popt[6], c[::-1])
-    r = np.linspace(0, len(rprof), len(rprof)) * res
-    data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
-    fwhm_pix = int(data_fwhm / res)
-    if fwhm_pix == 0:
-        return None
-
-    # Get solid angles
-    y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
-    x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
-    kern = Gaussian2DKernel((data_fwhm / 2.3548) / res, (data_fwhm / 2.3548) / res)
-    imap_smooth = convolve_fft(imap - popt[6], kern)
-    model_smooth = convolve_fft(model - popt[6], kern)
-    norm = np.max(
-        imap_smooth[
-            max(0, c[0] - fwhm_pix) : min(imap_smooth.shape[0], c[0] + fwhm_pix),
-            max(0, c[1] - fwhm_pix) : min(imap_smooth.shape[1], c[1] + fwhm_pix),
-        ]
-    )
-    data_solid_angle_meas = solid_angle(
-        x, y, imap_smooth, c, min_sigma * (data_fwhm / 2.355), norm
-    )
-    model_solid_angle_meas = solid_angle(
-        x, y, model_smooth, c, min_sigma * (data_fwhm / 2.355), norm
-    )
-    model_solid_angle_true = (
-        2
-        * np.pi
-        * (
-            (
-                popt[0]
-                * (np.deg2rad(popt[3] / 3600) / 2.355)
-                * (np.deg2rad(popt[4] / 3600) / 2.355)
-            )
-            + (
-                popt[7]
-                * (np.deg2rad(popt[8] / 3600) / 2.355)
-                * (np.deg2rad(popt[9] / 3600) / 2.355)
-            )
-        )
-        / (popt[0] + popt[7])
-    )
-    data_solid_angle_corr = (
-        data_solid_angle_meas * model_solid_angle_true / model_solid_angle_meas
-    )
-    print(data_solid_angle_corr / model_solid_angle_true)
-
-    return (
-        popt,
-        perr,
-        model,
-        data_fwhm,
-        data_solid_angle_meas,
-        data_solid_angle_corr,
-        model_solid_angle_meas,
-        model_solid_angle_true,
-        r,
-        rprof,
-        mprof,
-    )
+    # Convert to a dict
+    par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
+    par_units = [u.arcsec, u.arcsec, map_units, map_units, u.arcsec, u.arcsec, u.radian]  # type: ignore
+    for m in multipoles:
+        for i in range(2):
+            par_names += [p + f"_m{m}_{i}" for p in par_names[3:7]]
+            par_units += [p for p in par_units[3:7]]
+    params = {n: v * u for n, u, v in zip(par_names, par_units, res.x)}
+    return params, model

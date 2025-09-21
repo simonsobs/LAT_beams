@@ -16,12 +16,12 @@ Still somewhat LAT specific but could be genralized if desired.
 # - should develop tests for this
 
 import argparse
+import logging
 import os
 import sqlite3
 import sys
 import time
 from functools import reduce
-import logging
 
 import h5py
 import matplotlib.pyplot as plt
