@@ -1,7 +1,13 @@
+import datetime as dt
+import os
+
+import astropy.units as u
+import h5py
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from scipy.interpolate import interp1d
 from scipy.ndimage import sobel
+from sotodlib.core import AxisManager
 
 
 def solid_angle(az, el, beam, cent, r1, norm):
@@ -110,3 +116,66 @@ def crop_maps(maps, cent, extent):
     ymax = min(maps[0].shape[1], cent[1] + extent)
     maps = [m[xmin:xmax, ymin:ymax] for m in maps]
     return maps
+
+
+def load_beam_fits(fpath):
+    f = h5py.File(fpath, mode="r")
+    obs_ids = []
+    times = []
+    stream_ids = []
+    bands = []
+    for o in f.keys():
+        for s in f[o].keys():
+            for b in f[o][s].keys():
+                obs_ids += [o]
+                times += [float(o.split("_")[1])]
+                stream_ids += [s]
+                bands += [b]
+    obs_ids = np.array(obs_ids)
+    times = np.array(times)
+    stream_ids = np.array(stream_ids)
+    bands = np.array(bands)
+
+    dates = [dt.date.fromtimestamp(ct) for ct in times]
+    tdelt = (
+        np.array(
+            [
+                ct - dt.datetime(year=d.year, month=d.month, day=d.day).timestamp()
+                for ct, d in zip(times, dates)
+            ]
+        )
+        / 3600
+    )
+
+    amans = np.array(
+        [
+            AxisManager.load(f[os.path.join(o, s, b)])
+            for o, s, b in zip(obs_ids, stream_ids, bands)
+        ]
+    )
+    # check that all fits have the same pars
+    par_list = np.sort(list(amans[0]._fields.keys()))
+    for aman in amans:
+        pars = np.sort(list(aman._fields.keys()))
+        if not np.array_equal(par_list, pars):
+            raise ValueError("Not all fits have the same pars!")
+    f.close()
+    dtype = [
+        ("obs_id", obs_ids.dtype),
+        ("stream_id", stream_ids.dtype),
+        ("band", bands.dtype),
+        ("time", float),
+        ("hour", float),
+        ("aman", "O"),
+    ]
+    all_fits = np.fromiter(
+        zip(obs_ids, stream_ids, bands, times, tdelt, amans), dtype, count=len(amans)
+    )
+    return all_fits
+
+
+def get_fit_vec(all_fits, name):
+    dat = u.Quantity([aman[name] for aman in all_fits["aman"]])
+    if dat.unit == u.Unit(3):
+        dat = dat.value * u.pW
+    return dat
