@@ -10,8 +10,7 @@ min_hits: 1
 min_snr: 1
 # context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc_per_obs.yaml'
 context: '/global/cfs/cdirs/sobs/users/skh/data/beams/lat/context_nersc_pointing_model.yaml'
-# start_time: 1749600000 # Realigned 
-start_time: 1744848000 # Everything aligned
+start_time: 1739941200
 stop_time: 2748476800
 n_med: 3
 mask:
@@ -21,7 +20,10 @@ mask:
     - 0.
     - .2 
 epochs:
-  # - [1744848000, 1745150000]
-  # - [1745150000, 1749600000]
-  - [1749600000, 1757088000]
-  - [1757088000, 2757088000]
+    - [1739941200, 1744848000]
+    - [1744848000, 1745150000]
+    - [1745150000, 1749355200]
+    - [1749355200, 1749600000]
+    - [1749600000, 1755576000]
+    - [1755576000, 1756699200]
+    - [1756699200, 2748476800]

@@ -1,8 +1,8 @@
 source: "saturn"
 min_samps: 20000
 context: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
-# start_time: 1739923200 # First light 
-start_time: 1744848000 # Everything aligned
+start_time: 1739923200 # First light 
+# start_time: 1744848000 # Everything aligned
 # start_time: 1746187200 # Corotator moved
 # start_time: 1748476800 # Autoschedular
 stop_time: 2748476800
