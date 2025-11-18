@@ -223,9 +223,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
 
     # Fit
     cent = get_cent(solved, sigma=60 / pixsize)
-    fit_params, model = fit_gauss_beam(
-        solved, weights, pixmap, cent, multipoles, "pW" 
-    )
+    fit_params, model = fit_gauss_beam(solved, weights, pixmap, cent, multipoles, "pW")
     if fit_params is None or model is None:
         print("\tFit failed! Skipping")
         to_save = (None, None)
@@ -266,7 +264,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         model_solid_angle_true,
         data_solid_angle_corr,
     ) = estimate_solid_angle(
-        solved, model, pixsize, data_fwhm, c, fit_params["off"].value, min_sigma 
+        solved, model, pixsize, data_fwhm, c, fit_params["off"].value, min_sigma
     )
 
     # Adjust shift

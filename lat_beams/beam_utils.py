@@ -3,8 +3,11 @@ import os
 
 import astropy.units as u
 import h5py
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve_fft
+from matplotlib.colors import SymLogNorm
 from scipy.interpolate import interp1d
 from scipy.ndimage import sobel
 from sotodlib.core import AxisManager
@@ -181,3 +184,79 @@ def get_fit_vec(all_fits, name):
     if dat.unit == u.Unit(3):
         dat = dat.value * u.pW
     return dat
+
+
+def plot_map(
+    data,
+    extent,
+    plt_extent,
+    cent,
+    plt_cent,
+    zoom,
+    ufm_plot_dir,
+    obs,
+    ufm,
+    band_name,
+    comp="T",
+    log=False,
+    log_thresh=1e-3,
+):
+    _norm = None
+    label = f"_{comp}"
+    rprof = radial_profile(data, cent[::-1])[: int(0.5 * min(*data.shape))]
+    if log:
+        _norm = SymLogNorm(linthresh=log_thresh * np.max(data), clip=True)
+        label = f"_{comp}_log10"
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rprof = np.sign(rprof) * np.log10(np.abs(rprof))
+    plt.close()
+    plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
+    plt.colorbar()
+    plt.grid()
+    plt.xlabel('RA (")')
+    plt.ylabel('Dec (")')
+    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
+    plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
+    plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
+    plt.savefig(
+        os.path.join(ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
+    )
+    plt.xlim((plt_cent[0] - extent / zoom, plt_cent[0] + extent / zoom))
+    plt.ylim((plt_cent[1] - extent / zoom, plt_cent[1] + extent / zoom))
+    plt.savefig(
+        os.path.join(
+            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
+        )
+    )
+
+    plt.close()
+    x = np.linspace(0, pixsize * len(rprof), len(rprof))
+    plt.plot(x, rprof)
+    plt.xlabel('Radius (")')
+    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
+    plt.xlim((0, extent))
+    plt.savefig(
+        os.path.join(
+            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}.png"
+        ),
+        bbox_inches="tight",
+    )
+    plt.xlim((0, extent / zoom))
+    lims = plt.gca().get_xlim()
+    i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
+    plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
+    plt.savefig(
+        os.path.join(
+            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
+        ),
+        bbox_inches="tight",
+    )
+
+
+def estimate_cent(imap, sigma):
+    smoothed = gaussian_filter(imap, sigma)
+    smoothed[:buf] = np.nan
+    smoothed[-1 * buf :] = np.nan
+    smoothed[:, :buf] = np.nan
+    smoothed[:, -1 * buf :] = np.nan
+    cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)

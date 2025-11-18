@@ -7,22 +7,17 @@ import time
 from copy import deepcopy
 
 import h5py
-import matplotlib
-import matplotlib.pyplot as plt
 import mpi4py.rc
 import numpy as np
 import yaml
-from matplotlib.colors import SymLogNorm
 from scipy.ndimage import gaussian_filter
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
-from sotodlib.coords.pointing_model import apply_pointing_model
 from sotodlib.core import Context, metadata
-from sotodlib.core.flagman import has_any_cuts
-from sotodlib.obs_ops.utils import correct_iir_params
-from sotodlib.preprocess.preprocess_util import preproc_or_load_group 
+from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 
+from lat_beams.beam_utils import estimate_cent, plot_map
 from lat_beams.utils import print_once
 
 mpi4py.rc.threads = False
@@ -42,85 +37,6 @@ N_FILES = 4
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 
 cp.logger.setLevel(logging.WARNING)
-
-
-def radial_profile(data, center):
-    msk = np.isfinite(data.ravel())
-    y, x = np.indices((data.shape))
-    r = np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2)
-    r = r.astype(int)
-
-    tbin = np.bincount(r.ravel()[msk], data.ravel()[msk])
-    nr = np.bincount(r.ravel()[msk])
-    radialprofile = tbin / nr
-    return radialprofile
-
-
-def plot_map(
-    data,
-    extent,
-    plt_extent,
-    cent,
-    plt_cent,
-    zoom,
-    ufm_plot_dir,
-    obs,
-    ufm,
-    band_name,
-    comp="T",
-    log=False,
-    log_thresh=1e-3,
-):
-    _norm = None
-    label = f"_{comp}"
-    rprof = radial_profile(data, cent[::-1])[: int(0.5 * min(*data.shape))]
-    if log:
-        _norm = SymLogNorm(linthresh=log_thresh * np.max(data), clip=True)
-        label = f"_{comp}_log10"
-        with np.errstate(divide="ignore", invalid="ignore"):
-            rprof = np.sign(rprof) * np.log10(np.abs(rprof))
-    plt.close()
-    plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
-    plt.colorbar()
-    plt.grid()
-    plt.xlabel('RA (")')
-    plt.ylabel('Dec (")')
-    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
-    plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
-    plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
-    plt.savefig(
-        os.path.join(ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
-    )
-    plt.xlim((plt_cent[0] - extent / zoom, plt_cent[0] + extent / zoom))
-    plt.ylim((plt_cent[1] - extent / zoom, plt_cent[1] + extent / zoom))
-    plt.savefig(
-        os.path.join(
-            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
-        )
-    )
-
-    plt.close()
-    x = np.linspace(0, pixsize * len(rprof), len(rprof))
-    plt.plot(x, rprof)
-    plt.xlabel('Radius (")')
-    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
-    plt.xlim((0, extent))
-    plt.savefig(
-        os.path.join(
-            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}.png"
-        ),
-        bbox_inches="tight",
-    )
-    plt.xlim((0, extent / zoom))
-    lims = plt.gca().get_xlim()
-    i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
-    plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
-    plt.savefig(
-        os.path.join(
-            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
-        ),
-        bbox_inches="tight",
-    )
 
 
 parser = argparse.ArgumentParser()
@@ -156,6 +72,7 @@ extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-3)
+buf = cfg.get("smooth_kern", 60)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 preprocess_cfg = cfg.get("preprocess", None)
 
@@ -167,6 +84,8 @@ if pointing_type not in ["pointing_model", "per_obs", "raw"]:
     raise ValueError(f"Invalid pointing_type {pointing_type}")
 if pointing_type == "raw" and comps != "T":
     print_once(f"Running with raw pointing, changing comps from {comps} to T")
+if comps not in ["T", "TQU"]:
+    raise ValueError("comps should be 'T' or 'TQU'")
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -254,7 +173,9 @@ for i, obs in enumerate(obslist):
         data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
     )
     os.makedirs(obs_data_dir, exist_ok=True)
-    wsufms = np.unique(np.column_stack([meta.det_info.wafer_slot, meta.det_info.stream_id]), axis=0)
+    wsufms = np.unique(
+        np.column_stack([meta.det_info.wafer_slot, meta.det_info.stream_id]), axis=0
+    )
 
     src_to_map = src_name.split("_")[0]
     if src_to_map == "taua":
@@ -267,9 +188,7 @@ for i, obs in enumerate(obslist):
 
             # Check if we already mapped
             # TODO: add a mode to replot but not refit
-            glob_path = os.path.join(
-                obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*"
-            )
+            glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*")
             flist = glob.glob(glob_path)
             if len(flist) >= N_FILES and (not args.overwrite):
                 print(
@@ -279,7 +198,13 @@ for i, obs in enumerate(obslist):
 
             # Load and process the TOD
             try:
-                err, _, _, aman = preproc_or_load_group(obs["obs_id"], preprocess_cfg, dets={"wafer_slot":ws, "wafer.bandpass":band}, save_archive=False, overwrite=True)
+                err, _, _, aman = preproc_or_load_group(
+                    obs["obs_id"],
+                    preprocess_cfg,
+                    dets={"wafer_slot": ws, "wafer.bandpass": band},
+                    save_archive=False,
+                    overwrite=True,
+                )
             except:
                 print("\t\t(Failed to load or preprocess! Skipping")
                 continue
@@ -359,9 +284,7 @@ for i, obs in enumerate(obslist):
                 cuts=cuts,
                 source_flags=source_flags,
                 comps=comps,
-                filename=os.path.join(
-                    obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"
-                ),
+                filename=os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
                 n_modes=n_modes,
                 info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
             )
@@ -372,37 +295,30 @@ for i, obs in enumerate(obslist):
             pixsize = 3600 * out["solved"].wcs.wcs.cdelt[1]
 
             # Smooth and find the center
-            smoothed = gaussian_filter(out["solved"][0], sigma=60 / pixsize)
-            smoothed[:buf] = np.nan
-            smoothed[-1 * buf :] = np.nan
-            smoothed[:, :buf] = np.nan
-            smoothed[:, -1 * buf :] = np.nan
-            cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
+            cent = estimate_cent(out["solved"][0], smooth_kern / pixsize)
 
-            # Estimate SNR, but only if we have a T map
-            peak = 1.0
-            if "T" in comps:
-                peak = out["solved"][0][cent]
-                snr = (
-                    peak
-                    / tod_ops.jumps.std_est(
-                        np.atleast_2d(out["solved"][0].ravel()), ds=1
-                    )[0]
-                )
-                print(f"\t\tMap SNR approximately {snr}")
-                if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
-                    print(f"\t\tMap SNR too low! Skipping...")
-                    if not del_map:
-                        continue
-                    print("\t\tDeleting fits files")
-                    glob_path = os.path.join(
-                        obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*.fits"
-                    )
-                    flist = glob.glob(glob_path)
-                    for fname in flist:
-                        if os.path.isfile(fname):
-                            os.remove(fname)
+            # Estimate SNR
+            peak = out["solved"][0][cent]
+            snr = (
+                peak
+                / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[
+                    0
+                ]
+            )
+            print(f"\t\tMap SNR approximately {snr}")
+            if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
+                print(f"\t\tMap SNR too low! Skipping...")
+                if not del_map:
                     continue
+                print("\t\tDeleting fits files")
+                glob_path = os.path.join(
+                    obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*.fits"
+                )
+                flist = glob.glob(glob_path)
+                for fname in flist:
+                    if os.path.isfile(fname):
+                        os.remove(fname)
+                continue
 
             # Plot
             ufm_plot_dir = os.path.join(obs_plot_dir, ufm)

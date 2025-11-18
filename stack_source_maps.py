@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from astropy import units as u
+from matplotlib.colors import SymLogNorm
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
-from matplotlib.colors import SymLogNorm
 
 from lat_beams.beam_utils import (
     crop_maps,
@@ -21,7 +21,7 @@ from lat_beams.beam_utils import (
     radial_profile,
 )
 from lat_beams.fitting import fit_gauss_beam
-from lat_beams.utils import print_once, coadd, recenter
+from lat_beams.utils import coadd, print_once, recenter
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 comps = ["T", "Q", "U"]
@@ -40,7 +40,7 @@ def plot_map(imap, title, out_file):
     plt.title(title)
     plt.savefig(out_file)
     plt.close()
-    
+
     _norm = SymLogNorm(linthresh=1e-3 * np.max(np.abs(imap)), clip=True)
     plt.imshow(imap, origin="lower", extent=plt_extent, norm=_norm)
     plt.colorbar()
@@ -51,6 +51,7 @@ def plot_map(imap, title, out_file):
     root, ext = os.path.splitext(out_file)
     plt.savefig(f"{root}_log{ext}")
     plt.close()
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
@@ -70,10 +71,12 @@ extent = cfg.get("extent", 900)
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
 plot_dir = os.path.join(
-    root_dir, "plots", project_dir, "source_maps", pointing_type, "stacks", args.source 
+    root_dir, "plots", project_dir, "source_maps", pointing_type, "stacks", args.source
 )
-out_dir = os.path.join( root_dir, "data", project_dir, "source_maps", pointing_type, "stacks", args.source) 
-data_dir = os.path.join( root_dir, "data", project_dir, "source_maps", pointing_type)
+out_dir = os.path.join(
+    root_dir, "data", project_dir, "source_maps", pointing_type, "stacks", args.source
+)
+data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type)
 os.makedirs(plot_dir, exist_ok=True)
 fit_file = os.path.join(data_dir, "fits", "beam_pars.h5")
 
@@ -114,13 +117,19 @@ dtype = [
     ("rname", rlist.dtype),
     ("rwname", rwlist.dtype),
 ]
-all_maps = np.fromiter( zip(obs_ids, stream_ids, bands, times, flist, wlist, rlist, rwlist), dtype, count=len(flist))
+all_maps = np.fromiter(
+    zip(obs_ids, stream_ids, bands, times, flist, wlist, rlist, rwlist),
+    dtype,
+    count=len(flist),
+)
 msk = np.array([os.path.isfile(wpath) for wpath in all_maps["wname"]])
 all_maps = all_maps[msk]
 msk = np.zeros(len(all_maps), bool)
 file = h5py.File(fit_file)
 for i in range(len(all_maps)):
-    aman_path = os.path.join(all_maps["obs_id"][i], all_maps["stream_id"][i], all_maps["band"][i])
+    aman_path = os.path.join(
+        all_maps["obs_id"][i], all_maps["stream_id"][i], all_maps["band"][i]
+    )
     msk[i] = aman_path in file
 file.close()
 all_maps = all_maps[msk]
@@ -147,14 +156,56 @@ for split in split_by:
                 continue
             maps = smaps[tmsk]
 
-            imaps = [recenter(enmap.read_map(fname), obs_id, stream_id, band, fit_file, True, extent) for fname, obs_id, stream_id, band in zip(maps["fname"], maps["obs_id"], maps["stream_id"], maps["band"])]
-            wmaps = [recenter(enmap.read_map(wname)[np.diag_indices(3)], obs_id, stream_id, band, fit_file, False, extent) for wname, obs_id, stream_id, band in zip(maps["wname"], maps["obs_id"], maps["stream_id"], maps["band"])]
+            imaps = [
+                recenter(
+                    enmap.read_map(fname),
+                    obs_id,
+                    stream_id,
+                    band,
+                    fit_file,
+                    True,
+                    extent,
+                )
+                for fname, obs_id, stream_id, band in zip(
+                    maps["fname"], maps["obs_id"], maps["stream_id"], maps["band"]
+                )
+            ]
+            wmaps = [
+                recenter(
+                    enmap.read_map(wname)[np.diag_indices(3)],
+                    obs_id,
+                    stream_id,
+                    band,
+                    fit_file,
+                    False,
+                    extent,
+                )
+                for wname, obs_id, stream_id, band in zip(
+                    maps["wname"], maps["obs_id"], maps["stream_id"], maps["band"]
+                )
+            ]
             omap, oweight = coadd(imaps, wmaps)
-            enmap.write_map(os.path.join(out_dir_spl, f"{'-'.join(spl)}_{epoch[0]}_{epoch[1]}_solved.fits"), omap)
-            enmap.write_map(os.path.join(out_dir_spl, f"{'-'.join(spl)}_{epoch[0]}_{epoch[1]}_weights.fits"), oweight)
+            enmap.write_map(
+                os.path.join(
+                    out_dir_spl, f"{'-'.join(spl)}_{epoch[0]}_{epoch[1]}_solved.fits"
+                ),
+                omap,
+            )
+            enmap.write_map(
+                os.path.join(
+                    out_dir_spl, f"{'-'.join(spl)}_{epoch[0]}_{epoch[1]}_weights.fits"
+                ),
+                oweight,
+            )
             for i, om in enumerate(omap.reshape((-1,) + omap.shape[-2:])):
-                plot_map(om, f"{spl} {comps[i]} Map Stack", os.path.join(plot_dir_spl, f"{'-'.join(spl)}_{comps[i]}_map_stack_{epoch[0]}_{epoch[1]}.png"))
-
+                plot_map(
+                    om,
+                    f"{spl} {comps[i]} Map Stack",
+                    os.path.join(
+                        plot_dir_spl,
+                        f"{'-'.join(spl)}_{comps[i]}_map_stack_{epoch[0]}_{epoch[1]}.png",
+                    ),
+                )
 
             # imaps = [enmap.read_map(rname) for rname in maps["rname"]]
             # wmaps = [enmap.read_map(rwname) for rwname in maps["rwname"]]
@@ -165,4 +216,3 @@ for split in split_by:
             # enmap.write_map(os.path.join(out_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_weights.fits"), oweight)
             # for i, om in enumerate(omap.reshape((-1,) + omap.shape[-2:])):
             #     plot_map(om, f"{spl} {comps[i]} Residual Stack", os.path.join(plot_dir_spl, f"{spl}_{comps[i]}_resid_stack_{epoch[0]}_{epoch[1]}.png"))
-
