@@ -1,0 +1,43 @@
+tags:
+  basedir:  /global/cfs/cdirs/sobs/metadata/lat
+  manifestdir: /global/cfs/cdirs/sobs/metadata/lat/manifests/
+
+imports:
+  - sotodlib.io.load_book
+  - sotodlib.io.metadata
+
+obsfiledb: '{basedir}/lat_obsfiledb_local.sqlite'
+obsdb: '{basedir}/lat_obsdb_240911m_local.sqlite'
+
+obs_loader_type: 'obs-book'
+obs_colon_tags: [wafer.bandpass, wafer_slot]
+
+metadata:
+  - db: '{manifestdir}/smurf_detsets/v0/smurf_detset_info_local.sqlite'
+    name: 'smurf'
+    det_info: true
+  - db: '{manifestdir}/det_match/lat_det_match_250516m/assignment_local.sqlite'
+    label: assignment
+    det_info: true
+    on_missing: trim
+  - db: '{manifestdir}/wafer_info/lat_wafer_info_250128r1/wafer_info_local.sqlite'
+    label: wafer_info
+    det_info: true
+    on_missing: fail
+  - db: '{manifestdir}/det_cal/lat_det_cal_250515m/det_cal_local.sqlite'
+    label: det_cal
+    unpack: det_cal
+    # on_missing: fail  ## work-around for variable mask
+    on_missing: trim
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_251110_r1/db.sqlite'
+    label: pointing_model
+    unpack: pointing_model
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r2/db.sqlite'
+    label: focal_plane
+    unpack: focal_plane
+    on_missing: fail
+  - db: '{manifestdir}/abscal/lat_abscal_250602/db_local.sqlite'
+    label: abscal
+    unpack:
+    - abscal
+

@@ -21,6 +21,7 @@ from sotodlib.coords.pointing_model import apply_pointing_model
 from sotodlib.core import Context, metadata
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.obs_ops.utils import correct_iir_params
+from sotodlib.preprocess.preprocess_util import preproc_or_load_group 
 
 from lat_beams.utils import print_once
 
@@ -156,13 +157,16 @@ zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-3)
 pointing_type = cfg.get("pointing_type", "pointing_model")
+preprocess_cfg = cfg.get("preprocess", None)
+
+if preprocess_cfg is None:
+    raise ValueError("Must specify a valid preprocess config!")
 
 # Check pointing_type
 if pointing_type not in ["pointing_model", "per_obs", "raw"]:
     raise ValueError(f"Invalid pointing_type {pointing_type}")
 if pointing_type == "raw" and comps != "T":
     print_once(f"Running with raw pointing, changing comps from {comps} to T")
-per_obs = pointing_type in ["per_obs", "raw"]
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -190,7 +194,7 @@ else:
 print_once(f"Found {len(obslist)} observations to map")
 
 # Keep only the ones with a focal plane
-if per_obs:
+if pointing_type != "pointing_model":
     dbs = [md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")]
     if len(dbs) > 1:
         print_once("Multiple pointing metadata entries found, using the first one")
@@ -238,25 +242,11 @@ for i, obs in enumerate(obslist):
     src_name = "_".join(src_names)
     print(f"\tMapping {src_name}")
 
-    meta.restrict("dets", np.isfinite(meta.det_cal.tau_eff))
-    db_flag = tod_ops.flags.get_det_bias_flags(meta)
-    meta.restrict("dets", ~db_flag.det_bias_flags)
-    meta.restrict("dets", np.isfinite(meta.det_cal.phase_to_pW))
-    if meta.dets.count < min_dets:
-        print(f"Only {meta.dets.count} detectors with good bias. Skipping...")
-        continue
     if "hits" in meta.focal_plane:
         meta.restrict("dets", meta.focal_plane.hits >= min_hits)
         if meta.dets.count < min_dets:
             print(f"Only {meta.dets.count} detectors with good fits. Skipping...")
             continue
-    meta.restrict(
-        "dets",
-        np.isfinite(meta.focal_plane.xi)
-        * np.isfinite(meta.focal_plane.eta)
-        * np.isfinite(meta.focal_plane.gamma),
-    )
-
     obs_plot_dir = os.path.join(
         plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
     )
@@ -264,25 +254,21 @@ for i, obs in enumerate(obslist):
         data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
     )
     os.makedirs(obs_data_dir, exist_ok=True)
-    ufms = np.unique(meta.det_info.stream_id)
+    wsufms = np.unique(np.column_stack([meta.det_info.wafer_slot, meta.det_info.stream_id]), axis=0)
 
     src_to_map = src_name.split("_")[0]
     if src_to_map == "taua":
         src_to_map = ("tauA", 83.6272579, 22.02159891)
-    for ufm in ufms:
-        meta_ufm = meta.copy().restrict("dets", meta.det_info.stream_id == ufm)
-        bp = (meta_ufm.det_cal.bg % 4) // 2
+    for ws, ufm in wsufms:
         tube_band = ufm[4]
         rsets = []
-        for band in np.unique(bp):
-            meta_band = meta_ufm.copy().restrict("dets", bp == band)
-            band_name = band_names[tube_band][band]
-            print(f"\tMapping {ufm} {band_name}")
+        for band in band_names[tube_band]:
+            print(f"\tMapping {ufm} {band}")
 
             # Check if we already mapped
             # TODO: add a mode to replot but not refit
             glob_path = os.path.join(
-                obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*"
+                obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*"
             )
             flist = glob.glob(glob_path)
             if len(flist) >= N_FILES and (not args.overwrite):
@@ -291,84 +277,31 @@ for i, obs in enumerate(obslist):
                 )
                 continue
 
-            if meta_band.dets.count < min_dets:
-                print(f"\t\t(bandpass) Only {meta_band.dets.count} dets! Skipping...")
-                continue
-
             # Load and process the TOD
-            aman = ctx.get_obs(meta_band)
-            if "boresight" not in aman:
-                print("\t\tNo boresight in TOD! Skipping...")
-                continue
             try:
-                filt = tod_ops.filters.iir_filter(invert=True)
-                aman.signal = tod_ops.filters.fourier_filter(
-                    aman, filt, signal_name="signal"
-                )
-            except ValueError:
-                print("\t\tNo iir params! Adding defaults...")
-                correct_iir_params(aman, True)
-                filt = tod_ops.filters.iir_filter(invert=True)
-                aman.signal = tod_ops.filters.fourier_filter(
-                    aman, filt, signal_name="signal"
-                )
-            filt = tod_ops.filters.timeconst_filter(
-                timeconst=aman.det_cal.tau_eff, invert=True
-            )
-            aman.signal = tod_ops.filters.fourier_filter(
-                aman, filt, signal_name="signal"
-            )
-
-            tod_ops.detrend_tod(aman, "median", in_place=True)
-            tf = tod_ops.flags.get_trending_flags(
-                aman, max_trend=5, t_piece=min(30, aman.obs_info.duration / 2)
-            )
-            tdets = has_any_cuts(tf)
-            aman.restrict("dets", ~tdets)
-
-            if aman.dets.count < min_dets:
-                print(f"\t\t(unlocks) Only {aman.dets.count} dets! Skipping...")
+                err, _, _, aman = preproc_or_load_group(obs["obs_id"], preprocess_cfg, dets={"wafer_slot":ws, "wafer.bandpass":band}, save_archive=False, overwrite=True)
+            except:
+                print("\t\t(Failed to load or preprocess! Skipping")
+                continue
+            if aman is None:
+                print(f"\t\tPreprocess failed with error {err}")
                 continue
 
-            jflags, _, jfix = tod_ops.jumps.twopi_jumps(
-                aman,
-                signal=aman.signal,
-                win_size=30,
-                nsigma=3,
-                fix=True,
-                inplace=True,
-                merge=False,
+            aman.restrict(
+                "dets",
+                np.isfinite(aman.focal_plane.xi)
+                * np.isfinite(aman.focal_plane.eta)
+                * np.isfinite(aman.focal_plane.gamma),
             )
-            aman.signal = jfix
-            gfilled = tod_ops.gapfill.fill_glitches(
-                aman, nbuf=30, use_pca=False, modes=1, glitch_flags=jflags
-            )
-            aman.signal = gfilled
-            nj = np.array(
-                [len(jflags.ranges[i].ranges()) for i in range(len(aman.signal))]
-            )
-            aman.restrict("dets", nj < 10)
 
             if aman.dets.count < min_dets:
-                print(f"\t\t(jumps) Only {aman.dets.count} dets! Skipping...")
+                print(f"\t\tOnly {aman.dets.count} dets! Skipping...")
                 continue
-
-            aman.signal -= np.mean(np.array(aman.signal), axis=-1)[..., None]
-            aman.signal *= aman.det_cal.phase_to_pW[..., None]
-            orig = aman.copy()
-
-            # Pointing model
-            if not per_obs:
-                try:
-                    aman.boresight = apply_pointing_model(aman)
-                except:
-                    print("\t\tFailed to apply pointing model! Skipping...")
-                    continue
 
             # Get source_flags
             _mask = deepcopy(mask)
             _mask["xyr"] = _mask["xyr"][:-1] + [
-                _mask["xyr"][-1] * 90.0 / float(band_name[1:]),
+                _mask["xyr"][-1] * 90.0 / float(band[1:]),
             ]
             source_flags = cp.compute_source_flags(
                 tod=aman,
@@ -427,10 +360,10 @@ for i, obs in enumerate(obslist):
                 source_flags=source_flags,
                 comps=comps,
                 filename=os.path.join(
-                    obs_data_dir, "{obs_id}_{ufm}_{band_name}_{map}.fits"
+                    obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"
                 ),
                 n_modes=n_modes,
-                info={"obs_id": obs["obs_id"], "ufm": ufm, "band_name": band_name},
+                info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
             )
             [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
                 out["solved"].corners(corner=False)
@@ -463,7 +396,7 @@ for i, obs in enumerate(obslist):
                         continue
                     print("\t\tDeleting fits files")
                     glob_path = os.path.join(
-                        obs_data_dir, f"{obs['obs_id']}_{ufm}_{band_name}*.fits"
+                        obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*.fits"
                     )
                     flist = glob.glob(glob_path)
                     for fname in flist:
@@ -487,7 +420,7 @@ for i, obs in enumerate(obslist):
                     ufm_plot_dir,
                     obs,
                     ufm,
-                    band_name,
+                    band,
                     comp,
                     False,
                     log_thresh,
@@ -502,7 +435,7 @@ for i, obs in enumerate(obslist):
                     ufm_plot_dir,
                     obs,
                     ufm,
-                    band_name,
+                    band,
                     comp,
                     True,
                     log_thresh,
