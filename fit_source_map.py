@@ -224,7 +224,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     # Fit
     cent = get_cent(solved, sigma=60 / pixsize)
     fit_params, model = fit_gauss_beam(
-        solved, weights, pixmap, cent, multipoles, min_sigma
+        solved, weights, pixmap, cent, multipoles, "pW" 
     )
     if fit_params is None or model is None:
         print("\tFit failed! Skipping")
@@ -253,11 +253,11 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         to_save = (None, None)
         skipped += [fname + " - data_fwhm"]
         continue
-    # if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
-    #     print("\tModel FWHM out of tolerance! Skipping")
-    #     to_save = (None, None)
-    #     skipped += [fname + " - model_fwhm"]
-    #     continue
+    if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
+        print("\tModel FWHM out of tolerance! Skipping")
+        to_save = (None, None)
+        skipped += [fname + " - model_fwhm"]
+        continue
 
     # Get solid angle
     (
@@ -266,7 +266,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
         model_solid_angle_true,
         data_solid_angle_corr,
     ) = estimate_solid_angle(
-        solved, model, pixsize, data_fwhm, c, fit_params["off"], "pW"
+        solved, model, pixsize, data_fwhm, c, fit_params["off"].value, min_sigma 
     )
 
     # Adjust shift
@@ -280,6 +280,12 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     enmap.write_map(
         f"{'_'.join(fname.split('_')[:-1])}_resid.fits",
         resid,
+        "fits",
+        allow_modify=True,
+    )
+    enmap.write_map(
+        f"{'_'.join(fname.split('_')[:-1])}_resid_weights.fits",
+        weights,
         "fits",
         allow_modify=True,
     )

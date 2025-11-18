@@ -320,7 +320,9 @@ for i, obs in enumerate(obslist):
             )
 
             tod_ops.detrend_tod(aman, "median", in_place=True)
-            tf = tod_ops.flags.get_trending_flags(aman, max_trend=3, t_piece=30)
+            tf = tod_ops.flags.get_trending_flags(
+                aman, max_trend=5, t_piece=min(30, aman.obs_info.duration / 2)
+            )
             tdets = has_any_cuts(tf)
             aman.restrict("dets", ~tdets)
 
@@ -357,7 +359,11 @@ for i, obs in enumerate(obslist):
 
             # Pointing model
             if not per_obs:
-                aman.boresight = apply_pointing_model(aman)
+                try:
+                    aman.boresight = apply_pointing_model(aman)
+                except:
+                    print("\t\tFailed to apply pointing model! Skipping...")
+                    continue
 
             # Get source_flags
             _mask = deepcopy(mask)

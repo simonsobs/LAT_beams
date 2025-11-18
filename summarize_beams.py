@@ -309,17 +309,18 @@ for split in split_by:
     ]
     spl_name = np.hstack(spl_name)
 
-    plt.scatter(time, spl_name, c=fwhm_ratio, alpha=0.4, marker="x")
-    plt.colorbar(label="Data FWHM/Nominal FWHM", ax=plt.gca())
+    plt.scatter(time, spl_name, c=np.log10(fwhm_ratio), alpha=0.4, marker="x", cmap="coolwarm", vmin=-.05, vmax=.05)
+    plt.colorbar(label="Log10(Data FWHM/Nominal FWHM)", ax=plt.gca())
     for e in epoch_lines:
         plt.axvline(e)
-    plt.title(f"FWHM Ratio by {split}")
+    plt.title(f"Log10 FWHM Ratio by {split}")
     plt.xlabel("ctime (s)")
     plt.ylabel(split)
     plt.savefig(os.path.join(plot_dir_spl, f"fwhm_ratio_{split}.png"))
     plt.close()
 
-    plt.scatter(time, spl_name, c=ellipticity, alpha=0.4, marker="x")
+    plt.scatter(time, spl_name, c=ellipticity, alpha=0.4, marker="x", vmin=np.percentile(ellipticity, 5), vmax=np.percentile(ellipticity, 95), cmap="coolwarm"
+)
     plt.colorbar(label="Ellipticity", ax=plt.gca())
     for e in epoch_lines:
         plt.axvline(e)
@@ -338,6 +339,7 @@ for split in split_by:
             marker="x",
             vmin=np.percentile(amp.value, 5),
             vmax=np.percentile(amp.value, 95),
+            cmap="coolwarm"
         )
         plt.colorbar(label="Normalized Amplitude", ax=plt.gca())
         for e in epoch_lines:

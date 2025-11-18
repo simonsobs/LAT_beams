@@ -111,10 +111,12 @@ def get_cent(imap, buf=30, sigma=5):
 
 def crop_maps(maps, cent, extent):
     xmin = max(0, cent[0] - extent)
-    xmax = min(maps[0].shape[0], cent[0] + extent)
+    xmax = min(maps[0].shape[-2], cent[0] + extent)
     ymin = max(0, cent[1] - extent)
-    ymax = min(maps[0].shape[1], cent[1] + extent)
-    maps = [m[xmin:xmax, ymin:ymax] for m in maps]
+    ymax = min(maps[0].shape[-1], cent[1] + extent)
+    slx = slice(int(xmin), int(xmax))
+    sly = slice(int(ymin), int(ymax))
+    maps = [m[..., slx, sly] for m in maps]
     return maps
 
 
