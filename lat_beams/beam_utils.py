@@ -9,11 +9,11 @@ import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from matplotlib.colors import SymLogNorm
 from scipy.interpolate import interp1d
-from scipy.ndimage import sobel
+from scipy.ndimage import gaussian_filter, sobel
 from sotodlib.core import AxisManager
-from scipy.ndimage import gaussian_filter
 
 plt.rcParams["image.cmap"] = "RdGy_r"
+
 
 def solid_angle(az, el, beam, cent, r1, norm):
     """Compute the integrated solid angle of a beam map.
