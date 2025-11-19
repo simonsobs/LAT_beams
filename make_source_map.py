@@ -10,7 +10,6 @@ import h5py
 import mpi4py.rc
 import numpy as np
 import yaml
-from scipy.ndimage import gaussian_filter
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
@@ -30,8 +29,6 @@ tod_ops.filters.logger.setLevel(logging.ERROR)
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
-
-plt.rcParams["image.cmap"] = "RdGy_r"
 
 N_FILES = 4
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
@@ -72,7 +69,7 @@ extent = cfg.get("extent", 1800)
 zoom = cfg.get("zoom", 5)
 buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-3)
-buf = cfg.get("smooth_kern", 60)
+smooth_kern = cfg.get("smooth_kern", 60)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 preprocess_cfg = cfg.get("preprocess", None)
 
@@ -128,7 +125,9 @@ if pointing_type != "pointing_model":
 
 # Get settings for source mask
 res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
-mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.3)})
+pixsize = 3600 * np.rad2deg(res)
+mask_size = cfg.get("mask_size", .1)
+search_mask = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
 
 # Split for MPI
 obslist = np.array_split(obslist, nproc)[myrank]
@@ -223,15 +222,11 @@ for i, obs in enumerate(obslist):
                 print(f"\t\tOnly {aman.dets.count} dets! Skipping...")
                 continue
 
-            # Get source_flags
-            _mask = deepcopy(mask)
-            _mask["xyr"] = _mask["xyr"][:-1] + [
-                _mask["xyr"][-1] * 90.0 / float(band[1:]),
-            ]
+            # Get initial source_flags
             source_flags = cp.compute_source_flags(
                 tod=aman,
                 P=None,
-                mask=_mask,
+                mask=search_mask,
                 center_on=src_to_map,
                 res=res,
                 max_pix=4e8,
@@ -271,12 +266,64 @@ for i, obs in enumerate(obslist):
             det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
                 np.diff(aman.timestamps)
             )
+            print(f"\t\t{det_secs} detector seconds on source in intial mask")
+            if det_secs < min_det_secs:
+                print(f"\t\tNot enough time on source. Skipping...")
+                continue
+
+            # Initial map
+            out = cp.make_map(
+                aman,
+                center_on=src_to_map,
+                res=res,
+                cuts=cuts,
+                source_flags=source_flags,
+                comps='T',
+                filename=None,
+                n_modes=n_modes,
+            )
+
+            # Smooth and find the center
+            cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
+
+            # Estimate SNR
+            peak = out["solved"][0][cent]
+            snr = (
+                peak
+                / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[
+                    0
+                ]
+            )
+            print(f"\t\tInitial map SNR approximately {snr}")
+            if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
+                print(f"\t\tInitial map SNR too low! Skipping...")
+                continue
+
+            # Make a new mask with this center and the correct map size
+            [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
+                out["solved"].corners(corner=False)
+            )
+            mask = {"shape": "circle", "xyr": ((ra_min - pixsize * cent[1])/3600, (dec_min + pixsize * cent[0])/3600, mask_size * 90.0 / float(band[1:]))}
+            source_flags = cp.compute_source_flags(
+                tod=aman,
+                P=None,
+                mask=mask,
+                center_on=src_to_map,
+                res=res,
+                max_pix=4e8,
+                wrap=None,
+            )
+
+            # Get time on source
+            det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
+                np.diff(aman.timestamps)
+            )
             print(f"\t\t{det_secs} detector seconds on source")
             if det_secs < min_det_secs:
                 print(f"\t\tNot enough time on source. Skipping...")
                 continue
 
-            # Its map time!
+            # Its map time for real now
             out = cp.make_map(
                 aman,
                 center_on=src_to_map,
@@ -292,10 +339,9 @@ for i, obs in enumerate(obslist):
                 out["solved"].corners(corner=False)
             )
             plt_extent = [ra_min, ra_max, dec_min, dec_max]
-            pixsize = 3600 * out["solved"].wcs.wcs.cdelt[1]
 
             # Smooth and find the center
-            cent = estimate_cent(out["solved"][0], smooth_kern / pixsize)
+            cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
 
             # Estimate SNR
             peak = out["solved"][0][cent]
@@ -328,6 +374,7 @@ for i, obs in enumerate(obslist):
                 map_norm = peak / out["solved"][i][cent]
                 plot_map(
                     map_norm * out["solved"][i],
+                    pixsize,
                     extent,
                     plt_extent,
                     cent,
@@ -343,6 +390,7 @@ for i, obs in enumerate(obslist):
                 )
                 plot_map(
                     map_norm * out["solved"][i],
+                    pixsize,
                     extent,
                     plt_extent,
                     cent,

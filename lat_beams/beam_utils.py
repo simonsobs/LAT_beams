@@ -11,7 +11,9 @@ from matplotlib.colors import SymLogNorm
 from scipy.interpolate import interp1d
 from scipy.ndimage import sobel
 from sotodlib.core import AxisManager
+from scipy.ndimage import gaussian_filter
 
+plt.rcParams["image.cmap"] = "RdGy_r"
 
 def solid_angle(az, el, beam, cent, r1, norm):
     """Compute the integrated solid angle of a beam map.
@@ -188,6 +190,7 @@ def get_fit_vec(all_fits, name):
 
 def plot_map(
     data,
+    pixsize,
     extent,
     plt_extent,
     cent,
@@ -213,8 +216,8 @@ def plot_map(
     plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
     plt.colorbar()
     plt.grid()
-    plt.xlabel('RA (")')
-    plt.ylabel('Dec (")')
+    plt.xlabel('Xi (")')
+    plt.ylabel('Eta (")')
     plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
     plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
     plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
@@ -253,10 +256,12 @@ def plot_map(
     )
 
 
-def estimate_cent(imap, sigma):
+def estimate_cent(imap, sigma, buf):
     smoothed = gaussian_filter(imap, sigma)
     smoothed[:buf] = np.nan
     smoothed[-1 * buf :] = np.nan
     smoothed[:, :buf] = np.nan
     smoothed[:, -1 * buf :] = np.nan
     cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
+
+    return cent
