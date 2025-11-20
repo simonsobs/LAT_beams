@@ -12,6 +12,7 @@ from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
+from sotodlib.site_pipeline import jobdb
 
 from lat_beams.beam_utils import (
     crop_maps,
@@ -22,7 +23,7 @@ from lat_beams.beam_utils import (
     radial_profile,
 )
 from lat_beams.fitting import fit_gauss_beam
-from lat_beams.utils import print_once
+from lat_beams.utils import print_once, set_tag
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -49,6 +50,9 @@ parser.add_argument(
     type=float,
     help="Amount of time to lookback for query, overides start time from config",
 )
+parser.add_argument(
+    "--retry_failed", "-r", action="store_true", help="Retry failed maps"
+)
 args = parser.parse_args()
 
 with open(args.cfg, "r") as f:
@@ -71,42 +75,75 @@ buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-3)
 smooth_kern = cfg.get("smooth_kern", 60)
 
-# Setup folders
+# Setup folders and files
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
 plot_dir = os.path.join(
-    root_dir, "plots", project_dir, "source_maps", pointing_type, "fits"
+    root_dir,
+    "plots",
+    project_dir,
+    "source_maps",
+    pointing_type,
 )
 data_dir = os.path.join(
-    root_dir, "data", project_dir, "source_maps", pointing_type, "fits"
+    root_dir,
+    "data",
+    project_dir,
+    "source_maps",
+    pointing_type,
 )
-map_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type)
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 outfile = None
 if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, "beam_pars.h5"), "a")
+jdb = jobdb.JobManager(sqlite_file=os.path.join(data_dir, "jobdb.db"))
 
-# Get the list of files
-flist = sorted(glob.glob(map_dir + "/*/*/*/*_solved.fits"))
+# Get the jobs, make them if we need to
+if myrank == 0:
+    maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
+    for job in maplist:
+        jobs = jdb.get_jobs(
+            jclass="fit_map",
+            tags={
+                "obs_id": job.tags["obs_id"],
+                "wafer_slot": job.tags["wafer_slot"],
+                "stream_id": job.tags["stream_id"],
+                "band": job.tags["band"],
+                "comps": job.tags["comps"],
+                "source": job.tags["source"],
+            },
+        )
+        if len(jobs) == 0:
+            jdb.create_job(
+                "fit_map",
+                tags={
+                    "obs_id": job.tags["obs_id"],
+                    "wafer_slot": job.tags["wafer_slot"],
+                    "stream_id": job.tags["stream_id"],
+                    "band": job.tags["band"],
+                    "comps": job.tags["comps"],
+                    "source": job.tags["source"],
+                    "message": "",
+                    "resid": "",
+                    "resid_weights": "",
+                },
+            )
 
-# Get the obs_id, stream id, and band
-obs_ids = []
-stream_ids = []
-bands = []
-for fname in flist:
-    parts = os.path.basename(fname).split("_")
-    obs_ids += [f"{parts[0]}_{parts[1]}_{parts[2]}_{parts[3]}"]
-    stream_ids += [f"{parts[4]}_{parts[5]}"]
-    bands += [parts[6]]
-obs_ids = np.array(obs_ids)
-stream_ids = np.array(stream_ids)
-bands = np.array(bands)
-flist = np.array(flist)
+        for j in jdb.get_jobs(jclass="fit_map"):
+            if j.lock and (time.time() - j.lock) > 60:
+                jdb.unlock(j.id)
+            if j.jstate.name == "failed" and (j.lock or args.retry_failed):
+                with jdb.locked(j) as jj:
+                    jj.jstate = "open"
+                jdb.unlock(j.id)
 
-# Metadata mods must be done by all
-# for fname, obs_id, stream_id, band in zip(flist, obs_ids, stream_ids, bands):
-#     outfile.require_group(os.path.join(obs_id, stream_id, band))
+# Get jobs list
+if args.overwrite:
+    joblist = jdb.get_jobs(jclass="fit_map", locked=False)
+else:
+    joblist = jdb.get_jobs(jclass="fit_map", jstate="open", locked=False)
+joblist = joblist[args.start_from :]
 
 if args.obs_ids is None:
     # Limit to the time range
@@ -117,54 +154,30 @@ if args.obs_ids is None:
     ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
     if ctx.obsdb is None:
         raise ValueError("No obsdb in context!")
+    obs_ids = [job.tags["obs_id"] for job in joblist]
     start_times = np.array([ctx.obsdb.get(obs_id)["start_time"] for obs_id in obs_ids])
     stop_times = np.array([ctx.obsdb.get(obs_id)["stop_time"] for obs_id in obs_ids])
     msk = (start_times > start_time) * (stop_times < stop_time)
+    joblist = [job for m, job in zip(msk, joblist) if m]
 else:
-    msk = np.isin(obs_ids, args.obs_ids)
-obs_ids = obs_ids[msk]
-stream_ids = stream_ids[msk]
-bands = bands[msk]
-flist = flist[msk]
+    joblist = [job for job in joblist if job.tags["obs_id"] in args.obs_ids]
 
-print_once(f"{len(flist)} maps found")
-print_once(f"Starting from {args.start_from}")
-obs_ids = obs_ids[args.start_from :]
-stream_ids = stream_ids[args.start_from :]
-bands = bands[args.start_from :]
-flist = flist[args.start_from :]
+print_once(f"{len(joblist)} maps found")
 
-# Remove files that we already have
-already_have = []
-if not args.overwrite and myrank == 0:
-    for fname, obs_id, stream_id, band in zip(flist, obs_ids, stream_ids, bands):
-        path = os.path.join(obs_id, stream_id, band)
-        if path in outfile:
-            already_have += [fname]
-already_have = comm.bcast(already_have, root=0)
+# split for mpi
+obs_idx = np.array_split(np.arange(len(joblist)), nproc)[myrank]
+joblist = [job for i, job in enumerate(joblist) if i in obs_idx]
 
-flist = np.array_split(flist, nproc)[myrank]
-obs_ids = np.array_split(obs_ids, nproc)[myrank]
-stream_ids = np.array_split(stream_ids, nproc)[myrank]
-bands = np.array_split(bands, nproc)[myrank]
-
-n_maps = comm.allgather(len(flist))
+n_maps = comm.allgather(len(joblist))
 max_maps = np.max(n_maps)
 if n_maps[0] != max_maps:
     raise ValueError("Root doesn't have max maps!")
-if len(flist) < max_maps:
-    lo = max_maps - len(flist)
-    flist = np.hstack([flist, lo * [""]])
-    obs_ids = np.hstack([obs_ids, lo * [""]])
-    stream_ids = np.hstack([stream_ids, lo * [""]])
-    bands = np.hstack([bands, lo * [""]])
-
+if len(joblist) < max_maps:
+    joblist += [None] * (max_maps - len(joblist))
 
 to_save = (None, None)
-skipped = []
-for i, (fname, obs_id, stream_id, band) in enumerate(
-    zip(flist, obs_ids, stream_ids, bands)
-):
+for i, j in enumerate(joblist):
+    sys.stdout.flush()
     comm.barrier()
     to_save = comm.gather(to_save, root=0)
     if myrank == 0 and to_save is not None and outfile is not None:
@@ -174,222 +187,227 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
             aman.save(outfile, path, overwrite=True)
         if i % 10 == 9:
             outfile.flush()
-    if fname == "":
+    if j is None:
         to_save = (None, None)
         continue
-    sys.stdout.flush()
-    print(f"Fitting {obs_id}_{stream_id}_{band} ({i+1}/{n_maps[myrank]})")
-    if fname in already_have:
-        print("\tAlready in output file and overwrite not set. Skipping...")
-        to_save = (None, None)
-        continue
-    wpath = fname[::-1].replace("solved"[::-1], "weights"[::-1], 1)[::-1]
-    if not os.path.isfile(wpath):
-        print("\tNo weights map found! Skipping...")
-        to_save = (None, None)
-        skipped += [fname + " - no_weights"]
-        continue
+    with jdb.locked(j) as job:
+        job.mark_visited()
+        obs_id = job.tags["obs_id"]
+        ufm = job.tags["stream_id"]
+        ws = job.tags["wafer_slot"]
+        band = job.tags["band"]
+        print(f"(rank {myrank}) Fitting {obs_id} {ufm} {band}({i+1}/{len(joblist)})")
 
-    # Load the maps
-    solved = enmap.read_map(fname)[0]
-    weights = enmap.read_map(wpath)[0][0]
-    pixsize = 3600 * solved.wcs.wcs.cdelt[1]  # type: ignore
+        map_jobs = jdb.get_jobs(
+            jclass="beam_map",
+            tags={
+                "obs_id": job.tags["obs_id"],
+                "wafer_slot": job.tags["wafer_slot"],
+                "stream_id": job.tags["stream_id"],
+                "band": job.tags["band"],
+                "comps": job.tags["comps"],
+                "source": job.tags["source"],
+            },
+        )
+        if len(map_jobs) == 0:
+            msg = "No map job"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
+        map_job = map_jobs[0]
 
-    # Check if this is a bogus map
-    if np.sum(~(weights == 0)) == 0:
-        print("\tWeights all 0. Skipping...")
-        to_save = (None, None)
-        skipped += [fname + " - zero_weights"]
-        continue
+        # Load the maps
+        try:
+            solved = enmap.read_map(map_job.tags["solved"])[0]
+            weights = enmap.read_map(map_job.tags["weights"])[0][0]
+        except FileNotFoundError:
+            msg = "Missing map files"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
+        pixsize = 3600 * solved.wcs.wcs.cdelt[1]  # type: ignore
 
-    # Estimate SNR
-    snr_extent_pix = int(snr_extent // pixsize)
-    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
-    sig = solved[cent]
-    noise = solved.copy()
-    xmin = max(0, cent[0] - snr_extent_pix)
-    xmax = min(solved.shape[0], cent[0] + snr_extent_pix)
-    ymin = max(0, cent[1] - snr_extent_pix)
-    ymax = min(solved.shape[1], cent[1] + snr_extent_pix)
-    noise[xmin:xmax, ymin:ymax] = np.nan
-    noise = np.nanstd(np.diff(noise))
-    snr = sig / noise
+        # Check if this is a bogus map
+        if np.sum(~(weights == 0)) == 0:
+            msg = "Weights all 0"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
 
-    if snr < min_snr:
-        print("\tSNR too low! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - data_snr"]
-        continue
+        # Estimate SNR
+        snr_extent_pix = int(snr_extent // pixsize)
+        cent = estimate_cent(solved, smooth_kern / pixsize, buf)
+        sig = solved[cent]
+        noise = solved.copy()
+        xmin = max(0, cent[0] - snr_extent_pix)
+        xmax = min(solved.shape[0], cent[0] + snr_extent_pix)
+        ymin = max(0, cent[1] - snr_extent_pix)
+        ymax = min(solved.shape[1], cent[1] + snr_extent_pix)
+        noise[xmin:xmax, ymin:ymax] = np.nan
+        noise = np.nanstd(np.diff(noise))
+        snr = sig / noise
 
-    # Slice things
-    solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
-    pixmap = enmap.pixmap(solved.shape, solved.wcs)
+        if snr < min_snr:
+            msg = "Data SNR too low"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
 
-    # Fit
-    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
-    fit_params, model = fit_gauss_beam(solved, weights, pixmap, cent, multipoles, "pW")
-    if fit_params is None or model is None:
-        print("\tFit failed! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - fit failed"]
-        continue
+        # Slice things
+        solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
+        pixmap = enmap.pixmap(solved.shape, solved.wcs)
 
-    # Check SNR again
-    if np.nanmax(model) / noise < min_snr:
-        print("\tSNR too low! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - fit_snr"]
-        continue
+        # Fit
+        cent = estimate_cent(solved, smooth_kern / pixsize, buf)
+        fit_params, model = fit_gauss_beam(
+            solved, weights, pixmap, cent, multipoles, "pW"
+        )
+        if fit_params is None or model is None:
+            msg = "Fit failed"
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            to_save = (None, None)
+            continue
 
-    # Get FWHM from data
-    c = np.unravel_index(np.argmax(model, axis=None), model.shape)
-    rprof = radial_profile(solved - fit_params["off"].value, c[::-1])
-    mprof = radial_profile(model - fit_params["off"].value, c[::-1])
-    r = np.linspace(0, len(rprof), len(rprof)) * pixsize
-    data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
-    model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
+        # Check SNR again
+        if np.nanmax(model) / noise < min_snr:
+            msg = "Model SNR too low"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
 
-    # FWHM check
-    # if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
-    #     print("\tData FWHM out of tolerance! Skipping")
-    #     to_save = (None, None)
-    #     skipped += [fname + " - data_fwhm"]
-    #     continue
-    # if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
-    #     print("\tModel FWHM out of tolerance! Skipping")
-    #     to_save = (None, None)
-    #     skipped += [fname + " - model_fwhm"]
-    #     continue
+        # Get FWHM from data
+        c = np.unravel_index(np.argmax(model, axis=None), model.shape)
+        rprof = radial_profile(solved - fit_params["off"].value, c[::-1])
+        mprof = radial_profile(model - fit_params["off"].value, c[::-1])
+        r = np.linspace(0, len(rprof), len(rprof)) * pixsize
+        data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
+        model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
 
-    # Get solid angle
-    (
-        data_solid_angle_meas,
-        model_solid_angle_meas,
-        model_solid_angle_true,
-        data_solid_angle_corr,
-    ) = estimate_solid_angle(
-        solved, model, pixsize, data_fwhm, c, fit_params["off"].value, min_sigma
-    )
+        # FWHM check
+        # if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
+        #     msg = "Data FWHM out of tolerance"
+        #     print(f"\t{msg}")
+        #     set_tag(job, "message", msg)
+        #     job.jstate = "failed"
+        #     to_save = (None, None)
+        #     continue
+        # if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
+        #     msg = "Model FWHM out of tolerance"
+        #     print(f"\t{msg}")
+        #     set_tag(job, "message", msg)
+        #     job.jstate = "failed"
+        #     to_save = (None, None)
+        #     continue
 
-    # Adjust shift
-    dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))
-    fit_params["xi0"] = ra * u.arcsec - fit_params["xi0"]
-    fit_params["eta0"] += dec * u.arcsec
+        # Get solid angle
+        (
+            data_solid_angle_meas,
+            model_solid_angle_meas,
+            model_solid_angle_true,
+            data_solid_angle_corr,
+        ) = estimate_solid_angle(
+            solved, model, pixsize, data_fwhm, c, fit_params["off"].value, min_sigma
+        )
 
-    # Save residual
-    resid = solved.copy()
-    resid -= model
-    enmap.write_map(
-        f"{'_'.join(fname.split('_')[:-1])}_resid.fits",
-        resid,
-        "fits",
-        allow_modify=True,
-    )
-    enmap.write_map(
-        f"{'_'.join(fname.split('_')[:-1])}_resid_weights.fits",
-        weights,
-        "fits",
-        allow_modify=True,
-    )
+        # Adjust shift
+        dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))
+        fit_params["xi0"] = ra * u.arcsec - fit_params["xi0"]
+        fit_params["eta0"] += dec * u.arcsec
 
-    # Plot
-    obs_plot_dir = os.path.join(plot_dir, str(obs_id.split("_")[1])[:5], obs_id)
-    os.makedirs(obs_plot_dir, exist_ok=True)
-    [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
-        solved.corners(corner=False)
-    )
-    plt_extent = (ra_min, ra_max, dec_min, dec_max)
-    plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-    plot_map(
-        model,
-        pixsize,
-        extent,
-        plt_extent,
-        cent,
-        plt_cent,
-        1.0,
-        obs_plot_dir,
-        obs_id,
-        stream_id,
-        band,
-        "T",
-        False,
-        log_thresh,
-        "model",
-    )
-    plot_map(
-        model,
-        pixsize,
-        extent,
-        plt_extent,
-        cent,
-        plt_cent,
-        1.0,
-        obs_plot_dir,
-        obs_id,
-        stream_id,
-        band,
-        "T",
-        True,
-        log_thresh,
-        "model",
-    )
-    plot_map(
-        resid,
-        pixsize,
-        extent,
-        plt_extent,
-        cent,
-        plt_cent,
-        1.0,
-        obs_plot_dir,
-        obs_id,
-        stream_id,
-        band,
-        "T",
-        False,
-        log_thresh,
-        "resid",
-    )
-    plot_map(
-        resid,
-        pixsize,
-        extent,
-        plt_extent,
-        cent,
-        plt_cent,
-        1.0,
-        obs_plot_dir,
-        obs_id,
-        stream_id,
-        band,
-        "T",
-        True,
-        log_thresh,
-        "resid",
-    )
+        # Save residual
+        resid = solved.copy()
+        resid -= model
+        fname = map_job.tags["solved"]
+        enmap.write_map(
+            f"{'_'.join(fname.split('_')[:-1])}_resid.fits",
+            resid,
+            "fits",
+            allow_modify=True,
+        )
+        enmap.write_map(
+            f"{'_'.join(fname.split('_')[:-1])}_resid_weights.fits",
+            weights,
+            "fits",
+            allow_modify=True,
+        )
+        set_tag(
+            job,
+            "resid",
+            f"{'_'.join(fname.split('_')[:-1])}_resid.fits",
+        )
+        set_tag(
+            job,
+            "resid_weights",
+            f"{'_'.join(fname.split('_')[:-1])}_resid_weights.fits",
+        )
 
-    # Save
-    aman = AxisManager()
-    for name, par in fit_params.items():
-        aman.wrap(name, par)
-    aman.wrap("data_fwhm", data_fwhm * u.arcsec)
-    aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
-    aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
-    aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
-    aman.wrap("model_solid_angle_true", model_solid_angle_true * u.sr)
-    aman.wrap("noise", noise * u.pW)
-    aman.wrap("r", r * u.arcsec)
-    aman.wrap("rprof", rprof * u.pW)
-    aman.wrap("mprof", rprof * u.pW)
-    aman_path = os.path.join(obs_id, stream_id, band)
-    to_save = (aman, aman_path)
+        # Plot
+        obs = ctx.obsdb.get(obs_id)
+        ufm_plot_dir = os.path.join(
+            plot_dir,
+            job.tags["source"],
+            str(obs["timestamp"])[:5],
+            obs_id,
+            job.tags["stream_id"],
+        )
+        os.makedirs(ufm_plot_dir, exist_ok=True)
+        [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
+            solved.corners(corner=False)
+        )
+        plt_extent = (ra_min, ra_max, dec_min, dec_max)
+        plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
+        for dat, label in [(model, "model"), (resid, "resid")]:
+            for log in [False, True]:
+                plot_map(
+                    dat,
+                    pixsize,
+                    extent,
+                    plt_extent,
+                    cent,
+                    plt_cent,
+                    1.0,
+                    ufm_plot_dir,
+                    obs_id,
+                    ufm,
+                    band,
+                    "T",
+                    log,
+                    log_thresh,
+                    label,
+                )
+
+        # Save
+        aman = AxisManager()
+        for name, par in fit_params.items():
+            aman.wrap(name, par)
+        aman.wrap("data_fwhm", data_fwhm * u.arcsec)
+        aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
+        aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
+        aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
+        aman.wrap("model_solid_angle_true", model_solid_angle_true * u.sr)
+        aman.wrap("noise", noise * u.pW)
+        aman.wrap("r", r * u.arcsec)
+        aman.wrap("rprof", rprof * u.pW)
+        aman.wrap("mprof", rprof * u.pW)
+        aman_path = os.path.join(obs_id, ufm, band)
+        to_save = (aman, aman_path)
+
+        set_tag(job, "message", "Success")
+        job.jstate = "done"
 
 comm.barrier()
-skipped = comm.gather(skipped, root=0)
-if myrank == 0 and skipped is not None:
-    print("\nSkipped maps:")
-    print("\t" + "\n\t".join(np.ravel(np.hstack(skipped))))
 to_save = comm.gather(to_save, root=0)
 if myrank == 0 and to_save is not None and outfile is not None:
     for aman, path in to_save:

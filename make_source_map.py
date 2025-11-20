@@ -18,7 +18,7 @@ from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 
 from lat_beams.beam_utils import estimate_cent, plot_map
-from lat_beams.utils import print_once
+from lat_beams.utils import print_once, set_tag
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -35,16 +35,6 @@ band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 comps = "TQU"
 
 cp.logger.setLevel(logging.WARNING)
-
-
-def set_tag(job, key, new_val):
-    # This should be provided by the Job class but it's not...
-    for _t in job._tags:
-        if _t.key == key:
-            _t.value = new_val
-            return
-    else:
-        raise ValueError(f'No tag called "{key}"')
 
 
 parser = argparse.ArgumentParser()
@@ -200,7 +190,7 @@ else:
 joblist = joblist[args.start_from :]
 print_once(f"{len(joblist)} maps to make.")
 
-# Split for MPI
+# split for mpi
 obs_idx = np.array_split(np.arange(len(joblist)), nproc)[myrank]
 joblist = [job for i, job in enumerate(joblist) if i in obs_idx]
 

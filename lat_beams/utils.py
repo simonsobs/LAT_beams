@@ -89,3 +89,13 @@ def recenter(imap, obs_id, stream_id, band, fit_file, norm=True, extent=None):
         )[0]
 
     return imap
+
+
+def set_tag(job, key, new_val):
+    # This should be provided by the Job class but it's not...
+    for _t in job._tags:
+        if _t.key == key:
+            _t.value = new_val
+            return
+    else:
+        raise ValueError(f'No tag called "{key}"')
