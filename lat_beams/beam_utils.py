@@ -100,20 +100,6 @@ def get_fwhm_radial_bins(r, y, interpolate=False):
     return fwhm
 
 
-def get_cent(imap, buf=30, sigma=5):
-    smoothed = imap.copy()
-    smoothed[smoothed == 0] = np.nan
-    kern = Gaussian2DKernel(sigma, sigma)
-    smoothed = convolve_fft(smoothed, kern)
-    smoothed[:buf] = 0
-    smoothed[-1 * buf :] = 0
-    smoothed[:, :buf] = 0
-    smoothed[:, -1 * buf :] = 0
-    cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
-
-    return cent
-
-
 def crop_maps(maps, cent, extent):
     xmin = max(0, cent[0] - extent)
     xmax = min(maps[0].shape[-2], cent[0] + extent)
@@ -197,19 +183,22 @@ def plot_map(
     plt_cent,
     zoom,
     ufm_plot_dir,
-    obs,
+    obs_id,
     ufm,
     band_name,
     comp="T",
     log=False,
     log_thresh=1e-3,
+    append="",
 ):
     _norm = None
     label = f"_{comp}"
+    if append != "":
+        label += f"_{append}"
     rprof = radial_profile(data, cent[::-1])[: int(0.5 * min(*data.shape))]
     if log:
         _norm = SymLogNorm(linthresh=log_thresh * np.max(data), clip=True)
-        label = f"_{comp}_log10"
+        label += f"_log10"
         with np.errstate(divide="ignore", invalid="ignore"):
             rprof = np.sign(rprof) * np.log10(np.abs(rprof))
     plt.close()
@@ -218,50 +207,53 @@ def plot_map(
     plt.grid()
     plt.xlabel('Xi (")')
     plt.ylabel('Eta (")')
-    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
+    plt.title(f"{obs_id}_{ufm}_{band_name}{label.replace('_', ' ')}")
     plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
     plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
     plt.savefig(
-        os.path.join(ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}.png")
+        os.path.join(ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_map{label}.png")
     )
-    plt.xlim((plt_cent[0] - extent / zoom, plt_cent[0] + extent / zoom))
-    plt.ylim((plt_cent[1] - extent / zoom, plt_cent[1] + extent / zoom))
-    plt.savefig(
-        os.path.join(
-            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_map{label}_zoom.png"
+    if zoom != 1:
+        plt.xlim((plt_cent[0] - extent / zoom, plt_cent[0] + extent / zoom))
+        plt.ylim((plt_cent[1] - extent / zoom, plt_cent[1] + extent / zoom))
+        plt.savefig(
+            os.path.join(
+                ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_map{label}_zoom.png"
+            )
         )
-    )
 
     plt.close()
     x = np.linspace(0, pixsize * len(rprof), len(rprof))
     plt.plot(x, rprof)
     plt.xlabel('Radius (")')
-    plt.title(f"{obs['obs_id']}_{ufm}_{band_name}{label.replace('_', ' ')}")
+    plt.title(f"{obs_id}_{ufm}_{band_name}{label.replace('_', ' ')}")
     plt.xlim((0, extent))
     plt.savefig(
-        os.path.join(
-            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}.png"
-        ),
+        os.path.join(ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_prof{label}.png"),
         bbox_inches="tight",
     )
-    plt.xlim((0, extent / zoom))
-    lims = plt.gca().get_xlim()
-    i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
-    plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
-    plt.savefig(
-        os.path.join(
-            ufm_plot_dir, f"{obs['obs_id']}_{ufm}_{band_name}_prof{label}_zoom.png"
-        ),
-        bbox_inches="tight",
-    )
+    if zoom != 1:
+        plt.xlim((0, extent / zoom))
+        lims = plt.gca().get_xlim()
+        i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
+        plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
+        plt.savefig(
+            os.path.join(
+                ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_prof{label}_zoom.png"
+            ),
+            bbox_inches="tight",
+        )
 
 
-def estimate_cent(imap, sigma, buf):
-    smoothed = gaussian_filter(imap, sigma)
-    smoothed[:buf] = np.nan
-    smoothed[-1 * buf :] = np.nan
-    smoothed[:, :buf] = np.nan
-    smoothed[:, -1 * buf :] = np.nan
-    cent = np.unravel_index(np.nanargmax(smoothed, axis=None), smoothed.shape)
+def estimate_cent(imap, sigma=5, buf=30):
+    smoothed = imap.copy()
+    smoothed[smoothed == 0] = np.nan
+    kern = Gaussian2DKernel(sigma, sigma)
+    smoothed = convolve_fft(smoothed, kern)
+    smoothed[:buf] = 0
+    smoothed[-1 * buf :] = 0
+    smoothed[:, :buf] = 0
+    smoothed[:, -1 * buf :] = 0
+    cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
 
     return cent

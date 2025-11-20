@@ -15,9 +15,10 @@ from sotodlib.core import AxisManager, Context
 
 from lat_beams.beam_utils import (
     crop_maps,
+    estimate_cent,
     estimate_solid_angle,
-    get_cent,
     get_fwhm_radial_bins,
+    plot_map,
     radial_profile,
 )
 from lat_beams.fitting import fit_gauss_beam
@@ -66,6 +67,9 @@ multipoles = cfg.get(
 )
 fwhm_tol = cfg.get("fwhm_tol", 0.25)
 pointing_type = cfg.get("pointing_type", "pointing_model")
+buf = cfg.get("buffer", 30)
+log_thresh = cfg.get("log_thresh", 1e-3)
+smooth_kern = cfg.get("smooth_kern", 60)
 
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -200,7 +204,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
 
     # Estimate SNR
     snr_extent_pix = int(snr_extent // pixsize)
-    cent = get_cent(solved)
+    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
     sig = solved[cent]
     noise = solved.copy()
     xmin = max(0, cent[0] - snr_extent_pix)
@@ -222,7 +226,7 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     pixmap = enmap.pixmap(solved.shape, solved.wcs)
 
     # Fit
-    cent = get_cent(solved, sigma=60 / pixsize)
+    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
     fit_params, model = fit_gauss_beam(solved, weights, pixmap, cent, multipoles, "pW")
     if fit_params is None or model is None:
         print("\tFit failed! Skipping")
@@ -246,16 +250,16 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
 
     # FWHM check
-    if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
-        print("\tData FWHM out of tolerance! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - data_fwhm"]
-        continue
-    if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
-        print("\tModel FWHM out of tolerance! Skipping")
-        to_save = (None, None)
-        skipped += [fname + " - model_fwhm"]
-        continue
+    # if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
+    #     print("\tData FWHM out of tolerance! Skipping")
+    #     to_save = (None, None)
+    #     skipped += [fname + " - data_fwhm"]
+    #     continue
+    # if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
+    #     print("\tModel FWHM out of tolerance! Skipping")
+    #     to_save = (None, None)
+    #     skipped += [fname + " - model_fwhm"]
+    #     continue
 
     # Get solid angle
     (
@@ -289,83 +293,81 @@ for i, (fname, obs_id, stream_id, band) in enumerate(
     )
 
     # Plot
-    os.makedirs(
-        os.path.join(plot_dir, str(obs_id.split("_")[1])[:5], obs_id), exist_ok=True
-    )
+    obs_plot_dir = os.path.join(plot_dir, str(obs_id.split("_")[1])[:5], obs_id)
+    os.makedirs(obs_plot_dir, exist_ok=True)
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
         solved.corners(corner=False)
     )
     plt_extent = (ra_min, ra_max, dec_min, dec_max)
-
-    plt.imshow(model, origin="lower", extent=plt_extent)
-    plt.xlabel('RA (")')
-    plt.ylabel('Dec (")')
-    plt.title(f"{obs_id}_{stream_id}_{band} Model")
-    plt.colorbar()
-    plt.savefig(
-        os.path.join(
-            plot_dir,
-            str(obs_id.split("_")[1])[:5],
-            obs_id,
-            f"{obs_id}_{stream_id}_{band}_model.png",
-        )
+    plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
+    plot_map(
+        model,
+        pixsize,
+        extent,
+        plt_extent,
+        cent,
+        plt_cent,
+        1.0,
+        obs_plot_dir,
+        obs_id,
+        stream_id,
+        band,
+        "T",
+        False,
+        log_thresh,
+        "model",
     )
-    plt.clf()
-
-    plt.imshow(resid, origin="lower", extent=plt_extent)
-    plt.xlabel('RA (")')
-    plt.ylabel('Dec (")')
-    plt.title(f"{obs_id}_{stream_id}_{band} Residual")
-    plt.colorbar()
-    plt.savefig(
-        os.path.join(
-            plot_dir,
-            str(obs_id.split("_")[1])[:5],
-            obs_id,
-            f"{obs_id}_{stream_id}_{band}_residual.png",
-        )
+    plot_map(
+        model,
+        pixsize,
+        extent,
+        plt_extent,
+        cent,
+        plt_cent,
+        1.0,
+        obs_plot_dir,
+        obs_id,
+        stream_id,
+        band,
+        "T",
+        True,
+        log_thresh,
+        "model",
     )
-    plt.clf()
-
-    plt.plot(
-        r,
-        rprof,
-        alpha=0.6,
-        label=f'Data \nFWHM={data_fwhm:.2f}", Ω={data_solid_angle_corr:.2f} sr',
+    plot_map(
+        resid,
+        pixsize,
+        extent,
+        plt_extent,
+        cent,
+        plt_cent,
+        1.0,
+        obs_plot_dir,
+        obs_id,
+        stream_id,
+        band,
+        "T",
+        False,
+        log_thresh,
+        "resid",
     )
-    plt.plot(
-        r,
-        mprof,
-        alpha=0.6,
-        label=f'Model \nFWHM=({fit_params["fwhm_xi"]:.2f}, {fit_params["fwhm_eta"]:.2f})", Ω={model_solid_angle_true:.2f} sr',
+    plot_map(
+        resid,
+        pixsize,
+        extent,
+        plt_extent,
+        cent,
+        plt_cent,
+        1.0,
+        obs_plot_dir,
+        obs_id,
+        stream_id,
+        band,
+        "T",
+        True,
+        log_thresh,
+        "resid",
     )
-    plt.xlabel('Radius (")')
-    plt.ylabel("Power (pW)")
-    plt.title(f"{obs_id}_{stream_id}_{band} Profile")
-    plt.legend()
-    plt.savefig(
-        os.path.join(
-            plot_dir,
-            str(obs_id.split("_")[1])[:5],
-            obs_id,
-            f"{obs_id}_{stream_id}_{band}_profile.png",
-        )
-    )
-    plt.clf()
-
-    plt.plot(r, rprof - mprof)
-    plt.xlabel('Radius (")')
-    plt.ylabel("Power (pW)")
-    plt.title(f"{obs_id}_{stream_id}_{band} Profile Residual")
-    plt.savefig(
-        os.path.join(
-            plot_dir,
-            str(obs_id.split("_")[1])[:5],
-            obs_id,
-            f"{obs_id}_{stream_id}_{band}_profile_resid.png",
-        )
-    )
-    plt.clf()
 
     # Save
     aman = AxisManager()
