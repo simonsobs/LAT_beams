@@ -61,23 +61,26 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-source_list = cfg.get("source_list", ["mars", "saturn"])
-min_dets = cfg.get("min_dets", 50)
-min_hits = cfg.get("min_hits", 1)
-min_det_secs = cfg.get("min_det_secs", 600)
-min_snr = cfg.get("min_snr", 5)
-n_modes = cfg.get("n_modes", 10)
-del_map = cfg.get("del_map", True)
-extent = cfg.get("extent", 1800)
-zoom = cfg.get("zoom", 5)
-buf = cfg.get("buffer", 30)
-log_thresh = cfg.get("log_thresh", 1e-3)
-smooth_kern = cfg.get("smooth_kern", 60)
-pointing_type = cfg.get("pointing_type", "pointing_model")
+source_list = cfg["source_list"] = cfg.get("source_list", ["mars", "saturn"])
+min_dets = cfg["min_dets"] = cfg.get("min_dets", 50)
+min_hits = cfg["min_hits"] = cfg.get("min_hits", 1)
+min_det_secs = cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
+min_snr = cfg["min_snr"] = cfg.get("min_snr", 5)
+n_modes = cfg["n_modes"] = cfg.get("n_modes", 10)
+det_map = cfg["del_map"] = cfg.get("del_map", True)
+extent = cfg["extent"] = cfg.get("extent", 1800)
+zoom = cfg["zoom"] = cfg.get("zoom", 5)
+buf = cfg["buf"] = cfg.get("buffer", 30)
+log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
+smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
+pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
 preprocess_cfg = cfg.get("preprocess", None)
+cfg_str = yaml.dump(cfg)
 
 if preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
+with open(preprocess_cfg, "r") as f:
+    preprocess_str = yaml.dump(yaml.safe_load(preprocess_cfg))
 
 # Check pointing_type
 if pointing_type not in ["pointing_model", "per_obs", "raw"]:
@@ -96,7 +99,10 @@ os.makedirs(data_dir, exist_ok=True)
 jdb = jobdb.JobManager(sqlite_file=os.path.join(data_dir, "jobdb.db"))
 
 # Get the list of observations
-ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
+ctx_path = cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml")
+ctx = Context(ctx_path)
+with open(ctx_path, "r") as f:
+    ctx_str = yaml.dump(yaml.safe_load(f))
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
 if args.obs_ids is not None:
@@ -172,6 +178,9 @@ if myrank == 0:
                         "weights": "",
                         "comps": comps,
                         "source": "",
+                        "config": "",
+                        "context": "",
+                        "preprocess": "",
                     },
                 )
     for j in jdb.get_jobs(jclass="beam_map"):
@@ -212,6 +221,12 @@ for i, j in enumerate(joblist):
         band = job.tags["band"]
         print(f"(rank {myrank}) Mapping {obs_id} {ufm} {band}({i+1}/{len(joblist)})")
 
+        # Save metadata and config info
+        set_tag(job, "config", cfg_str)
+        set_tag(job, "context", ctx_str)
+        set_tag(job, "preprocess", preprocess_str)
+
+        # Get metadata
         obs = ctx.obsdb.get(obs_id, tags=True)
         meta = ctx.get_meta(obs_id)
         if meta.dets.count == 0:

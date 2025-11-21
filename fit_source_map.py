@@ -59,21 +59,17 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-extent = cfg.get("extent", 900)
-snr_extent = cfg.get("snr_extent", 500)
-min_sigma = cfg.get("min_sigma_fit", 3)
-min_snr = cfg.get("min_snr", 10)
-multipoles = cfg.get(
-    "multipoles",
-    [
-        3,
-    ],
-)
-fwhm_tol = cfg.get("fwhm_tol", np.inf)
-pointing_type = cfg.get("pointing_type", "pointing_model")
-buf = cfg.get("buffer", 30)
-log_thresh = cfg.get("log_thresh", 1e-3)
-smooth_kern = cfg.get("smooth_kern", 60)
+extent = cfg["extent"] = cfg.get("extent", 900)
+snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
+min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
+min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
+multipoles = cfg["multipoles"] = cfg.get("multipoles", tuple())
+fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", np.inf)
+pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
+buf = cfg["buf"] = cfg.get("buffer", 30)
+log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
+smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
+cfg_str = yaml.dump(cfg)
 
 # Setup folders and files
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
@@ -127,6 +123,7 @@ if myrank == 0:
                     "message": "",
                     "resid": "",
                     "resid_weights": "",
+                    "config": "",
                 },
             )
 
@@ -197,6 +194,9 @@ for i, j in enumerate(joblist):
         ws = job.tags["wafer_slot"]
         band = job.tags["band"]
         print(f"(rank {myrank}) Fitting {obs_id} {ufm} {band}({i+1}/{len(joblist)})")
+
+        # Save config info
+        set_tag(job, "config", cfg_str)
 
         map_jobs = jdb.get_jobs(
             jclass="beam_map",
