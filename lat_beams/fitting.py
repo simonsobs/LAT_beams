@@ -512,7 +512,16 @@ def fit_tod_pointing(
     return focal_plane
 
 
-def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, map_units="pW"):
+def fit_gauss_beam(
+    imap,
+    ivar,
+    pixmap,
+    cent,
+    multipoles=tuple(),
+    force_sym=False,
+    match_multipoles=False,
+    map_units="pW",
+):
     """
     Fit 2d Gaussian to input map.
     This fit gaussian can include multipoles to capture extra structure (ie a cross).
@@ -527,9 +536,13 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, map_units="pW"):
         X and Y pixel indices for each pixel.
     cent : tuple
         The index of the map center
-    multipoles : tuple
+    multipoles : tuple, default: tuple()
         The multipoles to include in the fit.
         1 is the dipole, 2 the quadropole, 3 the octopole, etc.
+    force_sym : bool, default: False
+        If True don't allow ellipticity in the fit.
+    match_multipoles : bool, default: False
+        If True then only allow the amplitudes of the multipoles to vary
     map_units : str, default: pW
         The units of the map.
 
@@ -556,14 +569,26 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, map_units="pW"):
         60,
         0,
     ]
-    guess += np.tile(guess[3:], len(multipoles) * 2).tolist()
+    if force_sym:
+        guess = guess[:-2]
+    if match_multipoles:
+        guess += [guess[3]] * (len(multipoles * 2))
+    else:
+        guess += np.tile(guess[3:], len(multipoles) * 2).tolist()
 
     bounds = [
         [0, 0, -5 * np.max(np.abs(imap)), 0, 20, 20, 0],
         [nx * res, ny * res, 5 * np.max(imap), 5 * np.max(imap), 300, 300, 2 * np.pi],
     ]
-    bounds[0] += np.tile(bounds[0][3:], len(multipoles) * 2).tolist()
-    bounds[1] += np.tile(bounds[1][3:], len(multipoles) * 2).tolist()
+    if force_sym:
+        bounds[0] = bounds[0][:-2]
+        bounds[1] = bounds[1][:-2]
+    if match_multipoles:
+        bounds[0] += [bounds[0][3]] * (len(multipoles) * 2)
+        bounds[1] += [bounds[1][3]] * (len(multipoles) * 2)
+    else:
+        bounds[0] += np.tile(bounds[0][3:], len(multipoles) * 2).tolist()
+        bounds[1] += np.tile(bounds[1][3:], len(multipoles) * 2).tolist()
     bounds = [(lb, ub) for lb, ub in zip(*bounds)]
 
     pixmap = (pixmap[0].astype(float), pixmap[1].astype(float))
@@ -571,7 +596,24 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles, map_units="pW"):
     def _beam_mod(coeffs):
         n_multipole = len(multipoles)
         dx, dy, off = coeffs[:3]
-        amps, fwhm_xis, fwhm_etas, phis = coeffs[3:].reshape((-1, 4)).T
+        if match_multipoles:
+            if force_sym:
+                amp0, fwhm_xi = coeffs[3:5]
+                fwhm_eta = fwhm_xi
+                phi = 0
+            else:
+                amp0, fwhm_xi, fwhm_eta, phi = coeffs[3:7]
+            amps = np.insert(coeffs[7:], 0, amp0)
+            fwhm_xis = fwhm_xi * np.ones_like(amps)
+            fwhm_etas = fwhm_eta * np.ones_like(amps)
+            phis = phi * np.ones_like(amps)
+        else:
+            if force_sym:
+                amps, fwhm_xis = coeffs[3:].reshape((-1, 2)).T
+                fwhm_etas = np.copy(fwhm_xis)
+                phis = np.zeros_like(fwhm_xis)
+            else:
+                amps, fwhm_xis, fwhm_etas, phis = coeffs[3:].reshape((-1, 4)).T
         beam = guass_multipole_beam(
             pixmap[0],
             pixmap[1],

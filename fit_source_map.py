@@ -69,7 +69,7 @@ multipoles = cfg.get(
         3,
     ],
 )
-fwhm_tol = cfg.get("fwhm_tol", 0.25)
+fwhm_tol = cfg.get("fwhm_tol", np.inf)
 pointing_type = cfg.get("pointing_type", "pointing_model")
 buf = cfg.get("buffer", 30)
 log_thresh = cfg.get("log_thresh", 1e-3)
@@ -268,7 +268,7 @@ for i, j in enumerate(joblist):
         # Fit
         cent = estimate_cent(solved, smooth_kern / pixsize, buf)
         fit_params, model = fit_gauss_beam(
-            solved, weights, pixmap, cent, multipoles, "pW"
+            solved, weights, pixmap, cent, tuple(), True, True, "pW"
         )
         if fit_params is None or model is None:
             msg = "Fit failed"
@@ -296,20 +296,20 @@ for i, j in enumerate(joblist):
         model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
 
         # FWHM check
-        # if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
-        #     msg = "Data FWHM out of tolerance"
-        #     print(f"\t{msg}")
-        #     set_tag(job, "message", msg)
-        #     job.jstate = "failed"
-        #     to_save = (None, None)
-        #     continue
-        # if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
-        #     msg = "Model FWHM out of tolerance"
-        #     print(f"\t{msg}")
-        #     set_tag(job, "message", msg)
-        #     job.jstate = "failed"
-        #     to_save = (None, None)
-        #     continue
+        if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
+            msg = "Data FWHM out of tolerance"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
+        if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
+            msg = "Model FWHM out of tolerance"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
 
         # Get solid angle
         (
