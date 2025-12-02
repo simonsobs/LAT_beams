@@ -49,10 +49,6 @@ from mpi4py import MPI
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
 
-# TODO: Add optional argument to profile
-# from pyinstrument import Profiler
-# profiler = Profiler()
-
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
@@ -133,6 +129,9 @@ def main():
         type=float,
         help="Amount of time to lookback for query, overides start time from config",
     )
+    parser.add_argument(
+        "--profile", "-p", action="store_true", help="Run a profile"
+    )
     args = parser.parse_args()
 
     with open(args.cfg, "r") as f:
@@ -142,6 +141,11 @@ def main():
         print_once(
             "Running in 'no_fit' mode. TOD plots will be made but pointing will not be fit"
         )
+
+    if args.profile:   
+        from pyinstrument import Profiler
+        profiler = Profiler()
+        print_once("Running in profiler mode! Only a few dets will be kept")
 
     # Get some global settings
     forced_ws = args.forced_ws
@@ -326,7 +330,10 @@ def main():
     # Get settings for source mask
     res = cfg.get("res", (2 / 300.0) * np.pi / 180.0)
     mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.75)})
-    # profiler.start()
+    if args.profile:
+        profiler.start()
+        print_once("Restricting joblist to just 1 entry per process for profiling!")
+        joblist = [joblist[0]]
     to_save = (None, None, None)
     for i, j in enumerate(joblist):
         sys.stdout.flush()
@@ -613,8 +620,9 @@ def main():
 
                 # Make the fft a fast length (ie like a prime number)
                 _ = tod_ops.filters.fft_trim(aman, prefer="center")
-                # if aman.dets.count > 10:
-                #     aman.restrict("dets", aman.dets.vals[:10])
+                if aman.dets.count > 10 and args.profile:
+                    print("\tRestricting to 10 dets for profile")
+                    aman.restrict("dets", aman.dets.vals[:10])
                 focal_plane = fit_tod_pointing(
                     aman,
                     (4, 30),
@@ -736,12 +744,21 @@ def main():
                 rset = metadata.ResultSet.from_friend(pad_res)
             to_save = (rset, obs_id, ufm)
 
+            if args.profile:
+                to_save = (None, None, None)
+                msg = "Ran profile"
+                set_tag(job, "message", msg)
+                job.jstate = "open"
+                continue
+            job.jstate = "done"
+
     if h5_file is not None:
         h5_file.close()
     nominal.close()
 
-    # profiler.stop()
-    # profiler.write_html(f"profile_{myrank}.html")
+    if args.profile:
+        profiler.stop()
+        profiler.write_html(f"profile_{myrank}.html")
 
 
 if __name__ == "__main__":
