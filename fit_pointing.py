@@ -66,12 +66,12 @@ def src_flag_cut(source, aman, nominal, ufm, res, mask):
     fp = AxisManager(aman_dummy.dets)
     fp.wrap(
         "xi",
-        np.zeros(1) + xi_off + np.nanmean(np.array(nominal[ufm]["xi"][:])),
+        np.zeros(1) + np.nanmean(np.array(nominal[ufm]["xi"][:])),
         [(0, "dets")],
     )
     fp.wrap(
         "eta",
-        np.zeros(1) + eta_off + np.nanmean(np.array(nominal[ufm]["eta"][:])),
+        np.zeros(1) + np.nanmean(np.array(nominal[ufm]["eta"][:])),
         [(0, "dets")],
     )
     fp.wrap(
@@ -147,27 +147,28 @@ def main():
     forced_ws = args.forced_ws
     if cfg.get("try_all", False):
         forced_ws = ["ws0", "ws1", "ws2"]
-    ds = cfg.get("ds", 5)
-    hp_fc = cfg.get("hp_fc", 4)
-    lp_fc = cfg.get("lp_fc", 30)
-    n_med = cfg.get("n_med", 5)
-    n_std = cfg.get("n_std", 10)
-    source = cfg.get("source", "mars")
-    xi_off = cfg.get("xi_off", 0.0)
-    eta_off = cfg.get("eta_off", 0.0)
-    min_samps = cfg.get("min_samps", 1000) / ds
-    block_size = cfg.get("block_size", 5000) // ds
-    min_dets = cfg.get("min_dets", 30)
-    trim_samps = cfg.get("time_samps", 200) // ds
-    min_hits = cfg.get("min_hits", 1)
-    fwhm_tol = cfg.get("fwhm_tol", 0.2)
-    fit_pars = cfg.get("fit_pars", {})
-    src_msk = cfg.get("src_msk", True)
-    fwhm = cfg.get("fwhm", None)
-    pad = cfg.get("pad", True)
-    max_chisq = cfg.get("max_chisq", 2.5)
-    ufm_rad = cfg.get("ufm_rad", 0.01)
-    preprocess_cfg = cfg.get("preprocess", None)
+    ds = cfg["ds"] = cfg.get("ds", 5)
+    hp_fc = cfg["hp_fc"] = cfg.get("hp_fc", 4)
+    lp_fc = cfg["lp_fc"] = cfg.get("lp_fc", 30)
+    n_med = cfg["n_med"] = cfg.get("n_med", 5)
+    n_std = cfg["n_std"] = cfg.get("n_std", 10)
+    source = cfg["source"] = cfg.get("source", "mars")
+    min_samps = cfg["min_samps"] = cfg.get("min_samps", 1000)
+    min_same /= ds
+    block_size = cfg["block_size"] = cfg.get("block_size", 5000)
+    block_size = block_size // ds
+    min_dets = cfg["min_dets"] = cfg.get("min_dets", 30)
+    trim_samps = cfg["trim_samps"] = cfg.get("time_samps", 200)
+    trim_same = trim_samps // ds
+    min_hits = cfg["min_hits"] = cfg.get("min_hits", 1)
+    fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 0.2)
+    fit_pars = cfg["fit_pars"] = cfg.get("fit_pars", {})
+    src_msk = cfg["src_msk"] = cfg.get("src_msk", True)
+    fwhm = cfg["fwhm"] = cfg.get("fwhm", None)
+    pad = cfg["pad"] = cfg.get("pad", True)
+    max_chisq = cfg["max_chisq"] = cfg.get("max_chisq", 2.5)
+    ufm_rad = cfg["ufm_rad"] = cfg.get("ufm_rad", 0.01)
+    preprocess_cfg = cfg["preprocess_cfg"] = cfg.get("preprocess", None)
     tel = cfg.get("telescope", "lat")
     cfg_str = yaml.dump(cfg)
 
@@ -188,7 +189,7 @@ def main():
     os.makedirs(data_dir, exist_ok=True)
 
     # Get the list of observations
-    ctx_path = cfg.get(
+    ctx_path = cfg["context"] = cfg.get(
         "context",
         f"/global/cfs/cdirs/sobs/metadata/{tel}/contexts/smurf_detcal_local.yaml",
     )
@@ -319,14 +320,14 @@ def main():
     ]
 
     # Load nominal pointing [i.e. template pointing from the zemax model
-    nominal_path = os.path.expanduser(
+    nominal_path = cfg["nominal"] = os.path.expanduser(
         cfg.get("nominal", f"~/data/pointing/{tel}/nominal/focal_plane.h5")
     )
     nominal = h5py.File(nominal_path)
 
     # Get settings for source mask
-    res = cfg.get("res", (2 / 300.0) * np.pi / 180.0)
-    mask = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.75)})
+    res = cfg["res"] = cfg.get("res", (2 / 300.0) * np.pi / 180.0)
+    mask = cfg["mask"] = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.75)})
     if args.profile:
         profiler.start()
         print_once("Restricting joblist to just 1 entry per process for profiling!")
