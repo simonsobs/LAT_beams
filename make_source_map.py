@@ -17,7 +17,8 @@ from sotodlib.core import Context, metadata
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 
-from lat_beams.beam_utils import estimate_cent, plot_map
+from lat_beams.beam_utils import estimate_cent
+from lat_beams.plotting import plot_map
 from lat_beams.utils import print_once, set_tag
 
 mpi4py.rc.threads = False

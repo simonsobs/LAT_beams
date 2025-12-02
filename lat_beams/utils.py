@@ -90,6 +90,7 @@ def recenter(imap, obs_id, stream_id, band, fit_file, norm=True, extent=None):
 
     return imap
 
+
 class FakeJob:
     def __getattr__(self, name: str, /):
         _ = name

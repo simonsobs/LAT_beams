@@ -19,10 +19,10 @@ from lat_beams.beam_utils import (
     estimate_cent,
     estimate_solid_angle,
     get_fwhm_radial_bins,
-    plot_map,
     radial_profile,
 )
 from lat_beams.fitting import fit_gauss_beam
+from lat_beams.plotting import plot_map
 from lat_beams.utils import print_once, set_tag
 
 plt.rcParams["image.cmap"] = "RdGy_r"

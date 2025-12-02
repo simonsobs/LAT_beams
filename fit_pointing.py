@@ -41,6 +41,7 @@ from typing_extensions import cast
 
 from lat_beams import beam as lb
 from lat_beams.fitting import fit_tod_pointing
+from lat_beams.plotting import plot_focal_plane, plot_tod
 from lat_beams.utils import print_once, set_tag
 
 mpi4py.rc.threads = False
@@ -605,20 +606,7 @@ def main():
                 print(f"\t\tAttempting to fit {tot_dets} detectors")
 
                 # Plot the TOD
-                plt.plot(np.array(aman.signal).T, alpha=0.3)
-                plt.xlabel("Samples")
-                plt.ylabel("Signal (pW)")
-                plt.savefig(os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod.png"))
-                plt.close()
-
-                plt.plot(sig_filt.T, alpha=0.3)
-                plt.xlabel("Samples")
-                plt.ylabel("Filtered Signal (pW)")
-                plt.savefig(
-                    os.path.join(tod_plot_dir, f"{ufm}_{band_name}_tod_filt.png")
-                )
-                plt.close()
-
+                plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}")
                 if args.no_fit:
                     msg += "{band_name} Ran in no fit mode"
                     continue
@@ -729,50 +717,7 @@ def main():
                 continue
             # Plot focal plane, encoders, and a histrogram of fhwp, amp, hits
             # TODO: Split by band?
-            # TODO: Move to a function?
-            plt.close()
-
-            plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
-            plt.xlabel("Xi (rad)")
-            plt.ylabel("Eta (rad)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
-            plt.close()
-
-            plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
-            plt.xlabel("Az (rad)")
-            plt.ylabel("El (rad)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
-            plt.close()
-
-            plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
-            plt.xlabel("Amp (pW)")
-            plt.ylabel("Dets (#)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
-            plt.close()
-
-            plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
-            plt.xlabel("FWHM (rad)")
-            plt.ylabel("Dets (#)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
-            plt.close()
-
-            plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
-            plt.xlabel("Hits (#)")
-            plt.ylabel("Dets (#)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
-            plt.close()
-
-            plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
-            plt.xlabel("Reduced Chi Squared")
-            plt.ylabel("Dets (#)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
-            plt.close()
-
-            plt.hist(np.array(focal_plane.R2), bins=30, alpha=0.25)
-            plt.xlabel("R2")
-            plt.ylabel("Dets (#)")
-            plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_r2.png"))
-            plt.close()
+            plot_focal_plane(focal_plane, fit_plot_dir, ufm)
 
             # Ready to save
             print(f"\tSaving {len(rset)} fits ({np.sum(msk)} good).")
