@@ -149,6 +149,7 @@ def main():
         forced_ws = ["ws0", "ws1", "ws2"]
     ds = cfg.get("ds", 5)
     hp_fc = cfg.get("hp_fc", 4)
+    lp_fc = cfg.get("lp_fc", 30)
     n_med = cfg.get("n_med", 5)
     n_std = cfg.get("n_std", 10)
     source = cfg.get("source", "mars")
@@ -621,7 +622,7 @@ def main():
                     aman.restrict("dets", aman.dets.vals[:10])
                 focal_plane = fit_tod_pointing(
                     aman,
-                    (4, 30),
+                    (hp_fc, lp_fc),
                     fwhm=np.deg2rad(fwhm[band_name] / 60.0),
                     source=source_name,
                     show_tqdm=False,

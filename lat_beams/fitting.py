@@ -192,8 +192,6 @@ def fit_tod_pointing(
     source: str = "mars",
     bin_priors: bool = True,
     bin_2d: bool = True,
-    multistep: bool = False,
-    n_err: float = 5,
     pos_priors: Optional[NDArray[np.floating]] = None,
     show_tqdm: bool = False,
     min_snr: float = 5.0,
@@ -219,14 +217,6 @@ def fit_tod_pointing(
 
         bin_2d: If True the binned prior is done by binning the TOD into a naive map.
                 If False xi and eta are binned seperately.
-
-        multistep: If True fit using a multiple rounds of the L-BFGS-B optimizer.
-                   In the first round we hold the fwhm fixed.
-                   In the second the detector offsets are held fixed based on the first round and fwhm is fit.
-                   In the third all parameters are fit and the bounds are set based on the errors from the previous rounds.
-                   If False fit with a single round of Nelder-Mead.
-
-        n_err: How many times to errors to use for bounds in multistep fitting.
 
         pos_priors: Positional priors. Pass None to not use.
                     If using pass in a (ndets, 2) array where each row is the (xi, eta) to
@@ -388,63 +378,8 @@ def fit_tod_pointing(
             (-ptp, ptp),
         ]
 
-        if multistep:
-            ftol = 2.220446049250313e-09  # default
-            _bounds = deepcopy(bounds)
-            _bounds[3] = (fwhm, fwhm)
-            _bounds[0] = (np.min(xi), np.max(xi))
-            _bounds[1] = (np.min(eta), np.max(eta))
-            res = minimize(
-                fit_func,
-                init_pars,
-                bounds=_bounds,
-                args=(fit_am, filt, rfft),
-                method="L-BFGS-B",
-            )
-            init_pars = res.x
-            bounds[0] = (res.x[0] - max_rad, res.x[0] + max_rad)
-            bounds[1] = (res.x[1] - max_rad, res.x[1] + max_rad)
-            if res.success:
-                errs = [
-                    np.sqrt(max(1, abs(res.fun)) * ftol * res.hess_inv(eye)[i])
-                    for i, eye in enumerate(np.eye(len(res.x)))
-                ]
-                _bounds = deepcopy(bounds)
-                _bounds[0] = (res.x[0] - 1e-9, res.x[0] + 1e-9)
-                _bounds[1] = (res.x[1] - 1e-9, res.x[1] + 1e-9)
-                res = minimize(
-                    fit_func,
-                    res.x,
-                    bounds=_bounds,
-                    args=(fit_am, filt, rfft),
-                    method="L-BFGS-B",
-                )
-                if res.success:
-                    errs_new = [
-                        np.sqrt(max(1, abs(res.fun)) * ftol * res.hess_inv(eye)[i])
-                        for i, eye in enumerate(np.eye(len(res.x)))
-                    ]
-                    errs[2:] = errs_new[2:]
-                    _bounds = [
-                        (p - n_err * e, p + n_err * e) for p, e in zip(res.x, errs)
-                    ]
-                    res = minimize(
-                        fit_func,
-                        res.x,
-                        bounds=_bounds,
-                        args=(fit_am, filt, rfft),
-                        method="L-BFGS-B",
-                    )
-        else:
-            # OPTIMIZE FITS HERE.
-            # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
-            res = minimize(
-                fit_func,
-                init_pars,
-                bounds=bounds,
-                args=(fit_am, filt, rfft),
-                method="Nelder-Mead",
-            )
+        # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
+        res = minimize( fit_func, init_pars, bounds=bounds, args=(fit_am, filt, rfft), method="Nelder-Mead",)
 
         focal_plane.xi[i] = res.x[0]
         focal_plane.eta[i] = res.x[1]
