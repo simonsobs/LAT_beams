@@ -9,10 +9,7 @@ Still somewhat LAT specific but could be genralized if desired.
 # more plots:
 # - fit for each detector [on demand]
 # - input priors
-# - cuts, statistics on cuts basically
 # - coverage showing planet trajectory through focal plane [just use/modify the matthew functions]
-# - separate out the "special processing" so that can be it's own thing, but other features be more generic/modular/inlibrary
-# - single det capabilities
 # - should develop tests for this
 # - allow a list of sources
 
@@ -129,9 +126,7 @@ def main():
         type=float,
         help="Amount of time to lookback for query, overides start time from config",
     )
-    parser.add_argument(
-        "--profile", "-p", action="store_true", help="Run a profile"
-    )
+    parser.add_argument("--profile", "-p", action="store_true", help="Run a profile")
     args = parser.parse_args()
 
     with open(args.cfg, "r") as f:
@@ -142,8 +137,9 @@ def main():
             "Running in 'no_fit' mode. TOD plots will be made but pointing will not be fit"
         )
 
-    if args.profile:   
+    if args.profile:
         from pyinstrument import Profiler
+
         profiler = Profiler()
         print_once("Running in profiler mode! Only a few dets will be kept")
 
