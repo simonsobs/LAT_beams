@@ -1,6 +1,7 @@
 source: "saturn"
 min_samps: 20000
 context: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
+preprocess: "preproc/preproc_fit_point.yaml"
 start_time: 1739923200 # First light 
 # start_time: 1744848000 # Everything aligned
 # start_time: 1746187200 # Corotator moved
@@ -22,4 +23,3 @@ fwhm: # arcmin LAT; change per platform
   f150: 1.3
   f220: 0.95
   f280: 0.83
-    

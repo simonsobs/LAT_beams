@@ -1,6 +1,7 @@
 source: "mars"
 min_samps: 20000
 context: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
+preprocess: "preproc/preproc_fit_point.yaml"
 
 start_time: 1739923200 # First light 
 # start_time: 1744848000 # Everything aligned
