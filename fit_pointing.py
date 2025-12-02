@@ -31,12 +31,12 @@ from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.core.flagman import has_any_cuts
 from sotodlib.io.metadata import write_dataset
+from sotodlib.mapmaking import downsample_obs
 from sotodlib.obs_ops.utils import correct_iir_params
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from typing_extensions import cast
 
-from lat_beams import beam as lb
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
 from lat_beams.utils import print_once, set_tag
@@ -430,7 +430,7 @@ def main():
 
             # Downsample
             aman.signal = aman.signal.astype(np.float32)
-            aman = lb.downsample_obs(aman, ds)
+            aman = downsample_obs(aman, ds)
 
             # Source flags
             if src_msk:
