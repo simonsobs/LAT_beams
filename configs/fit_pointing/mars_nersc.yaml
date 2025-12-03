@@ -28,6 +28,6 @@ mask:
     - 1.5 
     
 project_dir: 'pointing/lat'
-nominal: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/focal_plane.h5'
+nominal: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/ID9/focal_plane.h5'
 
 src_msk: False

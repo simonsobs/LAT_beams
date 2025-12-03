@@ -379,7 +379,13 @@ def fit_tod_pointing(
         ]
 
         # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
-        res = minimize( fit_func, init_pars, bounds=bounds, args=(fit_am, filt, rfft), method="Nelder-Mead",)
+        res = minimize(
+            fit_func,
+            init_pars,
+            bounds=bounds,
+            args=(fit_am, filt, rfft),
+            method="Nelder-Mead",
+        )
 
         focal_plane.xi[i] = res.x[0]
         focal_plane.eta[i] = res.x[1]

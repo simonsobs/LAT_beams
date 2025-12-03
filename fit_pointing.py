@@ -53,13 +53,7 @@ nproc = comm.Get_size()
 band_names = {"l": ["f030", "f040"], "m": ["f090", "f150"], "u": ["f220", "f280"]}
 
 
-def src_flag_cut(source, aman, nominal, ufm, res, mask):
-    source_name = source
-    # This is just to account for gap in sotodlib.
-    # TODO: Add it to sotodlib...
-    if source == "rcw38":
-        source_name = "J134.78-47.509"
-
+def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
     # See how much of the source we saw...
     # Mask is made massive. This ONLY helps if you have prior knowledge of where source is.
     aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
@@ -127,6 +121,9 @@ def main():
         help="Amount of time to lookback for query, overides start time from config",
     )
     parser.add_argument("--profile", "-p", action="store_true", help="Run a profile")
+    parser.add_argument(
+        "--retry_failed", "-r", action="store_true", help="Retry failed jobs"
+    )
     args = parser.parse_args()
 
     with open(args.cfg, "r") as f:
@@ -154,12 +151,12 @@ def main():
     n_std = cfg["n_std"] = cfg.get("n_std", 10)
     source = cfg["source"] = cfg.get("source", "mars")
     min_samps = cfg["min_samps"] = cfg.get("min_samps", 1000)
-    min_same /= ds
+    min_samps /= ds
     block_size = cfg["block_size"] = cfg.get("block_size", 5000)
     block_size = block_size // ds
     min_dets = cfg["min_dets"] = cfg.get("min_dets", 30)
     trim_samps = cfg["trim_samps"] = cfg.get("time_samps", 200)
-    trim_same = trim_samps // ds
+    trim_samps = trim_samps // ds
     min_hits = cfg["min_hits"] = cfg.get("min_hits", 1)
     fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 0.2)
     fit_pars = cfg["fit_pars"] = cfg.get("fit_pars", {})
@@ -243,7 +240,7 @@ def main():
                 )
                 if len(jobs) == 0:
                     jdb.create_job(
-                        "beam_map",
+                        "fit_pointing",
                         tags={
                             "obs_id": obs["obs_id"],
                             "wafer_slot": ws,
@@ -272,7 +269,11 @@ def main():
     source_list = [
         source,
     ]
-    joblist = [job for job in joblist if job.tags["source"] in source_list]
+    joblist = [
+        job
+        for job in joblist
+        if job.tags["source"] in source_list or job.tags["source"] == ""
+    ]
     print_once(f"{len(joblist)} wafer-obs to fit.")
 
     # split for mpi
@@ -283,7 +284,7 @@ def main():
     max_fits = np.max(n_fits)
     if n_fits[0] != max_fits:
         raise ValueError("Root doesn't have max fits!")
-    if len(joblist) < max_maps:
+    if len(joblist) < max_fits:
         joblist += [None] * (max_fits - len(joblist))
 
     # Output metadata setup
@@ -333,6 +334,7 @@ def main():
         print_once("Restricting joblist to just 1 entry per process for profiling!")
         joblist = [joblist[0]]
     to_save = (None, None, None)
+    source_list = set(source_list)
     for i, j in enumerate(joblist):
         sys.stdout.flush()
         comm.barrier()
@@ -368,7 +370,7 @@ def main():
             obs_id = job.tags["obs_id"]
             ufm = job.tags["stream_id"]
             ws = job.tags["wafer_slot"]
-            print(f"(rank {myrank} Fitting {obs_id} {ufm}({i+1}/{len(joblist)})")
+            print(f"(rank {myrank}) Fitting {obs_id} {ufm} ({i+1}/{len(joblist)})")
 
             # Save metadata and config info
             set_tag(job, "config", cfg_str)
@@ -384,6 +386,20 @@ def main():
                 set_tag(job, "message", msg)
                 job.jstate = "failed"
                 continue
+
+            # Check source
+            src_names = list(source_list & set(obs["tags"]))
+            if len(src_names) > 1:
+                print("\tObservation tagged for multiple sources!")
+            elif len(src_names) == 0:
+                msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
+                print(f"\t{msg}")
+                set_tag(job, "message", msg)
+                job.jstate = "failed"
+                print(f"\t\tTags were: {obs['tags']}")
+                to_save = (None, None, None)
+                continue
+            set_tag(job, "source", source)
 
             # TODO: Make sure to make this tagging work for sat format too
             wafers = np.unique(
@@ -435,9 +451,15 @@ def main():
             aman = downsample_obs(aman, ds)
 
             # Source flags
+            source_name = source
+            # This is just to account for gap in sotodlib.
+            # TODO: Add it to sotodlib...
+            if source == "rcw38":
+                source_name = "J134.78-47.509"
+
             if src_msk:
                 print_once("\tRunning source flags")
-                start, stop = src_flag_cut(source, aman, nominal, ufm, res, mask)
+                start, stop = src_flag_cut(source_name, aman, nominal, ufm, res, mask)
                 msg = ""
                 if start < 0 or stop < 0:
                     if not args.no_fit:
@@ -600,7 +622,7 @@ def main():
                 ptp = np.ptp(sig_filt, axis=-1)
                 std = np.std(sig_filt, axis=-1)
                 thresh = 0.1 * np.percentile(ptp, 90)
-                msk = fake_fit + ((ptp > thresh) * (ptp > n_std * std) * (std > 0))
+                msk = (ptp > thresh) * (ptp > n_std * std) * (std > 0)
                 aman = aman.restrict("dets", msk)
                 sig_filt = sig_filt[msk]
                 if aman.dets.count < min_dets:
@@ -608,7 +630,7 @@ def main():
                     print(f"\t{msg}")
                     continue
 
-                print(f"\t\tAttempting to fit {tot_dets} detectors")
+                print(f"\t\tAttempting to fit {aman.dets.count} detectors")
 
                 # Plot the TOD
                 plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}")
@@ -626,7 +648,7 @@ def main():
                     (hp_fc, lp_fc),
                     fwhm=np.deg2rad(fwhm[band_name] / 60.0),
                     source=source_name,
-                    show_tqdm=False,
+                    show_tqdm=True,
                     **fit_pars,
                 )
 

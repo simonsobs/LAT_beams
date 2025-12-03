@@ -1,6 +1,11 @@
+import os
+
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.colors import SymLogNorm
+
+from .beam_utils import radial_profile
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
