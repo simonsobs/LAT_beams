@@ -11,11 +11,11 @@ subobs:
 
 archive:
   # index: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/process_archive.sqlite'
-  index: '/global/homes/s/skh/process_archive.sqlite'
+  index: '/global/cfs/cdirs/sobs/users/skh/process_archive.sqlite'
   policy:
     type: 'simple'
     # filename: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/preprocess_archive.h5'
-    filename: '/global/homes/s/skh/preprocess_archive.h5'
+    filename: '/global/cfs/cdirs/sobs/users/skh/preprocess_archive.h5'
 
 process_pipe:
     - name: "pointing_model"
