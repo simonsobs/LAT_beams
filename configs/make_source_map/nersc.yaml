@@ -10,8 +10,8 @@ min_dets: 50
 min_hits: 1
 min_snr: 1
 context: 'contexts/nersc_pointing_model.yaml'
-start_time: 1739941200
-stop_time: 2748476800
+start_time: 1745150000 
+stop_time: 20000000000
 n_med: 3
 mask_size: .1
 search_mask:
@@ -27,4 +27,5 @@ epochs:
     - [1749355200, 1749600000]
     - [1749600000, 1755576000]
     - [1755576000, 1756699200]
-    - [1756699200, 2748476800]
+    - [1756699200, 20000000000]
+append: "bs_relcal"
