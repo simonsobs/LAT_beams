@@ -13,13 +13,8 @@ from matplotlib.colors import SymLogNorm
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
 
-from lat_beams.beam_utils import (
-    crop_maps,
-    estimate_solid_angle,
-    get_cent,
-    get_fwhm_radial_bins,
-    radial_profile,
-)
+from lat_beams.beam_utils import (crop_maps, estimate_solid_angle, get_cent,
+                                  get_fwhm_radial_bins, radial_profile)
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.utils import coadd, print_once, recenter
 
