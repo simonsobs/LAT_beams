@@ -13,8 +13,12 @@ import numpy as np
 import so3g
 import sotodlib.coords.planets as planets
 from astropy import units as u
-from astropy.convolution import (Gaussian1DKernel, Gaussian2DKernel, convolve,
-                                 convolve_fft)
+from astropy.convolution import (
+    Gaussian1DKernel,
+    Gaussian2DKernel,
+    convolve,
+    convolve_fft,
+)
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 from scipy.signal import detrend
@@ -22,10 +26,12 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.core.context import AxisManager
-from sotodlib.tod_ops.fft_ops import (RFFTObj, find_inferior_integer,
-                                      find_superior_integer)
-from sotodlib.tod_ops.filters import (fourier_filter, high_pass_sine2,
-                                      identity_filter)
+from sotodlib.tod_ops.fft_ops import (
+    RFFTObj,
+    find_inferior_integer,
+    find_superior_integer,
+)
+from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, identity_filter
 from sotodlib.tod_ops.filters import logger as flog
 from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm

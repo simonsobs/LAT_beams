@@ -56,16 +56,12 @@ split_by = cfg.get("split_by", ["band", "stream_id"])
 # Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(
-    root_dir, "plots", project_dir, "source_maps", pointing_type, "fits", "summary"
-)
+plot_dir = os.path.join(root_dir, "plots", project_dir, pointing_type, "summary")
 data_dir = os.path.join(
     root_dir,
     "data",
     project_dir,
-    "source_maps",
     pointing_type,
-    "fits",
 )
 fpath = os.path.join(data_dir, "beam_pars.h5")
 os.makedirs(plot_dir, exist_ok=True)

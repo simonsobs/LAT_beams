@@ -98,14 +98,12 @@ plot_dir = os.path.join(
     root_dir,
     "plots",
     project_dir,
-    "source_maps",
     f"{pointing_type}{(append!="")*'_'}{append}",
 )
 data_dir = os.path.join(
     root_dir,
     "data",
     project_dir,
-    "source_maps",
     f"{pointing_type}{(append!="")*'_'}{append}",
 )
 os.makedirs(plot_dir, exist_ok=True)

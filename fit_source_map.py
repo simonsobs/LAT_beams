@@ -17,9 +17,13 @@ from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
 
-from lat_beams.beam_utils import (crop_maps, estimate_cent,
-                                  estimate_solid_angle, get_fwhm_radial_bins,
-                                  radial_profile)
+from lat_beams.beam_utils import (
+    crop_maps,
+    estimate_cent,
+    estimate_solid_angle,
+    get_fwhm_radial_bins,
+    radial_profile,
+)
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
 from lat_beams.utils import print_once, set_tag
@@ -80,14 +84,12 @@ plot_dir = os.path.join(
     root_dir,
     "plots",
     project_dir,
-    "source_maps",
     f"{pointing_type}{(append!="")*'_'}{append}",
 )
 data_dir = os.path.join(
     root_dir,
     "data",
     project_dir,
-    "source_maps",
     f"{pointing_type}{(append!="")*'_'}{append}",
 )
 os.makedirs(plot_dir, exist_ok=True)

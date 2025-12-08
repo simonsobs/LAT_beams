@@ -13,8 +13,13 @@ from matplotlib.colors import SymLogNorm
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
 
-from lat_beams.beam_utils import (crop_maps, estimate_solid_angle, get_cent,
-                                  get_fwhm_radial_bins, radial_profile)
+from lat_beams.beam_utils import (
+    crop_maps,
+    estimate_solid_angle,
+    get_cent,
+    get_fwhm_radial_bins,
+    radial_profile,
+)
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.utils import coadd, print_once, recenter
 
@@ -66,14 +71,14 @@ extent = cfg.get("extent", 900)
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
 plot_dir = os.path.join(
-    root_dir, "plots", project_dir, "source_maps", pointing_type, "stacks", args.source
+    root_dir, "plots", project_dir, pointing_type, "stacks", args.source
 )
 out_dir = os.path.join(
-    root_dir, "data", project_dir, "source_maps", pointing_type, "stacks", args.source
+    root_dir, "data", project_dir, pointing_type, "stacks", args.source
 )
-data_dir = os.path.join(root_dir, "data", project_dir, "source_maps", pointing_type)
+data_dir = os.path.join(root_dir, "data", project_dir, pointing_type)
 os.makedirs(plot_dir, exist_ok=True)
-fit_file = os.path.join(data_dir, "fits", "beam_pars.h5")
+fit_file = os.path.join(data_dir, "beam_pars.h5")
 
 # Get the list of files
 src = "*" if args.source == "all" else args.source
