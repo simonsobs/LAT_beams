@@ -162,8 +162,17 @@ def load_beam_fits(fpath):
     return all_fits
 
 
-def get_fit_vec(all_fits, name):
-    dat = u.Quantity([aman[name] for aman in all_fits["aman"]])
+def get_fit_vec(all_fits, name, fall_back=None):
+    if fall_back is not None:
+        dat = u.Quantity(
+            [
+                aman[name] if name in aman else aman[fall_back]
+                for aman in all_fits["aman"]
+            ]
+        )
+    else:
+        dat = u.Quantity([aman[name] for aman in all_fits["aman"]])
+
     if dat.unit == u.Unit(3):
         dat = dat.value * u.pW
     return dat
