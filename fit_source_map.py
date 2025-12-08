@@ -438,7 +438,7 @@ for i, j in enumerate(joblist):
     aman.wrap("noise", noise * u.pW)
     aman.wrap("r", r * u.arcsec)
     aman.wrap("rprof", rprof * u.pW)
-    aman.wrap("mprof", rprof * u.pW)
+    aman.wrap("mprof", mprof * u.pW)
     aman_path = os.path.join(obs_id, ufm, band)
     to_save = (aman, aman_path)
 

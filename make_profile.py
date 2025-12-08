@@ -101,6 +101,8 @@ for split in split_by:
     spl_name = []
     profiles = []
     windows = []
+    mprofiles = []
+    mwindows = []
     for spl in np.unique(split_vec):
         data_dir_spl = os.path.join(data_dir, "profiles", split, spl)
         plot_dir_spl = os.path.join(plot_dir, split, spl)
@@ -134,6 +136,11 @@ for split in split_by:
                 os.path.join(data_dir_spl, f"profile_{spl}_{epoch[0]}_{epoch[1]}.txt"),
                 profile,
             )
+            mprofile = avg_prof(fits["aman"], prof="mprof")
+            np.savetxt(
+                os.path.join(data_dir_spl, f"model_profile_{spl}_{epoch[0]}_{epoch[1]}.txt"),
+                mprofile,
+            )
 
             # Compute and save b_ell
             bl = beam2bl(profile[:, 1], np.deg2rad(profile[:, 0] / 3600), lmax)
@@ -143,12 +150,20 @@ for split in split_by:
                 os.path.join(data_dir_spl, f"window_{spl}_{epoch[0]}_{epoch[1]}.txt"),
                 profile,
             )
+            mbl = beam2bl(mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), lmax)
+            mwindow = np.column_stack((ells, mbl))
+            np.savetxt(
+                os.path.join(data_dir_spl, f"model_window_{spl}_{epoch[0]}_{epoch[1]}.txt"),
+                profile,
+            )
 
             # Save for plots
             profile = profile[profile[:, 0] < 300]
             profiles += [profile]
-            # window = window[window[:, 0] < 5000]
+            mprofile = mprofile[mprofile[:, 0] < 300]
+            mprofiles += [mprofile]
             windows += [window]
+            mwindows += [mwindow]
 
         for epoch, profile in zip(epochs, profiles):
             plt.plot(
@@ -170,6 +185,26 @@ for split in split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"profile_{spl}_log.png"))
         plt.close()
 
+        for epoch, profile in zip(epochs, mprofiles):
+            plt.plot(
+                profile[:, 0],
+                profile[:, 1],
+                label=epoch,
+                marker="x",
+            )
+        plt.legend()
+        plt.title(f"{spl} Model Profile")
+        plt.xlabel('r (")')
+        plt.ylabel("Profile")
+        plt.savefig(os.path.join(plot_dir_spl, f"model_profile_{spl}.png"))
+
+        plt.yscale("log")
+        plt.title(f"{spl} Log Model Profile")
+        plt.xlabel('r (")')
+        plt.ylabel("Log Profile")
+        plt.savefig(os.path.join(plot_dir_spl, f"model_profile_{spl}_log.png"))
+        plt.close()
+
         for epoch, window in zip(epochs, windows):
             plt.loglog(
                 window[:, 0],
@@ -182,4 +217,18 @@ for split in split_by:
         plt.xlabel("l")
         plt.ylabel("b_l")
         plt.savefig(os.path.join(plot_dir_spl, f"window_{spl}.png"))
+        plt.close()
+
+        for epoch, window in zip(epochs, mwindows):
+            plt.loglog(
+                window[:, 0],
+                window[:, 1],
+                label=epoch,
+                marker="x",
+            )
+        plt.legend()
+        plt.title(f"{spl} Model Window Function")
+        plt.xlabel("l")
+        plt.ylabel("b_l")
+        plt.savefig(os.path.join(plot_dir_spl, f"model_window_{spl}.png"))
         plt.close()
