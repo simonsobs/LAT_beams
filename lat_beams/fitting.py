@@ -13,12 +13,8 @@ import numpy as np
 import so3g
 import sotodlib.coords.planets as planets
 from astropy import units as u
-from astropy.convolution import (
-    Gaussian1DKernel,
-    Gaussian2DKernel,
-    convolve,
-    convolve_fft,
-)
+from astropy.convolution import (Gaussian1DKernel, Gaussian2DKernel, convolve,
+                                 convolve_fft)
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 from scipy.signal import detrend
@@ -26,12 +22,10 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.core.context import AxisManager
-from sotodlib.tod_ops.fft_ops import (
-    RFFTObj,
-    find_inferior_integer,
-    find_superior_integer,
-)
-from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, identity_filter
+from sotodlib.tod_ops.fft_ops import (RFFTObj, find_inferior_integer,
+                                      find_superior_integer)
+from sotodlib.tod_ops.filters import (fourier_filter, high_pass_sine2,
+                                      identity_filter)
 from sotodlib.tod_ops.filters import logger as flog
 from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
@@ -460,7 +454,6 @@ def fit_gauss_beam(
     cent,
     multipoles=tuple(),
     force_sym=False,
-    match_multipoles=False,
     map_units="pW",
 ):
     """
@@ -482,8 +475,6 @@ def fit_gauss_beam(
         1 is the dipole, 2 the quadropole, 3 the octopole, etc.
     force_sym : bool, default: False
         If True don't allow ellipticity in the fit.
-    match_multipoles : bool, default: False
-        If True then only allow the amplitudes of the multipoles to vary
     map_units : str, default: pW
         The units of the map.
 
@@ -500,6 +491,8 @@ def fit_gauss_beam(
     nx, ny = imap.shape[-2:]
 
     sigma = np.sqrt(ivar)
+    n_mula = len(multipoles) * 2
+    n_mulf = len(multipoles)
 
     guess = [
         pixmap[0][cent[0], cent[1]],
@@ -510,51 +503,45 @@ def fit_gauss_beam(
         60,
         0,
     ]
-    if force_sym:
-        guess = guess[:-2]
-    if match_multipoles:
-        guess += [guess[3]] * (len(multipoles * 2))
-    else:
-        guess += np.tile(guess[3:], len(multipoles) * 2).tolist()
-
     bounds = [
         [0, 0, -5 * np.max(np.abs(imap)), 0, 20, 20, 0],
         [nx * res, ny * res, 5 * np.max(imap), 5 * np.max(imap), 300, 300, 2 * np.pi],
     ]
+    map_units = u.Unit(map_units)
+    par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
+    par_units = [u.arcsec, u.arcsec, map_units, map_units, u.arcsec, u.arcsec, u.radian]  # type: ignore
     if force_sym:
+        guess = guess[:-2]
+        par_names = par_names[:-2]
+        par_units = par_units[:-2]
         bounds[0] = bounds[0][:-2]
         bounds[1] = bounds[1][:-2]
-    if match_multipoles:
-        bounds[0] += [bounds[0][3]] * (len(multipoles) * 2)
-        bounds[1] += [bounds[1][3]] * (len(multipoles) * 2)
-    else:
-        bounds[0] += np.tile(bounds[0][3:], len(multipoles) * 2).tolist()
-        bounds[1] += np.tile(bounds[1][3:], len(multipoles) * 2).tolist()
+    guess += [0] * n_mula
+    par_names += [
+        f"{par_names[3]}_{multipoles[int(i//2)]}_{i%2}" for i in range(n_mula)
+    ]
+    par_units += [par_units[3]] * n_mula
+    bounds[0] += [bounds[0][3]] * n_mula
+    bounds[1] += [bounds[1][3]] * n_mula
+    guess += [120] * n_mulf
+    par_names += [f"{par_names[4]}_{multipoles[i]}" for i in range(n_mulf)]
+    par_units += [par_units[4]] * n_mulf
+    bounds[0] += [bounds[0][4]] * n_mulf
+    bounds[1] += [5 * bounds[1][4]] * n_mulf
     bounds = [(lb, ub) for lb, ub in zip(*bounds)]
 
     pixmap = (pixmap[0].astype(float), pixmap[1].astype(float))
 
     def _beam_mod(coeffs):
-        n_multipole = len(multipoles)
-        dx, dy, off = coeffs[:3]
-        if match_multipoles:
-            if force_sym:
-                amp0, fwhm_xi = coeffs[3:5]
-                fwhm_eta = fwhm_xi
-                phi = 0
-            else:
-                amp0, fwhm_xi, fwhm_eta, phi = coeffs[3:7]
-            amps = np.insert(coeffs[7:], 0, amp0)
-            fwhm_xis = fwhm_xi * np.ones_like(amps)
-            fwhm_etas = fwhm_eta * np.ones_like(amps)
-            phis = phi * np.ones_like(amps)
+        dx, dy, off, amp = coeffs[:4]
+        m_amps = coeffs[-1 * (n_mula + n_mulf) : (-1 * n_mulf)]
+        m_fwhms = coeffs[-1 * n_mulf :]
+
+        if force_sym:
+            fwhm_xi = fwhm_eta = coeffs[4]
+            phi = 0
         else:
-            if force_sym:
-                amps, fwhm_xis = coeffs[3:].reshape((-1, 2)).T
-                fwhm_etas = np.copy(fwhm_xis)
-                phis = np.zeros_like(fwhm_xis)
-            else:
-                amps, fwhm_xis, fwhm_etas, phis = coeffs[3:].reshape((-1, 4)).T
+            fwhm_xi, fwhm_eta, phi = coeffs[4 : -1 * (n_mula + n_mulf)]
         beam = guass_multipole_beam(
             pixmap[0],
             pixmap[1],
@@ -562,10 +549,12 @@ def fit_gauss_beam(
             dx,
             dy,
             off,
-            amps,
-            fwhm_xis,
-            fwhm_etas,
-            phis,
+            amp,
+            fwhm_xi,
+            fwhm_eta,
+            phi,
+            m_amps,
+            m_fwhms,
         )
         return beam
 
@@ -577,7 +566,7 @@ def fit_gauss_beam(
         chisq = np.nansum((diff * sigma) ** 2)
         return chisq
 
-    res = minimize(_objective, guess, bounds=bounds, options={"gtol": 1e-4})
+    res = minimize(_objective, guess, bounds=bounds)
     if not res.success:
         return None, None
 
@@ -585,12 +574,6 @@ def fit_gauss_beam(
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
 
     # Convert to a dict
-    map_units = u.Unit(map_units)
-    par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
-    par_units = [u.arcsec, u.arcsec, map_units, map_units, u.arcsec, u.arcsec, u.radian]  # type: ignore
-    for m in multipoles:
-        for i in range(2):
-            par_names += [p + f"_m{m}_{i}" for p in par_names[3:7]]
-            par_units += [p for p in par_units[3:7]]
     params = {n: v * u for n, u, v in zip(par_names, par_units, res.x)}
+
     return params, model

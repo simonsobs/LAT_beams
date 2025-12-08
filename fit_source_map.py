@@ -17,13 +17,9 @@ from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
 
-from lat_beams.beam_utils import (
-    crop_maps,
-    estimate_cent,
-    estimate_solid_angle,
-    get_fwhm_radial_bins,
-    radial_profile,
-)
+from lat_beams.beam_utils import (crop_maps, estimate_cent,
+                                  estimate_solid_angle, get_fwhm_radial_bins,
+                                  radial_profile)
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
 from lat_beams.utils import print_once, set_tag
@@ -66,8 +62,10 @@ extent = cfg["extent"] = cfg.get("extent", 900)
 snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
 min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
-multipoles = cfg["multipoles"] = cfg.get("multipoles", tuple())
-fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", np.inf)
+gauss_multipoles = cfg["gauss_multipoles"] = cfg.get("gauss_multipoles", tuple())
+gauss_multipoles = tuple(gauss_multipoles)
+sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
+fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
 buf = cfg["buf"] = cfg.get("buffer", 30)
 log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
@@ -126,24 +124,26 @@ if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
 maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
 maplist = np.array_split(maplist, nproc)[myrank]
-it = maplist
-if myrank == 0:
-    it = tqdm(maplist, file=sys.stdout)
 joblist = []
 jobs_to_make = []
+print_once("Getting beam map jobs")
 jobdict = {
     f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}": job
     for job in jdb.get_jobs(jclass="fit_map")
 }
-for mjob in maplist:
+print_once("Processing possible jobs")
+it = maplist
+if myrank == 0:
+    it = tqdm(maplist, file=sys.stdout)
+for mjob in it:
     sys.stdout.flush()
     job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}"
-    obs = ctx.obsdb(mjob.tags["obs_id"])
-    if args.obs_list is None and (
-        obs.timestamp < start_time or obs.timestape >= stop_time
+    obs = ctx.obsdb.get(mjob.tags["obs_id"])
+    if args.obs_ids is None and (
+        obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
     ):
         continue
-    elif args.obs_list is not None and obs["obs_id"] not in args.obs_list:
+    elif args.obs_ids is not None and obs["obs_id"] not in args.obs_ids:
         continue
     if job_str in jobdict:
         job = jobdict[job_str]
@@ -179,6 +179,7 @@ tot_missing = comm.reduce(len(jobs_to_make), root=0)
 print_once(f"Adding {tot_missing} new jobs")
 t0 = time.time()
 for i in range(nproc):
+    print_once(f"\tRank {i} writing")
     if myrank == i:
         jdb.commit_jobs(jobs_to_make)
     comm.barrier()
@@ -202,20 +203,19 @@ to_save = (None, None)
 map_jobs = jdb.get_jobs(jclass="beam_map", jstate="done")
 map_jobdict = {
     f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
-    for job in mapjobs
+    for job in map_jobs
 }
 job = None
 for i, j in enumerate(joblist):
-    sys.stdout.flush()
     comm.barrier()
+    sys.stdout.flush()
     to_save = comm.gather(to_save, root=0)
     if myrank == 0 and to_save is not None and outfile is not None:
         for aman, path in to_save:
             if aman is None:
                 continue
             aman.save(outfile, path, overwrite=True)
-        if i % 10 == 9:
-            outfile.flush()
+        outfile.flush()
     comm.barrier()
     # To avoid multiproc issues where the database is locked we lock and unlock serially
     # with jdb.locked(j) as job:
@@ -252,7 +252,7 @@ for i, j in enumerate(joblist):
 
     # Save config info
     set_tag(job, "config", cfg_str)
-    set_tag(jobs, "comps", comps)
+    set_tag(job, "comps", comps)
 
     # Load the maps
     try:
@@ -304,13 +304,13 @@ for i, j in enumerate(joblist):
     # Fit
     cent = estimate_cent(solved, smooth_kern / pixsize, buf)
     fit_params, model = fit_gauss_beam(
-        solved, weights, pixmap, cent, tuple(), True, True, "pW"
+        solved, weights, pixmap, cent, gauss_multipoles, sym_gauss, "pW"
     )
     if fit_params is None or model is None:
         msg = "Fit failed"
+        print(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
-        to_save = (None, None)
         to_save = (None, None)
         continue
 

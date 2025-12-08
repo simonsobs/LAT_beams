@@ -61,26 +61,32 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
 
 
 def guass_multipole_beam(
-    x, y, multipoles, dx, dy, off, amps, fwhm_xis, fwhm_etas, phis
+    x,
+    y,
+    multipoles,
+    dx,
+    dy,
+    off,
+    amp,
+    fwhm_xi,
+    fwhm_eta,
+    phi,
+    m_amps,
+    m_fwhms,
 ):
-    # r = np.sqrt(x**2 + y**2)
     theta = np.arctan2(y - dy, x - dx)
 
     xieta = (x, y)
-    beam_model = gaussian2d(
-        xieta, amps[0], dx, dy, fwhm_xis[0], fwhm_etas[0], phis[0], 0
-    )
+    beam_model = gaussian2d(xieta, amp, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
     for m, n in enumerate(multipoles):
         order = 2 ** (n - 1)
-        for i, op in enumerate((np.sin,)):
+        for i, op in enumerate((np.sin, np.cos)):
             mp = op(theta * order)
-            j = 2 * m + i + 1
-            beam_model += (
-                gaussian2d(
-                    xieta, amps[j], dx, dy, fwhm_xis[j], fwhm_etas[j], phis[j], 0
-                )
-                * mp
+            j = 2 * m + i
+            base_beam = gaussian2d(
+                xieta, m_amps[i], dx, dy, m_fwhms[m], m_fwhms[m], phi, 0
             )
+            beam_model += base_beam * mp
     return beam_model + off
 
 
