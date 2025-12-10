@@ -5,7 +5,7 @@ source_list:
 pointing_type: "pointing_model" 
 preprocess: "preproc/preproc.yaml"
 # pointing_type: "per_obs" 
-min_samps: 800
+min_samps: 500
 min_dets: 50
 min_hits: 1
 min_snr: 1
@@ -26,5 +26,5 @@ epochs:
     - [1749600000, 1755576000]
     - [1756699200, 20000000000]
 append: "bs_relcal"
-gauss_multipoles: [1, 2, 3]
+gauss_multipoles: [0, 1, 2, 3]
 sym_gauss: False 
