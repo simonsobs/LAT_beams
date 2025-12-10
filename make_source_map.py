@@ -253,6 +253,7 @@ res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
 pixsize = 3600 * np.rad2deg(res)
 mask_size = cfg.get("mask_size", 0.1)
 search_mask = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
+mask_fac = search_mask["xyr"][-1]/mask_size
 
 # Mapping loop
 source_list = set(source_list)
@@ -294,6 +295,7 @@ for i, j in enumerate(joblist):
         set_tag(job, "message", msg)
         job.jstate = "failed"
         continue
+    fscale_fac =  90.0 / float(band[1:])
 
     src_names = list(source_list & set(obs["tags"]))
     if len(src_names) > 1:
@@ -411,7 +413,7 @@ for i, j in enumerate(joblist):
         np.diff(aman.timestamps)
     )
     print(f"\t{det_secs} detector seconds on source in intial mask")
-    if det_secs < min_det_secs:
+    if det_secs < min_det_secs * mask_fac * fscale_fac:
         msg = f"\tNot enough time on source in initial mask."
         print(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -453,7 +455,7 @@ for i, j in enumerate(joblist):
         "xyr": (
             (ra_min - pixsize * cent[1]) / 3600,
             (dec_min + pixsize * cent[0]) / 3600,
-            mask_size * 90.0 / float(band[1:]),
+            mask_size * fscale_fac,
         ),
     }
     source_flags = cp.compute_source_flags(
@@ -471,7 +473,7 @@ for i, j in enumerate(joblist):
         np.diff(aman.timestamps)
     )
     print(f"\t{det_secs} detector seconds on source")
-    if det_secs < min_det_secs:
+    if det_secs < min_det_secs * fscale_fac:
         msg = f"\tNot enough time on source."
         print(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -499,22 +501,22 @@ for i, j in enumerate(joblist):
     set_tag(
         job,
         "binned",
-        os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_binned.fits"),
+        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_binned.fits"), data_dir),
     )
     set_tag(
         job,
         "detweights",
-        os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_detweights.h5"),
+        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_detweights.h5"), data_dir),
     )
     set_tag(
         job,
         "solved",
-        os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_solved.fits"),
+        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_solved.fits"), data_dir),
     )
     set_tag(
         job,
         "weights",
-        os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_weights.fits"),
+        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_weights.fits"), data_dir),
     )
 
     # Smooth and find the center
