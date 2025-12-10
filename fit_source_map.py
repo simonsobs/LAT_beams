@@ -66,7 +66,7 @@ extent = cfg["extent"] = cfg.get("extent", 900)
 snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
 min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
-gauss_multipoles = cfg["gauss_multipoles"] = cfg.get("gauss_multipoles", tuple())
+gauss_multipoles = cfg["gauss_multipoles"] = cfg.get("gauss_multipoles", (0,))
 gauss_multipoles = tuple(gauss_multipoles)
 sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
@@ -258,8 +258,8 @@ for i, j in enumerate(joblist):
 
     # Load the maps
     try:
-        solved = enmap.read_map(map_job.tags["solved"])[0]
-        weights = enmap.read_map(map_job.tags["weights"])[0][0]
+        solved = enmap.read_map(os.path.join(data_dir, map_job.tags["solved"]))[0]
+        weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
     except FileNotFoundError:
         msg = "Missing map files"
         print(f"\t{msg}")
@@ -369,13 +369,13 @@ for i, j in enumerate(joblist):
     resid -= model
     fname = map_job.tags["solved"]
     enmap.write_map(
-        f"{'_'.join(fname.split('_')[:-1])}_resid.fits",
+        os.path.join(data_dir, f"{'_'.join(fname.split('_')[:-1])}_resid.fits"),
         resid,
         "fits",
         allow_modify=True,
     )
     enmap.write_map(
-        f"{'_'.join(fname.split('_')[:-1])}_resid_weights.fits",
+        os.path.join(data_dir, f"{'_'.join(fname.split('_')[:-1])}_resid_weights.fits"),
         weights,
         "fits",
         allow_modify=True,

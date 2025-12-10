@@ -60,35 +60,52 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     return sim_data + off
 
 
-def guass_multipole_beam(
-    x,
-    y,
-    multipoles,
-    dx,
-    dy,
-    off,
-    amp,
-    fwhm_xi,
-    fwhm_eta,
-    phi,
-    m_amps,
-    m_fwhms,
-):
-    theta = np.arctan2(y - dy, x - dx)
+def multipole(theta, mp, sin):
+    order = mp
+    if mp > 0:
+        order = 2 ** (mp - 1)
+    elif mp < 0:
+        raise ValueError("Negetive multipole orders not allowed!")
+    if sin:
+        return np.sin(theta * order)
+    return np.cos(theta * order)
 
-    xieta = (x, y)
-    beam_model = gaussian2d(xieta, amp, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
+def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
+    amps = np.zeros(len(multipoles) * 2)
+    beam = imap
+    mod = imap
+    if gs:
+        beam = imap.copy()
+        mod = np.zeros_like(beam)
     for m, n in enumerate(multipoles):
-        order = 2 ** (n - 1)
-        for i, op in enumerate((np.sin, np.cos)):
-            mp = op(theta * order)
-            j = 2 * m + i
-            base_beam = gaussian2d(
-                xieta, m_amps[i], dx, dy, m_fwhms[m], m_fwhms[m], phi, 0
-            )
-            beam_model += base_beam * mp
-    return beam_model + off
+        if gs:
+            mod[:] = 0.
+        for i in (0, 1):
+            mp = multipole(theta, n, i)
+            model = mp * base_beam
+            _sigma = sigma.copy()
+            _sigma[~np.isfinite(model)] = 0
+            model[~np.isfinite(model)] = 0
+            j = (2 * m) + i
+            norm = np.sum(_sigma*model*model)
+            if norm == 0:
+                continue
+            amp = np.sum(_sigma*beam*model)/norm
+            amps[j] = amp
+            if gs:
+                mod += amp*model
+        if gs:
+            beam -= mod
+    return amps
 
+def multipole_expansion(base_beam, amps, multipoles, theta):
+    beam = np.zeros_like(base_beam)
+    for m, n in enumerate(multipoles):
+        for i in (0, 1):
+            mp = multipole(theta, n, i)
+            j = (2 * m) + i
+            beam += amps[j] * mp * base_beam
+    return beam 
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     factor = 2 * np.sqrt(2 * np.log(2))

@@ -37,7 +37,7 @@ from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
-from .models import gaussian2d, guass_multipole_beam
+from .models import gaussian2d, multipole_decomp, multipole_expansion
 
 flog.setLevel(logging.ERROR)
 
@@ -453,15 +453,7 @@ def fit_tod_pointing(
     return focal_plane
 
 
-def fit_gauss_beam(
-    imap,
-    ivar,
-    pixmap,
-    cent,
-    multipoles=tuple(),
-    force_sym=False,
-    map_units="pW",
-):
+def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, map_units="pW"):
     """
     Fit 2d Gaussian to input map.
     This fit gaussian can include multipoles to capture extra structure (ie a cross).
@@ -476,9 +468,9 @@ def fit_gauss_beam(
         X and Y pixel indices for each pixel.
     cent : tuple
         The index of the map center
-    multipoles : tuple, default: tuple()
+    multipoles : tuple, default: (0,)
         The multipoles to include in the fit.
-        1 is the dipole, 2 the quadropole, 3 the octopole, etc.
+        0 is the monopole, 1 is the dipole, 2 the quadropole, 3 the octopole, etc.
     force_sym : bool, default: False
         If True don't allow ellipticity in the fit.
     map_units : str, default: pW
@@ -496,9 +488,11 @@ def fit_gauss_beam(
     pixmap = (pixmap[0] * res, pixmap[1] * res)  # convert to arcsec
     nx, ny = imap.shape[-2:]
 
+    # Make weights and zero things out
     sigma = np.sqrt(ivar)
-    n_mula = len(multipoles) * 2
-    n_mulf = len(multipoles)
+    sigma[~np.isfinite(sigma)] = 0
+    sigma[~np.isfinite(imap)] = 0
+    imap[~np.isfinite(imap)] = 0
 
     guess = [
         pixmap[0][cent[0], cent[1]],
@@ -518,56 +512,35 @@ def fit_gauss_beam(
     par_units = [u.arcsec, u.arcsec, map_units, map_units, u.arcsec, u.arcsec, u.radian]  # type: ignore
     if force_sym:
         guess = guess[:-2]
-        par_names = par_names[:-2]
-        par_units = par_units[:-2]
         bounds[0] = bounds[0][:-2]
         bounds[1] = bounds[1][:-2]
-    guess += [0] * n_mula
-    par_names += [
-        f"{par_names[3]}_{multipoles[int(i//2)]}_{i%2}" for i in range(n_mula)
-    ]
-    par_units += [par_units[3]] * n_mula
-    bounds[0] += [bounds[0][3]] * n_mula
-    bounds[1] += [bounds[1][3]] * n_mula
-    guess += [120] * n_mulf
-    par_names += [f"{par_names[4]}_{multipoles[i]}" for i in range(n_mulf)]
-    par_units += [par_units[4]] * n_mulf
-    bounds[0] += [bounds[0][4]] * n_mulf
-    bounds[1] += [5 * bounds[1][4]] * n_mulf
     bounds = [(lb, ub) for lb, ub in zip(*bounds)]
 
     pixmap = (pixmap[0].astype(float), pixmap[1].astype(float))
 
-    def _beam_mod(coeffs):
+    def _to_pars(coeffs):
         dx, dy, off, amp = coeffs[:4]
-        m_amps = coeffs[-1 * (n_mula + n_mulf) : (-1 * n_mulf)]
-        m_fwhms = coeffs[-1 * n_mulf :]
 
         if force_sym:
             fwhm_xi = fwhm_eta = coeffs[4]
             phi = 0
         else:
-            fwhm_xi, fwhm_eta, phi = coeffs[4 : -1 * (n_mula + n_mulf)]
-        beam = guass_multipole_beam(
-            pixmap[0],
-            pixmap[1],
-            multipoles,
-            dx,
-            dy,
-            off,
-            amp,
-            fwhm_xi,
-            fwhm_eta,
-            phi,
-            m_amps,
-            m_fwhms,
-        )
-        return beam
+            fwhm_xi, fwhm_eta, phi = coeffs[4:]
 
-    def _objective(
-        coeffs,
-    ):
-        beam = _beam_mod(coeffs)
+        return dx, dy, off, amp, fwhm_xi, fwhm_eta, phi
+
+    def _get_base_theta(dx, dy, off, fwhm_xi, fwhm_eta, phi):
+        x, y = pixmap[0], pixmap[1]
+        theta = np.arctan2(y - dy, x - dx)
+        xieta = (x, y)
+        base_beam = gaussian2d(xieta, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
+
+        return base_beam, theta
+
+    def _objective(coeffs,):
+        dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = _to_pars(coeffs)
+        beam = gaussian2d(pixmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
+
         diff = imap - beam
         chisq = np.nansum((diff * sigma) ** 2)
         return chisq
@@ -576,10 +549,21 @@ def fit_gauss_beam(
     if not res.success:
         return None, None
 
-    model = _beam_mod(res.x)
-    c = np.unravel_index(np.argmax(model, axis=None), model.shape)
+    # Compute model
+    dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = pars = _to_pars(res.x)
+    base_beam, theta = _get_base_theta(dx, dy, off, fwhm_xi, fwhm_eta, phi)
+    if len(multipoles) == 0:
+        amps = []
+        model = amp*(base_beam - off)
+    amps = multipole_decomp(base_beam - off, imap - off, sigma, multipoles, theta, True)
+    base_beam = gaussian2d(pixmap, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
+    model = multipole_expansion(base_beam, amps, multipoles, theta)
 
     # Convert to a dict
-    params = {n: v * u for n, u, v in zip(par_names, par_units, res.x)}
+    params = {n: v * u for n, u, v in zip(par_names, par_units, pars)}
+    for m, n in enumerate(multipoles):
+        for i in (0, 1):
+            j = 2 * m + i
+            params[f"amp_m{m}_{i}"] = amps[j] * map_units
 
     return params, model
