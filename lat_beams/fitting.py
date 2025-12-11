@@ -453,7 +453,7 @@ def fit_tod_pointing(
     return focal_plane
 
 
-def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, map_units="pW"):
+def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, map_units="pW", fwhm_start=60.):
     """
     Fit 2d Gaussian to input map.
     This fit gaussian can include multipoles to capture extra structure (ie a cross).
@@ -499,13 +499,13 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, m
         pixmap[1][cent[0], cent[1]],
         0,
         imap[cent[0], cent[1]],
-        60,
-        60,
+        fwhm_start,
+        fwhm_start,
         0,
     ]
     bounds = [
-        [0, 0, -5 * np.max(np.abs(imap)), 0, 20, 20, 0],
-        [nx * res, ny * res, 5 * np.max(imap), 5 * np.max(imap), 300, 300, 2 * np.pi],
+        [0, 0, -5 * np.max(np.abs(imap)), 0, fwhm_start/3, fwhm_start/3, 0],
+        [nx * res, ny * res, 5 * np.max(imap), 5 * np.max(imap), fwhm_start*3, fwhm_start*3, 2 * np.pi],
     ]
     map_units = u.Unit(map_units)
     par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
@@ -551,11 +551,11 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, m
 
     # Compute model
     dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = pars = _to_pars(res.x)
-    base_beam, theta = _get_base_theta(dx, dy, off, fwhm_xi, fwhm_eta, phi)
+    base_beam, theta = _get_base_theta(dx, dy, 0, fwhm_xi, fwhm_eta, phi)
     if len(multipoles) == 0:
         amps = []
-        model = amp*(base_beam - off)
-    amps = multipole_decomp(base_beam - off, imap - off, sigma, multipoles, theta, True)
+        model = amp*base_beam
+    amps = multipole_decomp(base_beam, imap - off, sigma, multipoles, theta, True)
     base_beam = gaussian2d(pixmap, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
     model = multipole_expansion(base_beam, amps, multipoles, theta)
 

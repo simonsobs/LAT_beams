@@ -1,7 +1,10 @@
-source_list:
+map_source_list:
   - "mars"
   - "saturn"
   - "taua"
+fit_source_list:
+  - "mars"
+  - "saturn"
 pointing_type: "pointing_model" 
 preprocess: "preproc/preproc.yaml"
 # pointing_type: "per_obs" 

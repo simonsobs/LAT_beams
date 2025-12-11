@@ -42,6 +42,7 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     fwhm_xi, fwhm_eta, phi: float, float, float
         fwhm along the xi, eta axis (rotated)
         and the rotation angle (in radians)
+    off: offset to add to beam
 
     Ouput:
     ------

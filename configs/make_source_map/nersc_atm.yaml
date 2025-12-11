@@ -1,7 +1,10 @@
-source_list:
+map_source_list:
   - "mars"
   - "saturn"
   - "taua"
+fit_source_list:
+  - "mars"
+  - "saturn"
 pointing_type: "pointing_model" 
 preprocess: "preproc/preproc_atm.yaml"
 min_samps: 500

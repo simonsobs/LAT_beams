@@ -62,6 +62,7 @@ with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
+source_list = cfg["source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
 extent = cfg["extent"] = cfg.get("extent", 900)
 snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
 min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
@@ -164,7 +165,7 @@ for mjob in it:
         }
         job = jdb.make_job(jclass="fit_map", tags=tags, check_existing=False)
         jobs_to_make += [job]
-    if job.lock:
+    if job.lock or job.tags["source"] not in source_list:
         continue
     if (
         args.overwrite
@@ -306,7 +307,7 @@ for i, j in enumerate(joblist):
     # Fit
     cent = estimate_cent(solved, smooth_kern / pixsize, buf)
     fit_params, model = fit_gauss_beam(
-        solved, weights, pixmap, cent, gauss_multipoles, sym_gauss, "pW"
+        solved, weights, pixmap, cent, gauss_multipoles, sym_gauss, "pW", 60*fwhm[band]
     )
     if fit_params is None or model is None:
         msg = "Fit failed"
@@ -328,10 +329,11 @@ for i, j in enumerate(joblist):
     # Get FWHM from data
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
     rprof = radial_profile(solved - fit_params["off"].value, c[::-1])
-    mprof = radial_profile(model - fit_params["off"].value, c[::-1])
+    mprof = radial_profile(model, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
-    data_fwhm = get_fwhm_radial_bins(r, rprof, interpolate=True)
     model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
+    rmsk = r < 3*model_fwhm/2.355
+    data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True)
 
     # FWHM check
     if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:

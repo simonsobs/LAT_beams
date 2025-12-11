@@ -19,6 +19,7 @@ from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
+from pixell import enmap
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
@@ -40,6 +41,49 @@ comps = "TQU"
 
 cp.logger.setLevel(logging.WARNING)
 
+def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh):
+    pixsize = solved.wcs.wcs.cdelt[1] * (60 * 60)
+    ufm_plot_dir = os.path.join(obs_plot_dir, ufm)
+    os.makedirs(ufm_plot_dir, exist_ok=True)
+    [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
+        solved.corners(corner=False)
+    )
+    plt_extent = [ra_min, ra_max, dec_min, dec_max]
+    plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
+    map_norm = 1./solved[0][cent]
+    for i, comp in enumerate(comps):
+        plot_map(
+            solved[i],
+            pixsize,
+            extent,
+            plt_extent,
+            cent,
+            plt_cent,
+            zoom,
+            ufm_plot_dir,
+            obs_id,
+            ufm,
+            band,
+            comp,
+            False,
+            log_thresh,
+        )
+        plot_map(
+            map_norm * solved[i],
+            pixsize,
+            extent,
+            plt_extent,
+            cent,
+            plt_cent,
+            zoom,
+            ufm_plot_dir,
+            obs_id,
+            ufm,
+            band,
+            comp,
+            True,
+            log_thresh,
+        )
 
 parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
@@ -55,14 +99,21 @@ parser.add_argument(
 )
 parser.add_argument(
     "--retry_failed", "-r", action="store_true", help="Retry failed maps"
+    )
+parser.add_argument(
+    "--replot", "-p", action="store_true", help="Don't do any mamaking, just replot existing maps"
 )
 args = parser.parse_args()
+
+if args.replot:
+    print_once("Running in replot mode!")
+
 
 with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings
-source_list = cfg["source_list"] = cfg.get("source_list", ["mars", "saturn"])
+source_list = cfg["source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
 min_dets = cfg["min_dets"] = cfg.get("min_dets", 50)
 min_hits = cfg["min_hits"] = cfg.get("min_hits", 1)
 min_det_secs = cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
@@ -217,10 +268,14 @@ for obs in it:
         if job.lock:
             continue
         if (
-            args.overwrite
+            (args.overwrite
             or job.jstate.name == "open"
-            or (job.jstate.name == "failed" and args.retry_failed)
+            or (job.jstate.name == "failed" and args.retry_failed))
+            and not args.replot
+
         ):
+            joblist += [job]
+        elif args.replot and job.jstate.name == "done":
             joblist += [job]
 comm.barrier()
 # Make the missing jobs
@@ -273,11 +328,32 @@ for i, j in enumerate(joblist):
         comm.barrier()
     if job is None:
         continue
+
     job.mark_visited()
     obs_id = job.tags["obs_id"]
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
+    obs = ctx.obsdb.get(obs_id, tags=True)
+
+    if args.replot:
+        print(f"(rank {myrank}) Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+        try:
+            solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
+        except FileNotFoundError:
+            msg = "Missing map files in replot mode"
+            print(f"\t{msg}")
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            continue
+
+        obs_plot_dir = os.path.join(
+            plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
+        )
+        cent = estimate_cent(solved[0], smooth_kern / pixsize, buf)
+        make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh)
+        continue
+
     print(f"(rank {myrank}) Mapping {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
 
     # Save metadata and config info
@@ -287,7 +363,6 @@ for i, j in enumerate(joblist):
     set_tag(job, "comps", comps)
 
     # Get metadata
-    obs = ctx.obsdb.get(obs_id, tags=True)
     meta = ctx.get_meta(obs_id)
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
@@ -318,12 +393,14 @@ for i, j in enumerate(joblist):
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
+
     obs_plot_dir = os.path.join(
         plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
     )
     obs_data_dir = os.path.join(
         data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
     )
+
     os.makedirs(obs_data_dir, exist_ok=True)
 
     src_to_map = src_name.split("_")[0]
@@ -492,10 +569,6 @@ for i, j in enumerate(joblist):
         n_modes=n_modes,
         info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
     )
-    [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
-        out["solved"].corners(corner=False)
-    )
-    plt_extent = [ra_min, ra_max, dec_min, dec_max]
 
     # Add paths to job
     set_tag(
@@ -546,43 +619,7 @@ for i, j in enumerate(joblist):
         continue
 
     # Plot
-    ufm_plot_dir = os.path.join(obs_plot_dir, ufm)
-    os.makedirs(ufm_plot_dir, exist_ok=True)
-    plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-    map_norm = 1./peak
-    for i, comp in enumerate(comps):
-        plot_map(
-            out["solved"][i],
-            pixsize,
-            extent,
-            plt_extent,
-            cent,
-            plt_cent,
-            zoom,
-            ufm_plot_dir,
-            obs_id,
-            ufm,
-            band,
-            comp,
-            False,
-            log_thresh,
-        )
-        plot_map(
-            map_norm * out["solved"][i],
-            pixsize,
-            extent,
-            plt_extent,
-            cent,
-            plt_cent,
-            zoom,
-            ufm_plot_dir,
-            obs_id,
-            ufm,
-            band,
-            comp,
-            True,
-            log_thresh,
-        )
+    make_plots(out["solved"], cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh)
 
     set_tag(job, "message", "Success")
     job.jstate = "done"
