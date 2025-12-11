@@ -128,7 +128,13 @@ for split in split_by:
                 continue
             fits = sfits[tmsk]
             data_fwhm = bu.get_fit_vec(fits, "data_fwhm")
-            print(f"\t\t{spl}: {np.mean(data_fwhm)} +- {np.std(data_fwhm)}")
+            model_fwhm_xi = bu.get_fit_vec(fits, "fwhm_xi")
+            model_fwhm_eta = bu.get_fit_vec(fits, "fwhm_eta")
+            solid_angle = bu.get_fit_vec(fits, "data_solid_angle_corr")
+            print(f"\t\t{spl} Data FWHM: {np.mean(data_fwhm)} +- {np.std(data_fwhm)}")
+            print(f"\t\t{spl} Model FWHM Xi: {np.mean(model_fwhm_xi)} +- {np.std(model_fwhm_xi)}")
+            print(f"\t\t{spl} Model FWHM Eta: {np.mean(model_fwhm_eta)} +- {np.std(model_fwhm_eta)}")
+            print(f"\t\t{spl} Solid Angle: {np.mean(solid_angle)} +- {np.std(solid_angle)}")
 
             # Compute and save profile
             profile = avg_prof(fits["aman"])
