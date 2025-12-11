@@ -549,10 +549,10 @@ for i, j in enumerate(joblist):
     ufm_plot_dir = os.path.join(obs_plot_dir, ufm)
     os.makedirs(ufm_plot_dir, exist_ok=True)
     plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
+    map_norm = 1./peak
     for i, comp in enumerate(comps):
-        map_norm = peak / out["solved"][i][cent]
         plot_map(
-            map_norm * out["solved"][i],
+            out["solved"][i],
             pixsize,
             extent,
             plt_extent,

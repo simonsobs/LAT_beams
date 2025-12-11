@@ -406,10 +406,14 @@ for i, j in enumerate(joblist):
     )
     plt_extent = (ra_min, ra_max, dec_min, dec_max)
     plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
+    norm = 1./sig
     for dat, label in [(model, "model"), (resid, "resid")]:
         for log in [False, True]:
+            _norm = 1
+            if log:
+                _norm = norm
             plot_map(
-                dat,
+                norm * dat,
                 pixsize,
                 extent,
                 plt_extent,
