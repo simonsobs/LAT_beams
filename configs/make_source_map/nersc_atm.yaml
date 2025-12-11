@@ -1,0 +1,26 @@
+source_list:
+  - "mars"
+  - "saturn"
+  - "taua"
+pointing_type: "pointing_model" 
+preprocess: "preproc/preproc_atm.yaml"
+min_samps: 500
+min_dets: 50
+min_hits: 1
+min_snr: 1
+context: 'contexts/nersc_pointing_model_atm.yaml'
+start_time: 1756699200
+stop_time: 20000000000
+n_med: 3
+mask_size: .1
+search_mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - .5
+epochs:
+    - [1756699200, 20000000000]
+append: "atm_relcal"
+gauss_multipoles: [0, 1, 2, 3]
+sym_gauss: False 
