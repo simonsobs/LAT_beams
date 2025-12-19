@@ -9,8 +9,10 @@ import seaborn as sns
 import yaml
 from healpy.sphtfunc import beam2bl
 from sotodlib.core import AxisManager, Context
+from astropy import constants as const
 
 from lat_beams import beam_utils as bu
+from lat_beams import fitting as bf
 
 
 def avg_prof(aman_list, prof="rprof", r="r"):
@@ -72,7 +74,13 @@ pointing_type = cfg.get("pointing_type", "pointing_model")
 nominal_fwhm = cfg.get("nominal_fwhm", nominal_fwhm)
 split_by = cfg.get("split_by", ["band", "tube_slot+band"])
 append = cfg["append"] = cfg.get("append", "")
-lmax = cfg["lmax"] = cfg.get("lmax", 10000)
+lmax = cfg["lmax"] = cfg.get("lmax", 20000)
+corr_primary = cfg["corr_primary"] = cfg.get("corr_primary", 280)
+corr_primary *= u.mm
+eps_primary = cfg["eps_primary"] = cfg.get("eps_primary", 17)
+eps_primary *= u.um
+mask_size = cfg.get("mask_size", 0.1)
+mask_size *= u.degree
 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
@@ -120,12 +128,11 @@ all_fits = all_fits[msk]
 for split in split_by:
     print(f"Splitting by {split}")
     split_vec = get_split_vec(all_fits, split, ctx)
-    spl_name = []
-    profiles = []
-    windows = []
-    mprofiles = []
-    mwindows = []
     for spl in np.unique(split_vec):
+        profiles = []
+        windows = []
+        mprofiles = []
+        mwindows = []
         data_dir_spl = os.path.join(data_dir, "profiles", split, spl)
         plot_dir_spl = os.path.join(plot_dir, split, spl)
         os.makedirs(data_dir_spl, exist_ok=True)
@@ -158,13 +165,24 @@ for split in split_by:
             print(f"\t\t{spl} Model FWHM Eta: {np.mean(model_fwhm_eta)} +- {np.std(model_fwhm_eta)}")
             print(f"\t\t{spl} Solid Angle: {np.mean(solid_angle)} +- {np.std(solid_angle)}")
 
+            band = (float(fits["band"][0][1:])*u.GHz)
+            fscale_fac =  90.0 * u.GHz / band
+            mask_rad = (mask_size * fscale_fac).to(u.arcsec).value
+
             # Compute and save profile
             profile = avg_prof(fits["aman"])
+            profile = profile[profile[:, 0] < mask_rad]
             np.savetxt(
                 os.path.join(data_dir_spl, f"profile_{spl}_{epoch[0]}_{epoch[1]}.txt"),
                 profile,
             )
-            mprofile = avg_prof(fits["aman"], prof="mprof")
+
+            # Fit model
+            mprofile, mpars = bf.fit_dr4_profile(profile[:, 0]*u.arcsec, profile[:, 1]*u.dimensionless_unscaled, np.median(data_fwhm), 6*u.m, const.c/band, np.median(solid_angle), corr_primary, eps_primary)
+            if mprofile is None or mpars is None:
+                raise ValueError("Fit failed!")
+            print(mpars)
+            # mprofile = avg_prof(fits["aman"], prof="mprof")
             np.savetxt(
                 os.path.join(data_dir_spl, f"model_profile_{spl}_{epoch[0]}_{epoch[1]}.txt"),
                 mprofile,
@@ -186,9 +204,7 @@ for split in split_by:
             )
 
             # Save for plots
-            profile = profile[profile[:, 0] < 300]
             profiles += [profile]
-            mprofile = mprofile[mprofile[:, 0] < 300]
             mprofiles += [mprofile]
             windows += [window]
             mwindows += [mwindow]
@@ -200,6 +216,7 @@ for split in split_by:
                 label=str(epoch),
                 marker="x",
             )
+        plt.ylim((1e-5, 1))
         plt.legend()
         plt.title(f"{spl} Profile")
         plt.xlabel('r (")')
@@ -220,6 +237,7 @@ for split in split_by:
                 label=str(epoch),
                 marker="x",
             )
+        plt.ylim((1e-5, 1))
         plt.legend()
         plt.title(f"{spl} Model Profile")
         plt.xlabel('r (")')
@@ -231,6 +249,27 @@ for split in split_by:
         plt.xlabel('r (")')
         plt.ylabel("Log Profile")
         plt.savefig(os.path.join(plot_dir_spl, f"model_profile_{spl}_log.png"))
+        plt.close()
+
+        for epoch, profile, mprofile in zip(epochs, profiles, mprofiles):
+            plt.plot(
+                profile[:, 0],
+                np.abs(profile[:, 1] - mprofile[:, 1])/mprofile[:, 1],
+                label=str(epoch),
+                marker="x",
+            )
+        plt.ylim((1e-5, 1))
+        plt.legend()
+        plt.title(f"{spl} Fractional Residual Profile")
+        plt.xlabel('r (")')
+        plt.ylabel("Profile")
+        plt.savefig(os.path.join(plot_dir_spl, f"resid_profile_{spl}.png"))
+
+        plt.yscale("log")
+        plt.title(f"{spl} Log Fractional Residual Profile")
+        plt.xlabel('r (")')
+        plt.ylabel("Log Profile")
+        plt.savefig(os.path.join(plot_dir_spl, f"resid_profile_{spl}_log.png"))
         plt.close()
 
         for epoch, window in zip(epochs, windows):
