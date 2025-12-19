@@ -11,6 +11,7 @@ import mpi4py.rc
 import numpy as np
 import sqlalchemy as sqy
 import yaml
+from pixell import enmap
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
@@ -18,11 +19,10 @@ from sotodlib.core import Context, metadata
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
-from pixell import enmap
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import print_once, set_tag, load_aman
+from lat_beams.utils import load_aman, print_once, set_tag
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -40,6 +40,7 @@ comps = "TQU"
 
 cp.logger.setLevel(logging.WARNING)
 
+
 def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh):
     pixsize = solved.wcs.wcs.cdelt[1] * (60 * 60)
     ufm_plot_dir = os.path.join(obs_plot_dir, ufm)
@@ -49,7 +50,7 @@ def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_
     )
     plt_extent = [ra_min, ra_max, dec_min, dec_max]
     plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-    map_norm = 1./solved[0][cent]
+    map_norm = 1.0 / solved[0][cent]
     for i, comp in enumerate(comps):
         plot_map(
             solved[i],
@@ -84,6 +85,101 @@ def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_
             log_thresh,
         )
 
+
+def make_cuts(aman, source_flags, n_modes, job):
+    sig_filt = cp.filter_for_sources(
+        tod=aman,
+        signal=aman.signal.copy(),
+        source_flags=source_flags,
+        n_modes=n_modes,
+    )
+    smsk = source_flags.mask()
+    sig_filt_src = sig_filt.copy()
+    sig_filt_src[~smsk] = np.nan
+    sig_filt[smsk] = np.nan
+    all_src = np.all(smsk, axis=-1)
+    no_src = ~np.any(smsk, axis=-1)
+    sdets = ~(all_src + no_src)
+    peak_snr = np.zeros(len(sig_filt))
+    with np.errstate(divide="ignore"):
+        peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
+            np.diff(sig_filt[sdets], axis=-1)
+        )
+    to_cut = peak_snr < min_snr  # + ~np.isfinite(peak_snr)
+    to_cut[~sdets] = False
+    cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
+    print(f"\tCutting {np.sum(to_cut)} detectors from map")
+    if np.sum(~to_cut) < min_dets:
+        msg = f"Not enough detectors after source flag cuts!"
+        print(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        return None
+    return cuts
+
+
+def make_map(
+    aman,
+    src_to_map,
+    res,
+    cuts,
+    source_flags,
+    comps,
+    n_modes,
+    filename,
+    min_det_secs,
+    job,
+    map_str,
+):
+    # Get time on source
+    det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
+        np.diff(aman.timestamps)
+    )
+    print(f"\t{det_secs} detector seconds on source in {map_str} mask")
+    if det_secs < min_det_secs:
+        msg = f"\tNot enough time on source in {map_str} mask."
+        print(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        return None, None
+
+    # Initial map
+    out = cp.make_map(
+        aman,
+        center_on=src_to_map,
+        res=res,
+        cuts=cuts,
+        source_flags=source_flags,
+        comps=comps,
+        filename=filename,
+        n_modes=n_modes,
+    )
+
+    # Smooth and find the center
+    cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
+
+    # Estimate SNR
+    peak = out["solved"][0][cent]
+    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+    print(f"\t{map_str.title()} map SNR approximately {snr}")
+    if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
+        msg = f"{map_str.title()} map SNR too low."
+        print(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        if del_map and filename is not None:
+            print("\tDeleting map files")
+            glob_path = os.path.splitext(filename)[0] + "*.*"
+            flist = glob.glob(glob_path)
+            for fname in flist:
+                if os.path.isfile(fname):
+                    os.remove(fname)
+            for name in ["binned", "detweights", "solved", "weights"]:
+                set_tag(job, binned, "")
+        return None, None
+    return out, cent
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
 parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
@@ -111,9 +207,12 @@ parser.add_argument(
 )
 parser.add_argument(
     "--retry_failed", "-r", action="store_true", help="Retry failed maps"
-    )
+)
 parser.add_argument(
-    "--replot", "-p", action="store_true", help="Don't do any mamaking, just replot existing maps"
+    "--replot",
+    "-p",
+    action="store_true",
+    help="Don't do any mamaking, just replot existing maps",
 )
 args = parser.parse_args()
 
@@ -280,15 +379,18 @@ for obs in it:
             jobs_to_make += [job]
         if job.lock:
             continue
-        if job.visit_time is not None and args.job_memory is not None and now - job.visit_time < 60*60*args.job_memory and now - job.visit_time > 60*args.job_memory_buffer:
+        if (
+            job.visit_time is not None
+            and args.job_memory is not None
+            and now - job.visit_time < 60 * 60 * args.job_memory
+            and now - job.visit_time > 60 * args.job_memory_buffer
+        ):
             continue
         if (
-            (args.overwrite
+            args.overwrite
             or job.jstate.name == "open"
-            or (job.jstate.name == "failed" and args.retry_failed))
-            and not args.replot
-
-        ):
+            or (job.jstate.name == "failed" and args.retry_failed)
+        ) and not args.replot:
             joblist += [job]
         elif args.replot and job.jstate.name == "done":
             joblist += [job]
@@ -323,7 +425,7 @@ res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
 pixsize = 3600 * np.rad2deg(res)
 mask_size = cfg.get("mask_size", 0.1)
 search_mask = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
-mask_fac = search_mask["xyr"][-1]/mask_size
+mask_fac = search_mask["xyr"][-1] / mask_size
 
 # Mapping loop
 source_list = set(source_list)
@@ -352,7 +454,9 @@ for i, j in enumerate(joblist):
     obs = ctx.obsdb.get(obs_id, tags=True)
 
     if args.replot:
-        print(f"(rank {myrank}) Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+        print(
+            f"(rank {myrank}) Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})"
+        )
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
         except FileNotFoundError:
@@ -366,7 +470,9 @@ for i, j in enumerate(joblist):
             plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
         )
         cent = estimate_cent(solved[0], smooth_kern / pixsize, buf)
-        make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh)
+        make_plots(
+            solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh
+        )
         continue
 
     print(f"(rank {myrank}) Mapping {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
@@ -385,7 +491,7 @@ for i, j in enumerate(joblist):
         set_tag(job, "message", msg)
         job.jstate = "failed"
         continue
-    fscale_fac =  90.0 / float(band[1:])
+    fscale_fac = 90.0 / float(band[1:])
 
     src_names = list(source_list & set(obs["tags"]))
     if len(src_names) > 1:
@@ -424,7 +530,13 @@ for i, j in enumerate(joblist):
         src_to_map = ("tauA", 83.6272579, 22.02159891)
 
     # Load and process the TOD
-    aman = load_aman(obs["obs_id"], {"wafer_slot": ws, "wafer.bandpass": band}, job, min_dets, fp_flag=True)
+    aman = load_aman(
+        obs["obs_id"],
+        {"wafer_slot": ws, "wafer.bandpass": band},
+        job,
+        min_dets,
+        fp_flag=True,
+    )
     if aman is None:
         continue
 
@@ -440,71 +552,25 @@ for i, j in enumerate(joblist):
     )
 
     # Do an aggressive filter and flag dets without the source
-    sig_filt = cp.filter_for_sources(
-        tod=aman,
-        signal=aman.signal.copy(),
-        source_flags=source_flags,
-        n_modes=2 * n_modes,
-    )
-    smsk = source_flags.mask()
-    sig_filt_src = sig_filt.copy()
-    sig_filt_src[~smsk] = np.nan
-    sig_filt[smsk] = np.nan
-    all_src = np.all(smsk, axis=-1)
-    no_src = ~np.any(smsk, axis=-1)
-    sdets = ~(all_src + no_src)
-    peak_snr = np.zeros(len(sig_filt))
-    with np.errstate(divide="ignore"):
-        peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
-            np.diff(sig_filt[sdets], axis=-1)
-        )
-    to_cut = peak_snr < min_snr  # + ~np.isfinite(peak_snr)
-    to_cut[~sdets] = False
-    cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
-    print(f"\tCutting {np.sum(to_cut)} detectors from map")
-    if np.sum(~to_cut) < min_dets:
-        msg = f"Not enough detectors after source flag cuts!"
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        continue
-
-    # Get time on source
-    det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
-        np.diff(aman.timestamps)
-    )
-    print(f"\t{det_secs} detector seconds on source in intial mask")
-    if det_secs < min_det_secs * mask_fac * fscale_fac**2:
-        msg = f"\tNot enough time on source in initial mask."
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
+    cuts = ake_cuts(aman, source_flags, 2 * n_modes, job)
+    if cuts is None:
         continue
 
     # Initial map
-    out = cp.make_map(
+    out, cent = make_map(
         aman,
-        center_on=src_to_map,
-        res=res,
-        cuts=cuts,
-        source_flags=source_flags,
-        comps="T",
-        filename=None,
-        n_modes=n_modes,
+        src_to_map,
+        res,
+        cuts,
+        source_flags,
+        "T",
+        n_modes,
+        None,
+        min_det_secs * mask_fac * (fscale_fac**2),
+        job,
+        "initial",
     )
-
-    # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
-
-    # Estimate SNR
-    peak = out["solved"][0][cent]
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
-    print(f"\tInitial map SNR approximately {snr}")
-    if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
-        msg = f"\tInitial map SNR too low."
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
+    if out is None or cent is None:
         continue
 
     # Make a new mask with this center and the correct map size
@@ -529,81 +595,43 @@ for i, j in enumerate(joblist):
         wrap=None,
     )
 
-    # Get time on source
-    det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
-        np.diff(aman.timestamps)
-    )
-    print(f"\t{det_secs} detector seconds on source")
-    if det_secs < min_det_secs * fscale_fac:
-        msg = f"\tNot enough time on source."
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        continue
-
-    # Its map time for real now
-    out = cp.make_map(
+    # Make final map
+    out, cent = make_map(
         aman,
-        center_on=src_to_map,
-        res=res,
-        cuts=cuts,
-        source_flags=source_flags,
-        comps=comps,
-        filename=os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
-        n_modes=n_modes,
-        info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
+        src_to_map,
+        res,
+        cuts,
+        source_flags,
+        comps,
+        n_modes,
+        os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
+        min_det_secs * (fscale_fac**2),
+        job,
+        "final",
     )
+    if out is None or cent is None:
+        continue
 
     # Add paths to job
-    set_tag(
-        job,
-        "binned",
-        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_binned.fits"), data_dir),
-    )
-    set_tag(
-        job,
-        "detweights",
-        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_detweights.h5"), data_dir),
-    )
-    set_tag(
-        job,
-        "solved",
-        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_solved.fits"), data_dir),
-    )
-    set_tag(
-        job,
-        "weights",
-        os.path.relpath(os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_weights.fits"), data_dir),
-    )
-
-    # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
-
-    # Estimate SNR
-    peak = out["solved"][0][cent]
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
-    print(f"\tMap SNR approximately {snr}")
-    if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
-        msg = f"Map SNR too low."
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        if not del_map:
-            continue
-        print("\tDeleting map files")
-        glob_path = os.path.join(obs_data_dir, f"{obs['obs_id']}_{ufm}_{band}*.*")
-        flist = glob.glob(glob_path)
-        for fname in flist:
-            if os.path.isfile(fname):
-                os.remove(fname)
-        set_tag(job, "binned", "")
-        set_tag(job, "detweights", "")
-        set_tag(job, "solved", "")
-        set_tag(job, "weights", "")
-        continue
+    for name, ext in [
+        ("binned", "fits"),
+        ("detweights", "h5"),
+        ("solved", "fits"),
+        ("weights", "fits"),
+    ]:
+        set_tag(
+            job,
+            name,
+            os.path.relpath(
+                os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_{name}.{ext}"),
+                data_dir,
+            ),
+        )
 
     # Plot
-    make_plots(out["solved"], cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh)
+    make_plots(
+        out["solved"], cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh
+    )
 
     set_tag(job, "message", "Success")
     job.jstate = "done"
