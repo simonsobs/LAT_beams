@@ -5,6 +5,7 @@ import numpy as np
 from astropy import units as u
 from pixell import enmap, utils
 from sotodlib.core import AxisManager
+from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 
 from .beam_utils import crop_maps
 
@@ -115,3 +116,41 @@ def set_tag(job, key, new_val):
             return
     else:
         raise ValueError(f'No tag called "{key}"')
+
+def load_aman(obs_id, dets, job, min_dets, fp_flag=False):
+    try:
+        err, _, _, aman = preproc_or_load_group(
+            obs_id,
+            preprocess_cfg,
+            dets=dets,
+            save_archive=False,
+            overwrite=True,
+        )
+    except:
+        msg = "Failed to load or preprocess!"
+        print(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        return None
+    if aman is None:
+        msg = f"Preprocess failed with error {err}"
+        print(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        return None
+
+    if fp_flag:
+        aman.restrict(
+            "dets",
+            np.isfinite(aman.focal_plane.xi)
+            * np.isfinite(aman.focal_plane.eta)
+            * np.isfinite(aman.focal_plane.gamma),
+        )
+
+    if aman.dets.count < min_dets:
+        msg = f"Only {aman.dets.count} dets!"
+        print(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        return None
+    return aman

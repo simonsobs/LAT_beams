@@ -491,31 +491,8 @@ def main():
                     h5_file.create_group(obs["obs_id"])
 
                 # Load and process the TOD
-                try:
-                    err, _, _, aman = preproc_or_load_group(
-                        obs["obs_id"],
-                        preprocess_cfg,
-                        dets={"wafer_slot": ws},
-                        save_archive=False,
-                        overwrite=True,
-                    )
-                except:
-                    msg = "Failed to load or preprocess!"
-                    print(f"\t{msg}")
-                    set_tag(job, "message", msg)
-                    job.jstate = "failed"
-                    continue
+                aman_path = load_aman(obs["obs_id"], {"wafer_slot": ws}, job, min_dets, fp_flag=False)
                 if aman is None:
-                    msg = f"Preprocess failed with error {err}"
-                    print(f"\t{msg}")
-                    set_tag(job, "message", msg)
-                    job.jstate = "failed"
-                    continue
-                if aman.samps.count < min_samps * ds:
-                    msg = f"Not enough samples! Skipping..."
-                    print(f"\t{msg}")
-                    set_tag(job, "message", msg)
-                    job.jstate = "failed"
                     continue
 
                 # Downsample

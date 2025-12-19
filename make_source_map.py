@@ -15,7 +15,6 @@ from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
-from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
@@ -23,7 +22,7 @@ from pixell import enmap
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import print_once, set_tag
+from lat_beams.utils import print_once, set_tag, load_aman
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -425,39 +424,8 @@ for i, j in enumerate(joblist):
         src_to_map = ("tauA", 83.6272579, 22.02159891)
 
     # Load and process the TOD
-    try:
-        err, _, _, aman = preproc_or_load_group(
-            obs["obs_id"],
-            preprocess_cfg,
-            dets={"wafer_slot": ws, "wafer.bandpass": band},
-            save_archive=False,
-            overwrite=True,
-        )
-    except:
-        msg = "Failed to load or preprocess!"
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        continue
+    aman = load_aman(obs["obs_id"], {"wafer_slot": ws, "wafer.bandpass": band}, job, min_dets, fp_flag=True)
     if aman is None:
-        msg = f"Preprocess failed with error {err}"
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        continue
-
-    aman.restrict(
-        "dets",
-        np.isfinite(aman.focal_plane.xi)
-        * np.isfinite(aman.focal_plane.eta)
-        * np.isfinite(aman.focal_plane.gamma),
-    )
-
-    if aman.dets.count < min_dets:
-        msg = f"Only {aman.dets.count} dets!"
-        print(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
         continue
 
     # Get initial source_flags
