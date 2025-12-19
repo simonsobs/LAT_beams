@@ -98,6 +98,19 @@ parser.add_argument(
     help="Amount of time to lookback for query, overides start time from config",
 )
 parser.add_argument(
+    "--job_memory",
+    "-m",
+    type=float,
+    help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
+)
+parser.add_argument(
+    "--job_memory_buffer",
+    "-mb",
+    default=0,
+    type=float,
+    help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
+)
+parser.add_argument(
     "--retry_failed", "-r", action="store_true", help="Retry failed maps"
     )
 parser.add_argument(
@@ -224,6 +237,7 @@ jobdict = {
     f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
     for job in jdb.get_jobs(jclass="beam_map")
 }
+now = time.time()
 for obs in it:
     sys.stdout.flush()
     try:
@@ -266,6 +280,8 @@ for obs in it:
             job = jdb.make_job(jclass="beam_map", tags=tags, check_existing=False)
             jobs_to_make += [job]
         if job.lock:
+            continue
+        if job.visit_time is not None and args.job_memory is not None and now - job.visit_time < 60*60*args.job_memory and now - job.visit_time > 60*args.job_memory_buffer:
             continue
         if (
             (args.overwrite
@@ -490,7 +506,7 @@ for i, j in enumerate(joblist):
         np.diff(aman.timestamps)
     )
     print(f"\t{det_secs} detector seconds on source in intial mask")
-    if det_secs < min_det_secs * mask_fac * fscale_fac:
+    if det_secs < min_det_secs * mask_fac * fscale_fac**2:
         msg = f"\tNot enough time on source in initial mask."
         print(f"\t{msg}")
         set_tag(job, "message", msg)
