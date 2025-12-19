@@ -1,5 +1,4 @@
 import argparse
-import datetime as dt
 import os
 
 import astropy.units as u

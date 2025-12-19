@@ -7,7 +7,6 @@ Maybe should add priors
 import logging
 import sys
 import warnings
-from copy import deepcopy
 
 import numpy as np
 import so3g
@@ -20,7 +19,7 @@ from astropy.convolution import (
     convolve_fft,
 )
 from numpy.typing import NDArray
-from scipy.optimize import minimize, direct
+from scipy.optimize import direct, minimize
 from scipy.signal import detrend
 from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
@@ -37,7 +36,7 @@ from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
-from .models import gaussian2d, multipole_decomp, multipole_expansion, dr4_beam
+from .models import dr4_beam, gaussian2d, multipole_decomp, multipole_expansion
 
 flog.setLevel(logging.ERROR)
 
@@ -453,7 +452,16 @@ def fit_tod_pointing(
     return focal_plane
 
 
-def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, map_units="pW", fwhm_start=60.):
+def fit_gauss_beam(
+    imap,
+    ivar,
+    pixmap,
+    cent,
+    multipoles=(0,),
+    force_sym=False,
+    map_units="pW",
+    fwhm_start=60.0,
+):
     """
     Fit 2d Gaussian to input map.
     This fit gaussian can include multipoles to capture extra structure (ie a cross).
@@ -504,8 +512,16 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, m
         0,
     ]
     bounds = [
-        [0, 0, -5 * np.max(np.abs(imap)), 0, fwhm_start/3, fwhm_start/3, 0],
-        [nx * res, ny * res, 5 * np.max(imap), 5 * np.max(imap), fwhm_start*3, fwhm_start*3, 2 * np.pi],
+        [0, 0, -5 * np.max(np.abs(imap)), 0, fwhm_start / 3, fwhm_start / 3, 0],
+        [
+            nx * res,
+            ny * res,
+            5 * np.max(imap),
+            5 * np.max(imap),
+            fwhm_start * 3,
+            fwhm_start * 3,
+            2 * np.pi,
+        ],
     ]
     map_units = u.Unit(map_units)
     par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
@@ -537,7 +553,9 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, m
 
         return base_beam, theta
 
-    def _objective(coeffs,):
+    def _objective(
+        coeffs,
+    ):
         dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = _to_pars(coeffs)
         beam = gaussian2d(pixmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
 
@@ -554,7 +572,7 @@ def fit_gauss_beam(imap, ivar, pixmap, cent, multipoles=(0,), force_sym=False, m
     base_beam, theta = _get_base_theta(dx, dy, 0, fwhm_xi, fwhm_eta, phi)
     if len(multipoles) == 0:
         amps = []
-        model = amp*base_beam
+        model = amp * base_beam
     amps = multipole_decomp(base_beam, imap - off, sigma, multipoles, theta, True)
     base_beam = gaussian2d(pixmap, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
     model = multipole_expansion(base_beam, amps, multipoles, theta)
@@ -574,8 +592,8 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps):
     # TODO: Covariance and scattering
     r_rad = r.to(u.radian).value
     prof = rprof.value
-    ell_0 = (2*np.pi*d/lmd).decompose().value
-    r_0 = fwhm.to(u.radian).value/2.355
+    ell_0 = (2 * np.pi * d / lmd).decompose().value
+    r_0 = fwhm.to(u.radian).value / 2.355
     par_names = ["ell_max", "r_c", "alpha", "off"]
     par_units = [u.dimensionless_unscaled, r.unit, rprof.unit, rprof.unit]
     par_units_fit = [u.dimensionless_unscaled, u.radian, rprof.unit, rprof.unit]
@@ -583,7 +601,7 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps):
     bounds = [(1, 1), (guess[1], guess[1]), (0, np.inf), (0, np.inf)]
 
     # Fix the number of modes to half the data points within 5 sigma and setup amps
-    n_modes = int(np.sum(r_rad < 5*r_0)/2)
+    n_modes = int(np.sum(r_rad < 5 * r_0) / 2)
     par_names += [f"amp_{i}" for i in range(n_modes)]
     par_units += [rprof.unit] * n_modes
     par_units_fit += [rprof.unit] * n_modes
@@ -591,39 +609,50 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps):
     bounds += [(0, np.inf)] * n_modes
 
     # Setup scatter beam
-    scatter_pars = {"n_terms": 5, "lmd":lmd.to(u.m).value, "sang":sang.to(u.sr).value, "corr":corr.to(u.m).value, "eps":np.sqrt(2)*eps.to(u.m).value}
+    scatter_pars = {
+        "n_terms": 5,
+        "lmd": lmd.to(u.m).value,
+        "sang": sang.to(u.sr).value,
+        "corr": corr.to(u.m).value,
+        "eps": np.sqrt(2) * eps.to(u.m).value,
+    }
 
     def _model(pars):
         ell_max, r_c, alpha, off = pars[:4]
         amps = pars[4:]
-        model = dr4_beam(r_rad, ell_max*ell_0, r_c*r_0, alpha, off, amps, scatter_pars)
+        model = dr4_beam(
+            r_rad, ell_max * ell_0, r_c * r_0, alpha, off, amps, scatter_pars
+        )
         return model
 
     def _objective(pars):
         model = _model(pars)
-        return np.nansum((prof - model)**2) * 1e10
+        return np.nansum((prof - model) ** 2) * 1e10
 
-    res = minimize(_objective, guess, bounds=bounds, options={"maxfun":100000})
+    res = minimize(_objective, guess, bounds=bounds, options={"maxfun": 100000})
     if res.success is False:
         return None, None
     model = _model(res.x)
-    frac_res = abs(rprof - model)/model
-    bad_fit = (frac_res >= 1) * (r_rad > 5*r_0)
+    frac_res = abs(rprof - model) / model
+    bad_fit = (frac_res >= 1) * (r_rad > 5 * r_0)
     guess = res.x
     guess[1] = 5
     if np.sum(bad_fit) > 0:
         r_c = r_rad[int(np.percentile(np.where(bad_fit)[0], 5))]
-        guess[1] = r_c/r_0
-    bounds[1] = (guess[1]*.7, guess[1]*1.3)
-    bounds[0] = (.1, 10.)
-    res = minimize(_objective, guess, bounds=bounds, options={"maxfun":100000})
+        guess[1] = r_c / r_0
+    bounds[1] = (guess[1] * 0.7, guess[1] * 1.3)
+    bounds[0] = (0.1, 10.0)
+    res = minimize(_objective, guess, bounds=bounds, options={"maxfun": 100000})
     print(res.x)
 
     model = _model(res.x)
     pars = res.x
     pars[0] *= ell_0
     pars[1] *= r_0
-    params = {n: (v * uf).to(u) for n, u, uf, v in zip(par_names, par_units, par_units_fit, pars)}
+    params = {
+        n: (v * uf).to(u)
+        for n, u, uf, v in zip(par_names, par_units, par_units_fit, pars)
+    }
     # TODO: include uncertainties here
     mprofile = np.column_stack((r.value, model))
 

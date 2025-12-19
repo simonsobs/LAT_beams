@@ -17,10 +17,9 @@ Still somewhat LAT specific but could be genralized if desired.
 import argparse
 import logging
 import os
-import sqlite3
 import sys
 import time
-from functools import reduce
+from functools import partial, reduce
 
 import h5py
 import matplotlib.pyplot as plt
@@ -31,11 +30,8 @@ import yaml
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
-from sotodlib.core.flagman import has_any_cuts
 from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
-from sotodlib.obs_ops.utils import correct_iir_params
-from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
@@ -43,7 +39,7 @@ from typing_extensions import cast
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
-from lat_beams.utils import print_once, set_tag
+from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -56,6 +52,67 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 band_names = {"l": ["f030", "f040"], "m": ["f090", "f150"], "u": ["f220", "f280"]}
+
+
+def get_jobdict(jdb):
+    jobdict = {
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}": job
+        for job in jdb.get_jobs(jclass="fit_pointing")
+    }
+    return jobdict
+
+
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source):
+    if obs_ids is not None:
+        obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
+    else:
+        obslist = ctx.obsdb.query(
+            f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {stop_time}",
+            tags=[f"{source}=1"],
+        )
+
+    obslist = np.array_split(obslist, nproc)[myrank]
+    obsit = []
+    for obs in obslist:
+        try:
+            det_info = ctx.get_det_info(obs["obs_id"])
+        except:
+            continue
+        wsufms = np.unique(
+            np.column_stack(
+                [
+                    det_info["wafer_slot"],
+                    det_info["stream_id"],
+                ]
+            ),
+            axis=0,
+        )
+        for (
+            ws,
+            ufm,
+        ) in wsufms:
+            obsit += [(obs, ws, ufm)]
+    return obsit
+
+
+def get_jobstr(info):
+    obs, ws, ufm = info
+    job_str = f"{obs['obs_id']}-{ws}-{ufm}"
+
+
+def get_tags(info):
+    obs, ws, ufm = info
+    tags = {
+        "obs_id": obs["obs_id"],
+        "wafer_slot": ws,
+        "stream_id": ufm,
+        "message": "",
+        "source": "",
+        "config": "",
+        "context": "",
+        "preprocess": "",
+    }
+    return tags
 
 
 def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
@@ -111,6 +168,19 @@ def main():
     )
     parser.add_argument(
         "--forced_ws", "-ws", nargs="+", help="Force these wafer slots into the fit"
+    )
+    parser.add_argument(
+        "--job_memory",
+        "-m",
+        type=float,
+        help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
+    )
+    parser.add_argument(
+        "--job_memory_buffer",
+        "-mb",
+        default=0,
+        type=float,
+        help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
     )
     parser.add_argument(
         "--lookback",
@@ -240,117 +310,36 @@ def main():
         cfg.get("nominal", f"~/data/pointing/{tel}/nominal/focal_plane.h5")
     )
     nominal = h5py.File(nominal_path)
-
     source_list = [
         source,
     ]
     # JobDB stuff
-    # Let rank 0 make jobdb first to avoid race conditions
-    if myrank == 0:
-        engine = sqy.create_engine(
-            f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
-            connect_args={"timeout": 10},
-            poolclass=NullPool,
-        )
-        jdb = jobdb.JobManager(engine=engine)
-        jdb.clear_locks(jobs="all")
-    comm.barrier()
-    if myrank != 0:
-        engine = sqy.create_engine(
-            f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
-            connect_args={"timeout": 10},
-            poolclass=NullPool,
-        )
-        jdb = jobdb.JobManager(engine=engine)
-
-    # Add to jobdb if they don't exist
-    if args.obs_ids is not None:
-        obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
-    else:
-        start_time = cfg["start_time"]
-        if args.lookback is not None:
-            start_time = time.time() - 3600 * args.lookback
-        obslist = ctx.obsdb.query(
-            f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {cfg['stop_time']}",
-            tags=[f"{source}=1"],
-        )
-
-    print_once("Setting up jobdb")
-    obslist = np.array_split(obslist, nproc)[myrank]
-    it = obslist
-    if myrank == 0:
-        it = tqdm(obslist, file=sys.stdout)
-    joblist = []
-    jobs_to_make = []
-    jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}": job
-        for job in jdb.get_jobs(jclass="fit_pointing")
-    }
-    for obs in obslist:
-        try:
-            det_info = ctx.get_det_info(obs["obs_id"])
-        except:
-            continue
-        wsufms = np.unique(
-            np.column_stack(
-                [
-                    det_info["wafer_slot"],
-                    det_info["stream_id"],
-                ]
-            ),
-            axis=0,
-        )
-        for (
-            ws,
-            ufm,
-        ) in wsufms:
-            job_str = f"{obs['obs_id']}-{ws}-{ufm}"
-            if job_str in jobdict:
-                job = jobdict[job_str]
-            else:
-                tags = {
-                    "obs_id": obs["obs_id"],
-                    "wafer_slot": ws,
-                    "stream_id": ufm,
-                    "message": "",
-                    "source": "",
-                    "config": "",
-                    "context": "",
-                    "preprocess": "",
-                }
-                job = jdb.make_job(
-                    jclass="fit_pointing", tags=tags, check_existing=False
-                )
-                jobs_to_make += [job]
-            if job.lock:
-                continue
-            if job.tags["source"] not in source_list and job.tags["source"] != "":
-                continue
-            if (
-                args.overwrite
-                or job.jstate.name == "open"
-                or (job.jstate.name == "failed" and args.retry_failed)
-            ):
-                joblist += [job]
-    comm.barrier()
-
-    # Make the missing jobs
-    # Doing this serially so that we don't lock up the db
-    tot_missing = 0
-    tot_missing = comm.reduce(len(jobs_to_make), root=0)
-    print_once(f"Adding {tot_missing} new jobs")
-    t0 = time.time()
-    for i in range(nproc):
-        if myrank == i:
-            jdb.commit_jobs(jobs_to_make)
-        comm.barrier()
-    t1 = time.time()
-    print_once(f"Took {t1-t0} seconds to add")
-
-    # Get the final job list
-    all_jobs = comm.allgather(joblist)
-    joblist = [job for jobs in all_jobs for job in jobs]
-    print_once(f"{len(all_jobs)} wafer-obs to fit!")
+    start_time = cfg["start_time"]
+    if args.lookback is not None:
+        start_time = time.time() - 3600 * args.lookback
+    stop_time = cft["stop_time"]
+    all_jobs = setup_jobs(
+        comm,
+        data_dir,
+        "fit_pointing",
+        get_jobdict,
+        partial(
+            get_jobit,
+            obs_ids=args.obs_ids,
+            ctx=ctx,
+            start_time=start_time,
+            stop_time=stop_time,
+            source=source,
+        ),
+        get_jobstr,
+        get_tags,
+        source_list,
+        args.overwrite,
+        args.retry_failed,
+        args.job_memory,
+        args.job_memory_buffer,
+        False,
+    )
 
     # MPI Splitting
     if (
@@ -491,7 +480,9 @@ def main():
                     h5_file.create_group(obs["obs_id"])
 
                 # Load and process the TOD
-                aman_path = load_aman(obs["obs_id"], {"wafer_slot": ws}, job, min_dets, fp_flag=False)
+                aman_path = load_aman(
+                    obs["obs_id"], {"wafer_slot": ws}, job, min_dets, fp_flag=False
+                )
                 if aman is None:
                     continue
 

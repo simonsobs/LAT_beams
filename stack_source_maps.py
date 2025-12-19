@@ -1,8 +1,6 @@
 import argparse
 import glob
 import os
-import sys
-import time
 
 import h5py
 import matplotlib.pyplot as plt

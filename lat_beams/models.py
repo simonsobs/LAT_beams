@@ -71,6 +71,7 @@ def multipole(theta, mp, sin):
         return np.sin(theta * order)
     return np.cos(theta * order)
 
+
 def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
     amps = np.zeros(len(multipoles) * 2)
     beam = imap
@@ -80,7 +81,7 @@ def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
         mod = np.zeros_like(beam)
     for m, n in enumerate(multipoles):
         if gs:
-            mod[:] = 0.
+            mod[:] = 0.0
         for i in (0, 1):
             mp = multipole(theta, n, i)
             model = mp * base_beam
@@ -88,16 +89,17 @@ def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
             _sigma[~np.isfinite(model)] = 0
             model[~np.isfinite(model)] = 0
             j = (2 * m) + i
-            norm = np.sum(_sigma*model*model)
+            norm = np.sum(_sigma * model * model)
             if norm == 0:
                 continue
-            amp = np.sum(_sigma*beam*model)/norm
+            amp = np.sum(_sigma * beam * model) / norm
             amps[j] = amp
             if gs:
-                mod += amp*model
+                mod += amp * model
         if gs:
             beam -= mod
     return amps
+
 
 def multipole_expansion(base_beam, amps, multipoles, theta):
     beam = np.zeros_like(base_beam)
@@ -106,7 +108,8 @@ def multipole_expansion(base_beam, amps, multipoles, theta):
             mp = multipole(theta, n, i)
             j = (2 * m) + i
             beam += amps[j] * mp * base_beam
-    return beam 
+    return beam
+
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     factor = 2 * np.sqrt(2 * np.log(2))
@@ -165,15 +168,17 @@ def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
 
     return gauss, dgauss
 
+
 def scatter_beam(r, n_terms, lmd, sang, corr, eps):
-    var = (4*np.pi*eps/lmv)**2
-    prefac = (sang/(4*pi))*((2*np.pi*corr/lmd)**2)*np.exp(-1*var)
-    x = -1*(corr * np.pi * np.sin(r)/lmd)**2
+    var = (4 * np.pi * eps / lmv) ** 2
+    prefac = (sang / (4 * pi)) * ((2 * np.pi * corr / lmd) ** 2) * np.exp(-1 * var)
+    x = -1 * (corr * np.pi * np.sin(r) / lmd) ** 2
     profile = np.zeros_like(r)
     for n in range(1, n_terms + 1):
-        profile += (var**n/(n*np.fac(n)))*np.exp(x/n) 
+        profile += (var**n / (n * np.fac(n))) * np.exp(x / n)
     profile *= prefac
     return profile
+
 
 def dr4_beam(r, ell_max, r_c, alpha, off, amps, n_scatter, scatter_pars=None):
     """
@@ -181,18 +186,18 @@ def dr4_beam(r, ell_max, r_c, alpha, off, amps, n_scatter, scatter_pars=None):
     Does not include scattering term yet.
     """
     profile = np.zeros_like(r)
-    profile[r == 0] = 1.
+    profile[r == 0] = 1.0
 
     # Core beam
     msk = (r <= r_c) * (r > 0)
     r_ell = r[msk] * ell_max
     for n, amp in enumerate(amps):
-        profile[msk] += amp * jv(2*n + 1, r_ell)/r_ell
+        profile[msk] += amp * jv(2 * n + 1, r_ell) / r_ell
 
     # Wing
     msk = r > r_c
     if np.sum(msk) > 0:
-        profile[msk] = off + alpha*(r[msk][0]**3)/np.power(r[msk], 3)
+        profile[msk] = off + alpha * (r[msk][0] ** 3) / np.power(r[msk], 3)
         # Scattering beam
         if scatter_pars is not None:
             profile[msk] += scatter_beams(r[msk], **scatter_pars)

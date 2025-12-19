@@ -4,12 +4,10 @@ import logging
 import os
 import sys
 import time
-from copy import deepcopy
 
 import h5py
 import mpi4py.rc
 import numpy as np
-import sqlalchemy as sqy
 import yaml
 from pixell import enmap
 from so3g.proj import RangesMatrix
@@ -17,12 +15,11 @@ from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
 from sotodlib.site_pipeline import jobdb
-from sqlalchemy.pool import NullPool
 from tqdm import tqdm
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import load_aman, print_once, set_tag
+from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -39,6 +36,87 @@ band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 comps = "TQU"
 
 cp.logger.setLevel(logging.WARNING)
+
+
+def get_jobdict(jdb):
+    jobdict = {
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
+        for job in jdb.get_jobs(jclass="beam_map")
+    }
+    return jobdict
+
+
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type):
+    if obs_ids is not None:
+        obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
+    else:
+        src_str = "==1 or ".join(source_list) + "==1"
+        obslist = ctx.obsdb.query(
+            f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and src_str",
+            tags=source_list,
+        )
+    if pointing_type != "pointing_model":
+        dbs = [
+            md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")
+        ]
+        if len(dbs) > 1:
+            print_once("Multiple pointing metadata entries found, using the first one")
+        elif len(dbs) == 0:
+            print_once("No pointing metadata entries found")
+            sys.exit()
+        print_once(f"Using ManifestDb at {dbs[0]}")
+        db = metadata.ManifestDb(dbs[0])
+        obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
+        obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
+        print_once(f"Only {len(obslist)} observations with pointing metadata")
+
+    obslist = np.array_split(obslist, nproc)[myrank]
+    obsit = []
+    for obs in obslist:
+        try:
+            det_info = ctx.get_det_info(obs["obs_id"])
+        except:
+            continue
+        wsufmsband = np.unique(
+            np.column_stack(
+                [
+                    det_info["wafer_slot"],
+                    det_info["stream_id"],
+                    det_info["wafer.bandpass"],
+                ]
+            ),
+            axis=0,
+        )
+        for ws, ufm, band in wsufmsband:
+            if band[0] != "f":
+                continue
+            obsit += [(obs, ws, ufm, band)]
+    return obsit
+
+
+def get_jobstr(info):
+    obs, ws, ufm, band = info
+    job_str = f"{obs['obs_id']}-{ws}-{ufm}-{band}"
+
+
+def get_tags(info):
+    obs, ws, ufm, band = info
+    tags = {
+        "obs_id": obs["obs_id"],
+        "wafer_slot": ws,
+        "stream_id": ufm,
+        "band": band,
+        "message": "",
+        "binned": "",
+        "detweights": "",
+        "solved": "",
+        "weights": "",
+        "comps": "",
+        "source": "",
+        "config": "",
+        "context": "",
+        "preprocess": "",
+    }
 
 
 def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh):
@@ -253,7 +331,7 @@ if pointing_type == "raw" and comps != "T":
     print_once(f"Running with raw pointing, changing comps from {comps} to T")
     comps = "T"
 
-# Setup folders and jobdb
+# Setup folders
 root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
 project_dir = cfg.get("project_dir", "beams/lat")
 plot_dir = os.path.join(
@@ -270,150 +348,50 @@ data_dir = os.path.join(
 )
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
-# Let rank 0 make jobdb first to avoid race conditions
-if myrank == 0:
-    engine = sqy.create_engine(
-        f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
-        connect_args={"timeout": 10},
-        poolclass=NullPool,
-    )
-    jdb = jobdb.JobManager(engine=engine)
-    jdb.clear_locks(jobs="all")
-comm.barrier()
-if myrank != 0:
-    engine = sqy.create_engine(
-        f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
-        connect_args={"timeout": 10},
-        poolclass=NullPool,
-    )
-    jdb = jobdb.JobManager(engine=engine)
 
 
-# Get the list of observations
-ctx_path = cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml")
-ctx = Context(ctx_path)
+# Get context
+ctx_path = cfg["context"] = cfg.get(
+    "context",
+    f"/global/cfs/cdirs/sobs/metadata/lat/contexts/use_this_local.yaml",
+)
 with open(ctx_path, "r") as f:
     ctx_str = yaml.dump(yaml.safe_load(f))
+ctx = Context(ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
-if args.obs_ids is not None:
-    obslist = [ctx.obsdb.get(obs_id) for obs_id in args.obs_ids]
-else:
-    src_str = "==1 or ".join(source_list) + "==1"
-    start_time = cfg["start_time"]
-    if args.lookback is not None:
-        start_time = time.time() - 3600 * args.lookback
-    obslist = ctx.obsdb.query(
-        f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {cfg['stop_time']} and ({src_str})",
-        tags=source_list,
-    )
-print_once(f"Found {len(obslist)} observations to map")
 
-# Keep only the ones with a focal plane
-if pointing_type != "pointing_model":
-    dbs = [md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")]
-    if len(dbs) > 1:
-        print_once("Multiple pointing metadata entries found, using the first one")
-    elif len(dbs) == 0:
-        print_once("No pointing metadata entries found")
-        sys.exit()
-    print_once(f"Using ManifestDb at {dbs[0]}")
-    db = metadata.ManifestDb(dbs[0])
-    obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
-    obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
-    print_once(f"Only {len(obslist)} observations with pointing metadata")
-
-# Add to jobdb if they don't exist
-print_once("Setting up jobdb")
-obslist = np.array_split(obslist, nproc)[myrank]
-it = obslist
-if myrank == 0:
-    it = tqdm(obslist, file=sys.stdout)
-joblist = []
-jobs_to_make = []
-jobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
-    for job in jdb.get_jobs(jclass="beam_map")
-}
-now = time.time()
-for obs in it:
-    sys.stdout.flush()
-    try:
-        det_info = ctx.get_det_info(obs["obs_id"])
-    except:
-        continue
-    wsufmsband = np.unique(
-        np.column_stack(
-            [
-                det_info["wafer_slot"],
-                det_info["stream_id"],
-                det_info["wafer.bandpass"],
-            ]
-        ),
-        axis=0,
-    )
-    for ws, ufm, band in wsufmsband:
-        if band[0] != "f":
-            continue
-        job_str = f"{obs['obs_id']}-{ws}-{ufm}-{band}"
-        if job_str in jobdict:
-            job = jobdict[job_str]
-        else:
-            tags = {
-                "obs_id": obs["obs_id"],
-                "wafer_slot": ws,
-                "stream_id": ufm,
-                "band": band,
-                "message": "",
-                "binned": "",
-                "detweights": "",
-                "solved": "",
-                "weights": "",
-                "comps": "",
-                "source": "",
-                "config": "",
-                "context": "",
-                "preprocess": "",
-            }
-            job = jdb.make_job(jclass="beam_map", tags=tags, check_existing=False)
-            jobs_to_make += [job]
-        if job.lock:
-            continue
-        if (
-            job.visit_time is not None
-            and args.job_memory is not None
-            and now - job.visit_time < 60 * 60 * args.job_memory
-            and now - job.visit_time > 60 * args.job_memory_buffer
-        ):
-            continue
-        if (
-            args.overwrite
-            or job.jstate.name == "open"
-            or (job.jstate.name == "failed" and args.retry_failed)
-        ) and not args.replot:
-            joblist += [job]
-        elif args.replot and job.jstate.name == "done":
-            joblist += [job]
-comm.barrier()
-# Make the missing jobs
-# Doing this serially so that we don't lock up the db
-tot_missing = 0
-tot_missing = comm.reduce(len(jobs_to_make), root=0)
-print_once(f"Adding {tot_missing} new jobs")
-t0 = time.time()
-for i in range(nproc):
-    if myrank == i:
-        jdb.commit_jobs(jobs_to_make)
-    comm.barrier()
-t1 = time.time()
-print_once(f"Took {t1-t0} seconds to add")
-# Get the final job list
-all_jobs = comm.allgather(joblist)
-all_jobs = [job for jobs in all_jobs for job in jobs]
-print_once(f"{len(all_jobs)} maps to make!")
-joblist = np.array_split(all_jobs, nproc)[myrank].tolist()
+# Setup jobs
+start_time = cfg["start_time"]
+if args.lookback is not None:
+    start_time = time.time() - 3600 * args.lookback
+stop_time = cft["stop_time"]
+all_jobs = setup_jobs(
+    comm,
+    data_dir,
+    "beam_map",
+    get_jobdict,
+    partial(
+        get_jobit,
+        obs_ids=args.obs_ids,
+        ctx=ctx,
+        start_time=start_time,
+        stop_time=stop_time,
+        source_list=source_list,
+        pointing_type=pointing_type,
+    ),
+    get_jobstr,
+    get_tags,
+    source_list,
+    args.overwrite,
+    args.retry_failed,
+    args.job_memory,
+    args.job_memory_buffer,
+    args.replot,
+)
 
 # Even things out
+joblist = np.array_split(all_jobs, nproc)[myrank].tolist()
 n_maps = comm.allgather(len(joblist))
 max_maps = np.max(n_maps)
 if n_maps[0] != max_maps:

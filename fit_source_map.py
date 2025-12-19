@@ -1,8 +1,8 @@
 import argparse
-import glob
 import os
 import sys
 import time
+from functools import partial
 
 import h5py
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ from lat_beams.beam_utils import (
 )
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
-from lat_beams.utils import print_once, set_tag
+from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -38,6 +38,48 @@ nproc = comm.Get_size()
 fwhm = {"f090": 2, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
 
+def get_jobdict(jdb):
+    jobdict = {
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}": job
+        for job in jdb.get_jobs(jclass="fit_map")
+    }
+    return jobdb
+
+
+def get_jobit(jdb):
+    maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
+    maplist = np.array_split(maplist, nproc)[myrank]
+    return maplist
+
+
+def get_jobstr(mjob, ctx, start_time, stop_time):
+    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}"
+    obs = ctx.obsdb.get(mjob.tags["obs_id"])
+    if args.obs_ids is None and (
+        obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
+    ):
+        return None
+    elif args.obs_ids is not None and obs["obs_id"] not in args.obs_ids:
+        return None
+    return jobstr
+
+
+def get_tags(mjob):
+    tags = {
+        "obs_id": mjob.tags["obs_id"],
+        "wafer_slot": mjob.tags["wafer_slot"],
+        "stream_id": mjob.tags["stream_id"],
+        "band": mjob.tags["band"],
+        "comps": mjob.tags["comps"],
+        "source": mjob.tags["source"],
+        "message": "",
+        "resid": "",
+        "resid_weights": "",
+        "config": "",
+    }
+    return tags
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
 parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
@@ -46,6 +88,19 @@ parser.add_argument(
 )
 parser.add_argument(
     "--start_from", "-s", default=0, type=int, help="Skip to the nth obs (0 indexed)"
+)
+parser.add_argument(
+    "--job_memory",
+    "-m",
+    type=float,
+    help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
+)
+parser.add_argument(
+    "--job_memory_buffer",
+    "-mb",
+    default=0,
+    type=float,
+    help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
 )
 parser.add_argument(
     "--lookback",
@@ -97,27 +152,7 @@ os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 outfile = None
 
-# Let rank 0 make jobdb first to avoid race conditions
-if myrank == 0:
-    outfile = h5py.File(os.path.join(data_dir, "beam_pars.h5"), "a")
-    engine = sqy.create_engine(
-        f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
-        connect_args={"timeout": 10},
-        poolclass=NullPool,
-    )
-    jdb = jobdb.JobManager(engine=engine)
-    jdb.clear_locks(jobs="all")
-comm.barrier()
-if myrank != 0:
-    engine = sqy.create_engine(
-        f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
-        connect_args={"timeout": 10},
-        poolclass=NullPool,
-    )
-    jdb = jobdb.JobManager(engine=engine)
-
 # Get the jobs, make them if we need to
-print_once("Setting up jobdb")
 start_time = cfg["start_time"]
 if args.lookback is not None:
     start_time = time.time() - 3600 * args.lookback
@@ -125,77 +160,24 @@ stop_time = cfg["stop_time"]
 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
-maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
-maplist = np.array_split(maplist, nproc)[myrank]
-joblist = []
-jobs_to_make = []
-print_once("Getting beam map jobs")
-jobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}": job
-    for job in jdb.get_jobs(jclass="fit_map")
-}
-print_once("Processing possible jobs")
-it = maplist
-if myrank == 0:
-    it = tqdm(maplist, file=sys.stdout)
-for mjob in it:
-    sys.stdout.flush()
-    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}"
-    obs = ctx.obsdb.get(mjob.tags["obs_id"])
-    if args.obs_ids is None and (
-        obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
-    ):
-        continue
-    elif args.obs_ids is not None and obs["obs_id"] not in args.obs_ids:
-        continue
-    if job_str in jobdict:
-        job = jobdict[job_str]
-    else:
-        tags = {
-            "obs_id": mjob.tags["obs_id"],
-            "wafer_slot": mjob.tags["wafer_slot"],
-            "stream_id": mjob.tags["stream_id"],
-            "band": mjob.tags["band"],
-            "comps": mjob.tags["comps"],
-            "source": mjob.tags["source"],
-            "message": "",
-            "resid": "",
-            "resid_weights": "",
-            "config": "",
-        }
-        job = jdb.make_job(jclass="fit_map", tags=tags, check_existing=False)
-        jobs_to_make += [job]
-    if job.lock or job.tags["source"] not in source_list:
-        continue
-    if (
-        args.overwrite
-        or job.jstate.name == "open"
-        or (job.jstate.name == "failed" and args.retry_failed)
-    ):
-        joblist += [job]
-comm.barrier()
-
-# Make the missing jobs
-# Doing this serially so that we don't lock up the db
-tot_missing = 0
-tot_missing = comm.reduce(len(jobs_to_make), root=0)
-print_once(f"Adding {tot_missing} new jobs")
-t0 = time.time()
-for i in range(nproc):
-    print_once(f"\tRank {i} writing")
-    if myrank == i:
-        jdb.commit_jobs(jobs_to_make)
-    comm.barrier()
-t1 = time.time()
-print_once(f"Took {t1-t0} seconds to add")
-
-# Get the final job list
-all_jobs = comm.allgather(joblist)
-all_jobs = [job for jobs in all_jobs for job in jobs]
-print_once(f"{len(all_jobs)} maps to fit!")
-joblist = np.array_split(all_jobs, nproc)[myrank].tolist()
+all_jobs = setup_jobs(
+    comm,
+    data_dir,
+    "fit_map",
+    get_jobdict,
+    get_jobit,
+    partial(get_jobstr, ctx=ctx, start_time=start_time, stop_time=stop_time),
+    get_tags,
+    source_list,
+    args.overwrite,
+    args.retry_failed,
+    args.job_memory,
+    args.job_memory_buffer,
+    False,
+)
 
 # Even things out
+joblist = np.array_split(all_jobs, nproc)[myrank].tolist()
 n_maps = comm.allgather(len(joblist))
 max_maps = np.max(n_maps)
 if n_maps[0] != max_maps:
@@ -307,7 +289,14 @@ for i, j in enumerate(joblist):
     # Fit
     cent = estimate_cent(solved, smooth_kern / pixsize, buf)
     fit_params, model = fit_gauss_beam(
-        solved, weights, pixmap, cent, gauss_multipoles, sym_gauss, "pW", 60*fwhm[band]
+        solved,
+        weights,
+        pixmap,
+        cent,
+        gauss_multipoles,
+        sym_gauss,
+        "pW",
+        60 * fwhm[band],
     )
     if fit_params is None or model is None:
         msg = "Fit failed"
@@ -332,7 +321,7 @@ for i, j in enumerate(joblist):
     mprof = radial_profile(model, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
-    rmsk = r < 3*model_fwhm/2.355
+    rmsk = r < 3 * model_fwhm / 2.355
     data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True)
 
     # FWHM check
@@ -408,7 +397,7 @@ for i, j in enumerate(joblist):
     )
     plt_extent = (ra_min, ra_max, dec_min, dec_max)
     plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-    norm = 1./sig
+    norm = 1.0 / sig
     for dat, label in [(model, "model"), (resid, "resid")]:
         for log in [False, True]:
             _norm = 1

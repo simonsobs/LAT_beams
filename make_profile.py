@@ -1,5 +1,4 @@
 import argparse
-import datetime as dt
 import os
 
 import astropy.units as u
@@ -7,9 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import yaml
+from astropy import constants as const
 from healpy.sphtfunc import beam2bl
 from sotodlib.core import AxisManager, Context
-from astropy import constants as const
 
 from lat_beams import beam_utils as bu
 from lat_beams import fitting as bf
@@ -161,12 +160,18 @@ for split in split_by:
             model_fwhm_eta = bu.get_fit_vec(fits, "fwhm_eta")
             solid_angle = bu.get_fit_vec(fits, "data_solid_angle_corr")
             print(f"\t\t{spl} Data FWHM: {np.mean(data_fwhm)} +- {np.std(data_fwhm)}")
-            print(f"\t\t{spl} Model FWHM Xi: {np.mean(model_fwhm_xi)} +- {np.std(model_fwhm_xi)}")
-            print(f"\t\t{spl} Model FWHM Eta: {np.mean(model_fwhm_eta)} +- {np.std(model_fwhm_eta)}")
-            print(f"\t\t{spl} Solid Angle: {np.mean(solid_angle)} +- {np.std(solid_angle)}")
+            print(
+                f"\t\t{spl} Model FWHM Xi: {np.mean(model_fwhm_xi)} +- {np.std(model_fwhm_xi)}"
+            )
+            print(
+                f"\t\t{spl} Model FWHM Eta: {np.mean(model_fwhm_eta)} +- {np.std(model_fwhm_eta)}"
+            )
+            print(
+                f"\t\t{spl} Solid Angle: {np.mean(solid_angle)} +- {np.std(solid_angle)}"
+            )
 
-            band = (float(fits["band"][0][1:])*u.GHz)
-            fscale_fac =  90.0 * u.GHz / band
+            band = float(fits["band"][0][1:]) * u.GHz
+            fscale_fac = 90.0 * u.GHz / band
             mask_rad = (mask_size * fscale_fac).to(u.arcsec).value
 
             # Compute and save profile
@@ -178,13 +183,24 @@ for split in split_by:
             )
 
             # Fit model
-            mprofile, mpars = bf.fit_dr4_profile(profile[:, 0]*u.arcsec, profile[:, 1]*u.dimensionless_unscaled, np.median(data_fwhm), 6*u.m, const.c/band, np.median(solid_angle), corr_primary, eps_primary)
+            mprofile, mpars = bf.fit_dr4_profile(
+                profile[:, 0] * u.arcsec,
+                profile[:, 1] * u.dimensionless_unscaled,
+                np.median(data_fwhm),
+                6 * u.m,
+                const.c / band,
+                np.median(solid_angle),
+                corr_primary,
+                eps_primary,
+            )
             if mprofile is None or mpars is None:
                 raise ValueError("Fit failed!")
             print(mpars)
             # mprofile = avg_prof(fits["aman"], prof="mprof")
             np.savetxt(
-                os.path.join(data_dir_spl, f"model_profile_{spl}_{epoch[0]}_{epoch[1]}.txt"),
+                os.path.join(
+                    data_dir_spl, f"model_profile_{spl}_{epoch[0]}_{epoch[1]}.txt"
+                ),
                 mprofile,
             )
 
@@ -199,7 +215,9 @@ for split in split_by:
             mbl = beam2bl(mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), lmax)
             mwindow = np.column_stack((ells, mbl))
             np.savetxt(
-                os.path.join(data_dir_spl, f"model_window_{spl}_{epoch[0]}_{epoch[1]}.txt"),
+                os.path.join(
+                    data_dir_spl, f"model_window_{spl}_{epoch[0]}_{epoch[1]}.txt"
+                ),
                 profile,
             )
 
@@ -254,7 +272,7 @@ for split in split_by:
         for epoch, profile, mprofile in zip(epochs, profiles, mprofiles):
             plt.plot(
                 profile[:, 0],
-                np.abs(profile[:, 1] - mprofile[:, 1])/mprofile[:, 1],
+                np.abs(profile[:, 1] - mprofile[:, 1]) / mprofile[:, 1],
                 label=str(epoch),
                 marker="x",
             )

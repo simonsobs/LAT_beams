@@ -5,7 +5,6 @@ Eventually we should just not have bad fits...
 
 import argparse
 import os
-import sys
 
 import h5py
 import matplotlib.pyplot as plt
