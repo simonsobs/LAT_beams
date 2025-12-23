@@ -98,6 +98,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source):
 def get_jobstr(info):
     obs, ws, ufm = info
     job_str = f"{obs['obs_id']}-{ws}-{ufm}"
+    return job_str
 
 
 def get_tags(info):
@@ -318,7 +319,7 @@ def main():
     if args.lookback is not None:
         start_time = time.time() - 3600 * args.lookback
     stop_time = cft["stop_time"]
-    all_jobs = setup_jobs(
+    jdb, all_jobs = setup_jobs(
         comm,
         data_dir,
         "fit_pointing",
@@ -481,7 +482,7 @@ def main():
 
                 # Load and process the TOD
                 aman_path = load_aman(
-                    obs["obs_id"], {"wafer_slot": ws}, job, min_dets, fp_flag=False
+                    obs["obs_id"], preprocess_cfg, {"wafer_slot": ws}, job, min_dets, fp_flag=False
                 )
                 if aman is None:
                     continue

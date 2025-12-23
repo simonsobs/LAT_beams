@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+from functools import partial
 
 import h5py
 import mpi4py.rc
@@ -52,7 +53,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
     else:
         src_str = "==1 or ".join(source_list) + "==1"
         obslist = ctx.obsdb.query(
-            f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and src_str",
+            f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and {src_str}",
             tags=source_list,
         )
     if pointing_type != "pointing_model":
@@ -97,6 +98,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
 def get_jobstr(info):
     obs, ws, ufm, band = info
     job_str = f"{obs['obs_id']}-{ws}-{ufm}-{band}"
+    return job_str
 
 
 def get_tags(info):
@@ -117,7 +119,7 @@ def get_tags(info):
         "context": "",
         "preprocess": "",
     }
-
+    return tags
 
 def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh):
     pixsize = solved.wcs.wcs.cdelt[1] * (60 * 60)
@@ -365,8 +367,8 @@ if ctx.obsdb is None:
 start_time = cfg["start_time"]
 if args.lookback is not None:
     start_time = time.time() - 3600 * args.lookback
-stop_time = cft["stop_time"]
-all_jobs = setup_jobs(
+stop_time = cfg["stop_time"]
+jdb, all_jobs = setup_jobs(
     comm,
     data_dir,
     "beam_map",
@@ -510,6 +512,7 @@ for i, j in enumerate(joblist):
     # Load and process the TOD
     aman = load_aman(
         obs["obs_id"],
+        preprocess_cfg,
         {"wafer_slot": ws, "wafer.bandpass": band},
         job,
         min_dets,
@@ -530,7 +533,7 @@ for i, j in enumerate(joblist):
     )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = ake_cuts(aman, source_flags, 2 * n_modes, job)
+    cuts = make_cuts(aman, source_flags, 2 * n_modes, job)
     if cuts is None:
         continue
 

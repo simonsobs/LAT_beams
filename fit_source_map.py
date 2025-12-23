@@ -26,7 +26,7 @@ from lat_beams.beam_utils import (
 )
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
-from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs
+from lat_beams.utils import print_once, set_tag, setup_jobs
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -43,7 +43,7 @@ def get_jobdict(jdb):
         f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}": job
         for job in jdb.get_jobs(jclass="fit_map")
     }
-    return jobdb
+    return jobdict
 
 
 def get_jobit(jdb):
@@ -61,7 +61,7 @@ def get_jobstr(mjob, ctx, start_time, stop_time):
         return None
     elif args.obs_ids is not None and obs["obs_id"] not in args.obs_ids:
         return None
-    return jobstr
+    return job_str
 
 
 def get_tags(mjob):
@@ -160,7 +160,7 @@ stop_time = cfg["stop_time"]
 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
-all_jobs = setup_jobs(
+jdb, all_jobs = setup_jobs(
     comm,
     data_dir,
     "fit_map",

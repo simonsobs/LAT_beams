@@ -10,6 +10,7 @@ from sotodlib.core import AxisManager
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
+from tqdm import tqdm
 
 from .beam_utils import crop_maps
 
@@ -122,7 +123,7 @@ def set_tag(job, key, new_val):
         raise ValueError(f'No tag called "{key}"')
 
 
-def load_aman(obs_id, dets, job, min_dets, fp_flag=False):
+def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, fp_flag=False):
     try:
         err, _, _, aman = preproc_or_load_group(
             obs_id,
@@ -198,6 +199,8 @@ def setup_jobs(
     job_memory_buffer,
     replot,
 ):
+    myrank = comm.Get_rank()
+    nproc = comm.Get_size()
     # Get the jobs, make them if we need to
     now = time.time()
     print_once("Setting up jobdb")
@@ -208,21 +211,25 @@ def setup_jobs(
     jobdict = get_jobdict(jdb)
     print_once("Getting potential jobs")
     it = get_jobit(jdb)
+    print_once("Processing possible jobs")
     if myrank == 0:
         it = tqdm(it, file=sys.stdout)
-    print_once("Processing possible jobs")
     for info in it:
         sys.stdout.flush()
         jobstr = get_jobstr(info)
+        ignore_lock = False
         if jobstr is None:
             continue
-        if job_str in jobdict:
-            job = jobdict[job_str]
+        if jobstr in jobdict:
+            job = jobdict[jobstr]
         else:
             tags = get_tags(info)
-            job = jdb.make_job(jclass=jclass, tags=tags, check_existing=False)
+            job = jdb.create_job(jclass=jclass, tags=tags, check_existing=False, commit=False)
             jobs_to_make += [job]
-        if job.lock or job.tags["source"] not in source_list:
+            ignore_lock = True
+        if job.lock and not ignore_lock:
+            continue
+        if job.tags["source"] not in source_list and job.tags["source"] != "":
             continue
         if (
             job.visit_time is not None
@@ -251,6 +258,7 @@ def setup_jobs(
         print_once(f"\tRank {i} writing")
         if myrank == i:
             jdb.commit_jobs(jobs_to_make)
+            jdb.clear_locks(jobs=joblist)
         comm.barrier()
     t1 = time.time()
     print_once(f"Took {t1-t0} seconds to add")
@@ -260,4 +268,4 @@ def setup_jobs(
     all_jobs = [job for jobs in all_jobs for job in jobs]
     print_once(f"{len(all_jobs)} jobs to run!")
 
-    return all_jobs
+    return jdb, all_jobs
