@@ -11,6 +11,8 @@ from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
+from sotodlib.mapmaking import init
+import logging
 
 from .beam_utils import crop_maps
 
@@ -24,6 +26,18 @@ try:
 except:
     comm = None
 
+def init_log(level=logging.DEBUG, comm=comm):
+    def lognormal(self, message, *args, **kwargs):
+        if self.isEnabledFor(25):
+            self._log(25, message, args, **kwargs)
+    rank = 0
+    if comm is not None:
+        rank = comm.Get_rank()
+    L = init(level, rank = rank)
+    logging.addLevelName(25, "NORMAL")
+    setattr(L, "normal", lognormal) 
+
+    return L
 
 def print_once(*args):
     """
@@ -38,7 +52,6 @@ def print_once(*args):
     if comm is None or comm.Get_rank() == 0:
         print(*args)
         sys.stdout.flush()
-
 
 def subpix_shift(imap, ishape, iwcs):
     crdelt = iwcs.wcs.crval - imap.wcs.wcs.crval
@@ -123,7 +136,7 @@ def set_tag(job, key, new_val):
         raise ValueError(f'No tag called "{key}"')
 
 
-def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, fp_flag=False):
+def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
     try:
         err, _, _, aman = preproc_or_load_group(
             obs_id,
@@ -131,16 +144,17 @@ def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, fp_flag=False):
             dets=dets,
             save_archive=False,
             overwrite=True,
+            logger=L,
         )
     except:
         msg = "Failed to load or preprocess!"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
     if aman is None:
         msg = f"Preprocess failed with error {err}"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
@@ -155,7 +169,7 @@ def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, fp_flag=False):
 
     if aman.dets.count < min_dets:
         msg = f"Only {aman.dets.count} dets!"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
@@ -198,20 +212,21 @@ def setup_jobs(
     job_memory,
     job_memory_buffer,
     replot,
+    L,
 ):
     myrank = comm.Get_rank()
     nproc = comm.Get_size()
     # Get the jobs, make them if we need to
     now = time.time()
-    print_once("Setting up jobdb")
+    L.info("Setting up jobdb")
     jdb = make_jobdb(comm, data_dir)
     joblist = []
     jobs_to_make = []
-    print_once("Getting jobdict")
+    L.info("Getting jobdict")
     jobdict = get_jobdict(jdb)
-    print_once("Getting potential jobs")
+    L.info("Getting potential jobs")
     it = get_jobit(jdb)
-    print_once("Processing possible jobs")
+    L.info("Processing possible jobs")
     if myrank == 0:
         it = tqdm(it, file=sys.stdout)
     for info in it:
@@ -252,20 +267,20 @@ def setup_jobs(
     # Doing this serially so that we don't lock up the db
     tot_missing = 0
     tot_missing = comm.reduce(len(jobs_to_make), root=0)
-    print_once(f"Adding {tot_missing} new jobs")
+    L.info(f"Adding {tot_missing} new jobs")
     t0 = time.time()
     for i in range(nproc):
-        print_once(f"\tRank {i} writing")
+        L.debug(f"\tRank {i} writing")
         if myrank == i:
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
         comm.barrier()
     t1 = time.time()
-    print_once(f"Took {t1-t0} seconds to add")
+    L.info(f"Took {t1-t0} seconds to add")
 
     # Get the final job list
     all_jobs = comm.allgather(joblist)
     all_jobs = [job for jobs in all_jobs for job in jobs]
-    print_once(f"{len(all_jobs)} jobs to run!")
+    L.info(f"{len(all_jobs)} jobs to run!")
 
     return jdb, all_jobs

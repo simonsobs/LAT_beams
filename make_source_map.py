@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs
+from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs, init_log
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -47,7 +47,7 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type):
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L):
     if obs_ids is not None:
         obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
     else:
@@ -61,15 +61,15 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
             md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")
         ]
         if len(dbs) > 1:
-            print_once("Multiple pointing metadata entries found, using the first one")
+            if myrank == 0: L.warning("Multiple pointing metadata entries found, using the first one")
         elif len(dbs) == 0:
-            print_once("No pointing metadata entries found")
+            if myrank == 0: L.error("No pointing metadata entries found")
             sys.exit()
-        print_once(f"Using ManifestDb at {dbs[0]}")
+        L.info(f"Using ManifestDb at {dbs[0]}")
         db = metadata.ManifestDb(dbs[0])
         obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
         obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
-        print_once(f"Only {len(obslist)} observations with pointing metadata")
+        L.info(f"Only {len(obslist)} observations with pointing metadata")
 
     obslist = np.array_split(obslist, nproc)[myrank]
     obsit = []
@@ -166,7 +166,7 @@ def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_
         )
 
 
-def make_cuts(aman, source_flags, n_modes, job):
+def make_cuts(aman, source_flags, n_modes, job, L):
     sig_filt = cp.filter_for_sources(
         tod=aman,
         signal=aman.signal.copy(),
@@ -188,10 +188,10 @@ def make_cuts(aman, source_flags, n_modes, job):
     to_cut = peak_snr < min_snr  # + ~np.isfinite(peak_snr)
     to_cut[~sdets] = False
     cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
-    print(f"\tCutting {np.sum(to_cut)} detectors from map")
+    L.debug(f"\tCutting {np.sum(to_cut)} detectors from map")
     if np.sum(~to_cut) < min_dets:
         msg = f"Not enough detectors after source flag cuts!"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
@@ -210,15 +210,16 @@ def make_map(
     min_det_secs,
     job,
     map_str,
+    L,
 ):
     # Get time on source
     det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
         np.diff(aman.timestamps)
     )
-    print(f"\t{det_secs} detector seconds on source in {map_str} mask")
+    L.debug(f"\t{det_secs} detector seconds on source in {map_str} mask")
     if det_secs < min_det_secs:
         msg = f"\tNot enough time on source in {map_str} mask."
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None, None
@@ -241,14 +242,14 @@ def make_map(
     # Estimate SNR
     peak = out["solved"][0][cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
-    print(f"\t{map_str.title()} map SNR approximately {snr}")
+    L.debug(f"\t{map_str.title()} map SNR approximately {snr}")
     if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
         msg = f"{map_str.title()} map SNR too low."
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         if del_map and filename is not None:
-            print("\tDeleting map files")
+            L.debug("\tDeleting map files")
             glob_path = os.path.splitext(filename)[0] + "*.*"
             flist = glob.glob(glob_path)
             for fname in flist:
@@ -303,6 +304,9 @@ if args.replot:
 with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
+# Setup logger
+L = init_log()
+
 # Get some global settings
 source_list = cfg["source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
 min_dets = cfg["min_dets"] = cfg.get("min_dets", 50)
@@ -330,7 +334,7 @@ with open(preprocess_cfg, "r") as f:
 if pointing_type not in ["pointing_model", "per_obs", "raw"]:
     raise ValueError(f"Invalid pointing_type {pointing_type}")
 if pointing_type == "raw" and comps != "T":
-    print_once(f"Running with raw pointing, changing comps from {comps} to T")
+    L.info(f"Running with raw pointing, changing comps from {comps} to T")
     comps = "T"
 
 # Setup folders
@@ -381,6 +385,7 @@ jdb, all_jobs = setup_jobs(
         stop_time=stop_time,
         source_list=source_list,
         pointing_type=pointing_type,
+        L=L,
     ),
     get_jobstr,
     get_tags,
@@ -434,14 +439,12 @@ for i, j in enumerate(joblist):
     obs = ctx.obsdb.get(obs_id, tags=True)
 
     if args.replot:
-        print(
-            f"(rank {myrank}) Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})"
-        )
+        L.normal(f"Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
         except FileNotFoundError:
             msg = "Missing map files in replot mode"
-            print(f"\t{msg}")
+            L.error(f"\t{msg}")
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
@@ -455,7 +458,7 @@ for i, j in enumerate(joblist):
         )
         continue
 
-    print(f"(rank {myrank}) Mapping {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+    L.normal(f"Mapping {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
 
     # Save metadata and config info
     set_tag(job, "config", cfg_str)
@@ -467,7 +470,7 @@ for i, j in enumerate(joblist):
     meta = ctx.get_meta(obs_id)
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         continue
@@ -475,22 +478,22 @@ for i, j in enumerate(joblist):
 
     src_names = list(source_list & set(obs["tags"]))
     if len(src_names) > 1:
-        print("\tObservation tagged for multiple sources!")
+        L.warning("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
         msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
-        print(f"\t\tTags were: {obs['tags']}")
+        L.debug(f"\t\tTags were: {obs['tags']}")
         continue
     src_name = "_".join(src_names)
-    print(f"\tMapping {src_name}")
+    L.debug(f"\tMapping {src_name}")
 
     if "hits" in meta.focal_plane:
         meta.restrict("dets", meta.focal_plane.hits >= min_hits)
         if meta.dets.count < min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
-            print(f"\t{msg}")
+            L.error(f"\t{msg}")
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
@@ -516,6 +519,7 @@ for i, j in enumerate(joblist):
         {"wafer_slot": ws, "wafer.bandpass": band},
         job,
         min_dets,
+        L,
         fp_flag=True,
     )
     if aman is None:
@@ -533,7 +537,7 @@ for i, j in enumerate(joblist):
     )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = make_cuts(aman, source_flags, 2 * n_modes, job)
+    cuts = make_cuts(aman, source_flags, 2 * n_modes, job, L)
     if cuts is None:
         continue
 
@@ -550,6 +554,7 @@ for i, j in enumerate(joblist):
         min_det_secs * mask_fac * (fscale_fac**2),
         job,
         "initial",
+        L,
     )
     if out is None or cent is None:
         continue
@@ -589,6 +594,7 @@ for i, j in enumerate(joblist):
         min_det_secs * (fscale_fac**2),
         job,
         "final",
+        L,
     )
     if out is None or cent is None:
         continue

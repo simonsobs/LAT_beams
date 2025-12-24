@@ -26,7 +26,7 @@ from lat_beams.beam_utils import (
 )
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
-from lat_beams.utils import print_once, set_tag, setup_jobs
+from lat_beams.utils import print_once, set_tag, setup_jobs, init_log
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -116,6 +116,9 @@ args = parser.parse_args()
 with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
 
+# Setup logger
+L = init_log()
+
 # Get some global settings
 source_list = cfg["source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
 extent = cfg["extent"] = cfg.get("extent", 900)
@@ -174,6 +177,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory,
     args.job_memory_buffer,
     False,
+    L,
 )
 
 # Even things out
@@ -221,13 +225,13 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
-    print(f"(rank {myrank}) Fitting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+    L.normal(f"Fitting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
 
     # Get map job
     job_str = f"{obs_id}-{ws}-{ufm}-{band}"
     if job_str not in map_jobdict:
         msg = "No map job"
-        print(f"\t{msg}")
+        L.debug(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -245,7 +249,7 @@ for i, j in enumerate(joblist):
         weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
     except FileNotFoundError:
         msg = "Missing map files"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -255,13 +259,12 @@ for i, j in enumerate(joblist):
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
         msg = "Weights all 0"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
         continue
-
-    # Estimate SNR
+    # Estimatr SNR
     snr_extent_pix = int(snr_extent // pixsize)
     cent = estimate_cent(solved, smooth_kern / pixsize, buf)
     sig = solved[cent]
@@ -276,7 +279,7 @@ for i, j in enumerate(joblist):
 
     if snr < min_snr:
         msg = "Data SNR too low"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -300,7 +303,7 @@ for i, j in enumerate(joblist):
     )
     if fit_params is None or model is None:
         msg = "Fit failed"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -309,7 +312,7 @@ for i, j in enumerate(joblist):
     # Check SNR again
     if np.nanmax(model) / noise < min_snr:
         msg = "Model SNR too low"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -327,14 +330,14 @@ for i, j in enumerate(joblist):
     # FWHM check
     if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
         msg = "Data FWHM out of tolerance"
-        print(f"\t{msg}")
+        L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
         continue
     if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
         msg = "Model FWHM out of tolerance"
-        print(f"\t{msg}")
+        L.eror(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -442,4 +445,4 @@ for i, j in enumerate(joblist):
 
 comm.barrier()
 sys.stdout.flush()
-print_once("Done with all fits")
+L.info("Done with all fits")
