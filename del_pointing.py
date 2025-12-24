@@ -7,10 +7,9 @@ import argparse
 import os
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from sotodlib.core import AxisManager, Context, metadata
+from sotodlib.core import Context, metadata
 from sotodlib.io.metadata import read_dataset, write_dataset
 
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}

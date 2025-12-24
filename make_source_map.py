@@ -6,7 +6,6 @@ import sys
 import time
 from functools import partial
 
-import h5py
 import mpi4py.rc
 import numpy as np
 import yaml
@@ -15,12 +14,10 @@ from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
-from sotodlib.site_pipeline import jobdb
-from tqdm import tqdm
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs, init_log
+from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -297,15 +294,14 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-if args.replot:
-    print_once("Running in replot mode!")
+# Setup logger
+L = init_log()
 
+if args.replot:
+    L.info("Running in replot mode!")
 
 with open(args.cfg, "r") as f:
     cfg = yaml.safe_load(f)
-
-# Setup logger
-L = init_log()
 
 # Get some global settings
 source_list = cfg["source_list"] = cfg.get("map_source_list", ["mars", "saturn"])

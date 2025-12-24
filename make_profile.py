@@ -4,11 +4,10 @@ import os
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import yaml
 from astropy import constants as const
 from healpy.sphtfunc import beam2bl
-from sotodlib.core import AxisManager, Context
+from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
 from lat_beams import fitting as bf

@@ -4,18 +4,13 @@ import sys
 import time
 from functools import partial
 
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import sqlalchemy as sqy
 import yaml
 from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
-from sotodlib.site_pipeline import jobdb
-from sqlalchemy.pool import NullPool
-from tqdm import tqdm
 
 from lat_beams.beam_utils import (
     crop_maps,
@@ -26,7 +21,7 @@ from lat_beams.beam_utils import (
 )
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
-from lat_beams.utils import print_once, set_tag, setup_jobs, init_log
+from lat_beams.utils import set_tag, setup_jobs, init_log
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 

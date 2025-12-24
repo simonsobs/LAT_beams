@@ -1,10 +1,8 @@
 # TODO: make this generic
 import os
 
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from cycler import cycler
 from sotodlib.coords import fp_containers as fpc
 
 epochs = [(1744848000, 1745207940), (1745207940, 1749600000), (1749600000, 2e9)]

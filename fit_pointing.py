@@ -22,24 +22,19 @@ import time
 from functools import partial, reduce
 
 import h5py
-import matplotlib.pyplot as plt
 import mpi4py.rc
 import numpy as np
-import sqlalchemy as sqy
 import yaml
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
-from sotodlib.site_pipeline import jobdb
-from sqlalchemy.pool import NullPool
-from tqdm import tqdm
 from typing_extensions import cast
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
-from lat_beams.utils import load_aman, print_once, set_tag, setup_jobs, init_log
+from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log
 
 mpi4py.rc.threads = False
 from mpi4py import MPI

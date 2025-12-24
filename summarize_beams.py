@@ -2,12 +2,9 @@ import argparse
 import os
 
 import astropy.units as u
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import yaml
-from sotodlib.core import AxisManager
 
 from lat_beams import beam_utils as bu
 
