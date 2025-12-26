@@ -72,7 +72,7 @@ def plot_map(
         plt.xlim((0, extent / zoom))
         lims = plt.gca().get_xlim()
         i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
-        plt.gca().set_ylim(rprof[i].min(), rprof[i].max())
+        plt.gca().set_ylim(np.nanmin(rprof[i]), np.nanmax(rprof[i]))
         plt.savefig(
             os.path.join(
                 ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_prof{label}_zoom.png"
