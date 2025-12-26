@@ -33,9 +33,6 @@ nproc = comm.Get_size()
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 comps = "TQU"
 
-cp.logger.setLevel(logging.WARNING)
-
-
 def get_jobdict(jdb):
     jobdict = {
         f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
@@ -45,6 +42,8 @@ def get_jobdict(jdb):
 
 
 def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L):
+    lvl = metadata.loader.logger.level
+    metadata.loader.logger.setLevel(25)
     if obs_ids is not None:
         obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
     else:
@@ -89,6 +88,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
             if band[0] != "f":
                 continue
             obsit += [(obs, ws, ufm, band)]
+    metadata.loader.logger.setLevel(lvl)
     return obsit
 
 
@@ -128,6 +128,8 @@ def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_
     plt_extent = [ra_min, ra_max, dec_min, dec_max]
     plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
     map_norm = 1.0 / solved[0][cent]
+    if not np.isfinite(map_norm):
+        map_norm = 0.0
     for i, comp in enumerate(comps):
         plot_map(
             solved[i],
@@ -178,10 +180,11 @@ def make_cuts(aman, source_flags, n_modes, job, L):
     no_src = ~np.any(smsk, axis=-1)
     sdets = ~(all_src + no_src)
     peak_snr = np.zeros(len(sig_filt))
-    with np.errstate(divide="ignore"):
-        peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
-            np.diff(sig_filt[sdets], axis=-1)
-        )
+    if np.sum(sdets) > 0:
+        with np.errstate(divide="ignore"):
+            peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
+                np.diff(sig_filt[sdets], axis=-1)
+            )
     to_cut = peak_snr < min_snr  # + ~np.isfinite(peak_snr)
     to_cut[~sdets] = False
     cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
@@ -222,6 +225,8 @@ def make_map(
         return None, None
 
     # Initial map
+    lvl = L.level
+    L.setLevel(logging.WARNING)
     out = cp.make_map(
         aman,
         center_on=src_to_map,
@@ -231,7 +236,9 @@ def make_map(
         comps=comps,
         filename=filename,
         n_modes=n_modes,
+        info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
     )
+    L.setLevel(lvl)
 
     # Smooth and find the center
     cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
@@ -239,8 +246,9 @@ def make_map(
     # Estimate SNR
     peak = out["solved"][0][cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+    ndets = np.sum(np.all(~cuts.mask(), axis=-1))
     L.debug(f"\t{map_str.title()} map SNR approximately {snr}")
-    if snr < min_snr * np.sqrt(np.sum(~to_cut)) / 2:
+    if snr < min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -253,7 +261,7 @@ def make_map(
                 if os.path.isfile(fname):
                     os.remove(fname)
             for name in ["binned", "detweights", "solved", "weights"]:
-                set_tag(job, binned, "")
+                set_tag(job, name, "")
         return None, None
     return out, cent
 
@@ -296,6 +304,8 @@ args = parser.parse_args()
 
 # Setup logger
 L = init_log()
+metadata.loader.logger = L
+cp.logger = L
 
 if args.replot:
     L.info("Running in replot mode!")
@@ -391,6 +401,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory,
     args.job_memory_buffer,
     args.replot,
+    L,
 )
 
 # Even things out
@@ -411,6 +422,7 @@ mask_fac = search_mask["xyr"][-1] / mask_size
 # Mapping loop
 source_list = set(source_list)
 job = None
+L.flush()
 for i, j in enumerate(joblist):
     sys.stdout.flush()
     comm.barrier()
@@ -418,6 +430,7 @@ for i, j in enumerate(joblist):
     # with jdb.locked(j) as job:
     for r in range(nproc):
         if r == myrank:
+            L.flush()
             if job is not None:
                 jdb.unlock(job)
             job = None
@@ -463,7 +476,10 @@ for i, j in enumerate(joblist):
     set_tag(job, "comps", comps)
 
     # Get metadata
+    lvl = L.level
+    L.setLevel(logging.ERROR)
     meta = ctx.get_meta(obs_id)
+    L.setLevel(lvl)
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
         L.error(f"\t{msg}")
@@ -522,6 +538,8 @@ for i, j in enumerate(joblist):
         continue
 
     # Get initial source_flags
+    lvl = L.level
+    L.setLevel(logging.WARNING)
     source_flags = cp.compute_source_flags(
         tod=aman,
         P=None,
@@ -531,6 +549,7 @@ for i, j in enumerate(joblist):
         max_pix=4e8,
         wrap=None,
     )
+    L.setLevel(lvl)
 
     # Do an aggressive filter and flag dets without the source
     cuts = make_cuts(aman, source_flags, 2 * n_modes, job, L)
@@ -567,6 +586,8 @@ for i, j in enumerate(joblist):
             mask_size * fscale_fac,
         ),
     }
+    lvl = L.level
+    L.setLevel(logging.WARNING)
     source_flags = cp.compute_source_flags(
         tod=aman,
         P=None,
@@ -576,6 +597,7 @@ for i, j in enumerate(joblist):
         max_pix=4e8,
         wrap=None,
     )
+    L.setLevel(lvl)
 
     # Make final map
     out, cent = make_map(
@@ -612,14 +634,17 @@ for i, j in enumerate(joblist):
         )
 
     # Plot
-    make_plots(
-        out["solved"], cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh
-    )
+    try:
+        make_plots(
+            out["solved"], cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh
+        )
+    except Exception as e:
+        L.warning(f"Plotting failed with error: {e}")
 
     set_tag(job, "message", "Success")
     job.jstate = "done"
 
-    sys.stdout.flush()
+L.flush()
 
 # Splits stuff to implement later
 # TODO: Bin in annuli

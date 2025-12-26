@@ -6,13 +6,14 @@ import numpy as np
 import sqlalchemy as sqy
 from astropy import units as u
 from pixell import enmap, utils
-from sotodlib.core import AxisManager
+from sotodlib.core import AxisManager, metadata
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 from tqdm import tqdm
-from sotodlib.mapmaking import init
+from sotodlib.mapmaking import init, ColoredFormatter
 import logging
+from logging.handlers import MemoryHandler
 
 from .beam_utils import crop_maps
 
@@ -27,15 +28,25 @@ except:
     comm = None
 
 def init_log(level=logging.DEBUG, comm=comm):
+    # Uses a crappy version of https://stackoverflow.com/a/35804945
     def lognormal(self, message, *args, **kwargs):
         if self.isEnabledFor(25):
             self._log(25, message, args, **kwargs)
+    def flush_log(self):
+        for handler in self.handlers:
+            if hasattr(handler, "flush"):
+                handler.flush()
     rank = 0
     if comm is not None:
         rank = comm.Get_rank()
-    L = init(level, rank = rank)
     logging.addLevelName(25, "NORMAL")
-    setattr(L, "normal", lognormal) 
+    setattr(logging.getLoggerClass(), "normal", lognormal) 
+    setattr(logging.getLoggerClass(), "flush", flush_log) 
+    L = init(level, rank = rank)
+    for handler in L.handlers:
+        if isinstance(handler.formatter, ColoredFormatter):
+            handler.formatter.colors['NORMAL'] = "\033[1;34m"
+    L.handlers = [MemoryHandler(1000, flushLevel=logging.CRITICAL, target=h, flushOnClose=True) for h in L.handlers]
 
     return L
 
@@ -52,64 +63,6 @@ def print_once(*args):
     if comm is None or comm.Get_rank() == 0:
         print(*args)
         sys.stdout.flush()
-
-def subpix_shift(imap, ishape, iwcs):
-    crdelt = iwcs.wcs.crval - imap.wcs.wcs.crval
-    cpdelt = iwcs.wcs.crpix - imap.wcs.wcs.crpix
-    subpix = (crdelt / iwcs.wcs.cdelt - cpdelt + 0.5) % 1 - 0.5
-    imap2 = enmap.fractional_shift(imap, -1 * subpix[::-1], nofft=False)
-
-    return imap2
-
-
-def coadd(imaps, iweights, medsub=True):
-    # Get a joint geometry and init output maps
-    ishape, iwcs = imaps[0].shape, imaps[0].wcs
-    imaps = [subpix_shift(imap, ishape, iwcs) for imap in imaps]
-    iweights = [subpix_shift(imap, ishape, iwcs) for imap in iweights]
-    oshape, owcs = enmap.union_geometry([im.geometry for im in imaps])
-    omap = enmap.zeros((len(imaps[0].shape),) + oshape, owcs)
-    oweight = enmap.zeros((len(imaps[0].shape),) + oshape, owcs)
-
-    # Coadd
-    op = np.ndarray.__iadd__
-    for im, iw in zip(imaps, iweights):
-        oweight.insert(iw, op=op)
-        off = 0
-        # if medsub:
-        #     off = utils.weighted_median(im, iw, axis=0)
-        omap.insert(iw * (im - off), op=op)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        omap /= oweight
-    np.nan_to_num(omap, copy=False, nan=0, posinf=0, neginf=0)
-
-    return omap, oweight
-
-
-def recenter(imap, obs_id, stream_id, band, fit_file, norm=True, extent=None):
-    aman_path = os.path.join(obs_id, stream_id, band)
-    aman = AxisManager.load(fit_file, aman_path)
-    cent = enmap.sky2pix(
-        imap.shape,
-        imap.wcs,
-        np.array((aman.eta0.to(u.rad).value, aman.xi0.to(u.rad).value)),
-    )
-    zero = enmap.sky2pix(imap.shape, imap.wcs, np.array((0, 0)))
-    imap = enmap.shift(imap, cent - zero)
-
-    if norm:
-        imap = (imap) / aman.amp.value
-
-    if extent is not None:
-        imap = crop_maps(
-            [imap],
-            enmap.sky2pix(imap.shape, imap.wcs, np.array((0, 0))),
-            extent / np.abs(3600 * imap.wcs.wcs.cdelt[1]),
-        )[0]
-
-    return imap
-
-
 class FakeJob:
     def __getattr__(self, name: str, /):
         _ = name
@@ -137,7 +90,9 @@ def set_tag(job, key, new_val):
 
 
 def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
+    lvl = L.level
     try:
+        L.setLevel(logging.ERROR)
         err, _, _, aman = preproc_or_load_group(
             obs_id,
             preprocess_cfg,
@@ -146,7 +101,9 @@ def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
             overwrite=True,
             logger=L,
         )
+        L.setLevel(lvl)
     except:
+        L.setLevel(lvl)
         msg = "Failed to load or preprocess!"
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -177,7 +134,9 @@ def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
 
 
 def make_jobdb(comm, data_dir):
-    myrank = comm.Get_rank()
+    myrank = 0
+    if comm is not None:
+        myrank = comm.Get_rank()
     # Let rank 0 make jobdb first to avoid race conditions
     if myrank == 0:
         engine = sqy.create_engine(
@@ -187,6 +146,8 @@ def make_jobdb(comm, data_dir):
         )
         jdb = jobdb.JobManager(engine=engine)
         jdb.clear_locks(jobs="all")
+        if comm is None:
+            return jobdb
     comm.barrier()
     if myrank != 0:
         engine = sqy.create_engine(
@@ -219,16 +180,18 @@ def setup_jobs(
     # Get the jobs, make them if we need to
     now = time.time()
     L.info("Setting up jobdb")
+    L.flush()
     jdb = make_jobdb(comm, data_dir)
     joblist = []
     jobs_to_make = []
     L.info("Getting jobdict")
+    L.flush()
     jobdict = get_jobdict(jdb)
     L.info("Getting potential jobs")
+    L.flush()
     it = get_jobit(jdb)
     L.info("Processing possible jobs")
-    if myrank == 0:
-        it = tqdm(it, file=sys.stdout)
+    L.flush()
     for info in it:
         sys.stdout.flush()
         jobstr = get_jobstr(info)
@@ -268,19 +231,22 @@ def setup_jobs(
     tot_missing = 0
     tot_missing = comm.reduce(len(jobs_to_make), root=0)
     L.info(f"Adding {tot_missing} new jobs")
+    L.flush()
     t0 = time.time()
     for i in range(nproc):
-        L.debug(f"\tRank {i} writing")
         if myrank == i:
+            L.debug(f"\tRank {i} writing")
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
         comm.barrier()
     t1 = time.time()
+    L.flush()
     L.info(f"Took {t1-t0} seconds to add")
 
     # Get the final job list
     all_jobs = comm.allgather(joblist)
     all_jobs = [job for jobs in all_jobs for job in jobs]
     L.info(f"{len(all_jobs)} jobs to run!")
+    L.flush()
 
     return jdb, all_jobs

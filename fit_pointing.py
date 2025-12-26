@@ -58,6 +58,8 @@ def get_jobdict(jdb):
 
 
 def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source):
+    lvl = metadata.loader.logger.level
+    metadata.loader.logger.setLevel(25)
     if obs_ids is not None:
         obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
     else:
@@ -87,6 +89,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source):
             ufm,
         ) in wsufms:
             obsit += [(obs, ws, ufm)]
+    metadata.loader.logger.setLevel(lvl)
     return obsit
 
 
@@ -132,6 +135,8 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
         [(0, "dets")],
     )
     aman_dummy.wrap("focal_plane", fp)
+    lvl = cp.logger.level
+    cp.logger.setLevel(logging.WARNING)
     source_flags = cp.compute_source_flags(
         tod=aman_dummy,
         P=None,
@@ -141,6 +146,7 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
         max_pix=4e8,
         wrap=None,
     )
+    cp.logger.setLevel(lvl)
     if len(source_flags.ranges[0].ranges()) == 0:
         start = -1
         stop = -1
@@ -202,6 +208,8 @@ def main():
 
     # Setup logger
     L = init_log()
+    metadata.loader.logger = L
+    cp.logger = L
 
     if args.no_fit:
         L.info(
@@ -367,7 +375,6 @@ def main():
             joblist += [None] * (max_fits - len(joblist))
     else:
         joblist = []
-    L_local = init_log(comm=local_comm)
 
     # Get settings for source mask
     res = cfg["res"] = cfg.get("res", (2 / 300.0) * np.pi / 180.0)
@@ -414,6 +421,7 @@ def main():
                 # with jdb.locked(j) as job:
                 for r in range(nproc):
                     if r == myrank:
+                        L.flush()
                         if job is not None:
                             jdb.unlock(job)
                         job = None
@@ -439,7 +447,10 @@ def main():
 
                 # Get metadata
                 obs = ctx.obsdb.get(obs_id, tags=True)
+                lvl = L.level
+                L.setLevel(logging.ERROR)
                 meta = ctx.get_meta(obs_id)
+                L.setLevel(lvl)
                 if meta.dets.count == 0:
                     msg = "Looks like we don't have real metadata for this observation!"
                     L.error(f"\t{msg}")
@@ -861,6 +872,7 @@ def main():
     if args.profile and ismaster:
         profiler.stop()
         profiler.write_html(f"profile_{myrank}.html")
+    L.flush()
 
 
 if __name__ == "__main__":

@@ -205,6 +205,7 @@ for i, j in enumerate(joblist):
     # with jdb.locked(j) as job:
     for r in range(nproc):
         if r == myrank:
+            L.flush()
             if job is not None:
                 jdb.unlock(job)
             job = None
@@ -441,3 +442,4 @@ for i, j in enumerate(joblist):
 comm.barrier()
 sys.stdout.flush()
 L.info("Done with all fits")
+L.flush()
