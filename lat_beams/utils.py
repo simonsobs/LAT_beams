@@ -63,23 +63,8 @@ def print_once(*args):
     if comm is None or comm.Get_rank() == 0:
         print(*args)
         sys.stdout.flush()
-class FakeJob:
-    def __getattr__(self, name: str, /):
-        _ = name
-        return self._null_func
-
-    def __setattr__(self, name: str, value):
-        _ = name, value
-        pass
-
-    def _null_func(*args, **kwargs):
-        _ = args, kwargs
-        pass
-
 
 def set_tag(job, key, new_val):
-    if isinstance(job, FakeJob):
-        return
     # This should be provided by the Job class but it's not...
     for _t in job._tags:
         if _t.key == key:
