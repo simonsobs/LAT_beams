@@ -1,4 +1,3 @@
-import argparse
 import glob
 import logging
 import os
@@ -17,7 +16,7 @@ from sotodlib.core import Context, metadata
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log
+from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log, get_args_cfg
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -265,53 +264,15 @@ def make_map(
         return None, None
     return out, cent
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument("cfg", help="Path to the config file")
-parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
-parser.add_argument(
-    "--overwrite", "-o", action="store_true", help="Overwrite an existing map"
-)
-parser.add_argument(
-    "--lookback",
-    "-l",
-    type=float,
-    help="Amount of time to lookback for query, overides start time from config",
-)
-parser.add_argument(
-    "--job_memory",
-    "-m",
-    type=float,
-    help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
-)
-parser.add_argument(
-    "--job_memory_buffer",
-    "-mb",
-    default=0,
-    type=float,
-    help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
-)
-parser.add_argument(
-    "--retry_failed", "-r", action="store_true", help="Retry failed maps"
-)
-parser.add_argument(
-    "--replot",
-    "-p",
-    action="store_true",
-    help="Don't do any mamaking, just replot existing maps",
-)
-args = parser.parse_args()
+args, cfg = get_args_cfg()
 
 # Setup logger
 L = init_log()
 metadata.loader.logger = L
 cp.logger = L
 
-if args.replot:
-    L.info("Running in replot mode!")
-
-with open(args.cfg, "r") as f:
-    cfg = yaml.safe_load(f)
+if args.plot_only:
+    L.info("Running in plot_only mode!")
 
 # Get some global settings
 source_list = cfg["source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
@@ -400,7 +361,7 @@ jdb, all_jobs = setup_jobs(
     args.retry_failed,
     args.job_memory,
     args.job_memory_buffer,
-    args.replot,
+    args.plot_only,
     L,
 )
 
@@ -447,12 +408,12 @@ for i, j in enumerate(joblist):
     band = job.tags["band"]
     obs = ctx.obsdb.get(obs_id, tags=True)
 
-    if args.replot:
+    if args.plot_only:
         L.normal(f"Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
         except FileNotFoundError:
-            msg = "Missing map files in replot mode"
+            msg = "Missing map files in plot_only mode"
             L.error(f"\t{msg}")
             set_tag(job, "message", msg)
             job.jstate = "failed"

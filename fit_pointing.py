@@ -14,7 +14,6 @@ Still somewhat LAT specific but could be genralized if desired.
 # - should develop tests for this
 # - allow a list of sources
 
-import argparse
 import logging
 import os
 import sys
@@ -34,7 +33,7 @@ from typing_extensions import cast
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
-from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log
+from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log, get_args_cfg
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -157,63 +156,15 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
 
 
 def main():
-    # Only the config is necessary; the rest are just for ease of use.
-    # TODO: can refine these or add to them.
-    parser = argparse.ArgumentParser()
-    parser.add_argument("cfg", help="Path to the config file")
-    parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
-    parser.add_argument(
-        "--overwrite", "-o", action="store_true", help="Overwrite an existing fit"
-    )
-    parser.add_argument(
-        "--no_fit", "-n", action="store_true", help="Just plot TODs and don't fit"
-    )
-    parser.add_argument(
-        "--forced_ws", "-ws", nargs="+", help="Force these wafer slots into the fit"
-    )
-    parser.add_argument(
-        "--job_memory",
-        "-m",
-        type=float,
-        help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
-    )
-    parser.add_argument(
-        "--job_memory_buffer",
-        "-mb",
-        default=0,
-        type=float,
-        help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
-    )
-    parser.add_argument(
-        "--lookback",
-        "-l",
-        type=float,
-        help="Amount of time to lookback for query, overides start time from config",
-    )
-    parser.add_argument("--profile", "-p", action="store_true", help="Run a profile")
-    parser.add_argument(
-        "--retry_failed", "-r", action="store_true", help="Retry failed jobs"
-    )
-    parser.add_argument(
-        "--parallel_factor",
-        "-f",
-        default=4,
-        type=int,
-        help="Per-obs parallelization factor",
-    )
-    args = parser.parse_args()
-
-    with open(args.cfg, "r") as f:
-        cfg = yaml.safe_load(f)
-
+    args, cfg = get_args_cfg()
     # Setup logger
     L = init_log()
     metadata.loader.logger = L
     cp.logger = L
 
-    if args.no_fit:
+    if args.plot_only:
         L.info(
-            "Running in 'no_fit' mode. TOD plots will be made but pointing will not be fit"
+            "Running in 'plot_only' mode. TOD plots will be made but pointing will not be fit"
         )
 
     if args.profile:
@@ -514,22 +465,22 @@ def main():
                     )
                     msg = ""
                     if start < 0 or stop < 0:
-                        if not args.no_fit:
+                        if not args.plot_only:
                             msg = "No samples flagged in source flags!"
                             to_skip = True
                         else:
                             L.warning(
-                                f"\t\tNo samples flagged! But running in no_fit mode so will continue with all samples"
+                                f"\t\tNo samples flagged! But running in plot_only mode so will continue with all samples"
                             )
                             start = 0
                             stop = int(cast(int, aman.samps.count))
                     if stop - start < min_samps:
-                        if not args.no_fit:
+                        if not args.plot_only:
                             msg = "Too few samples flagged in source flags!"
                             to_skip = True
                         else:
                             L.debug(
-                                f"\t\tOnly {stop-start} flagged samples! But running in no_fit mode so will continue"
+                                f"\t\tOnly {stop-start} flagged samples! But running in plot_only mode so will continue"
                             )
                     if to_skip:
                         L.error(f"\t\t{msg}")
@@ -635,9 +586,9 @@ def main():
 
                     # Not enough samples flagged => won't bother fitting
                     if len(samp_idx) < min(block_size, min_samps / 2):
-                        if args.no_fit:
+                        if args.plot_only:
                             L.warning(
-                                "\t\tLooks like you didn't see the source at all! But running in no_fit mode so will continue"
+                                "\t\tLooks like you didn't see the source at all! But running in plot_only mode so will continue"
                             )
                         else:
                             _msg = f"{band_name} Failed to find source blind."
@@ -652,13 +603,13 @@ def main():
                         )
                     )
                     if stop - start < min_samps:
-                        if not args.no_fit:
+                        if not args.plot_only:
                             _msg = f"{band_name} Too few samples found in blind flagging."
                             L.error(_msg)
                             msg += _msg
                             continue
                         L.warning(
-                            f"\t\tOnly {stop-start} flagged samples! But running in no_fit mode so will continue"
+                            f"\t\tOnly {stop-start} flagged samples! But running in plot_only mode so will continue"
                         )
                     L.debug(f"\t\t{stop - start} samps flagged blind")
                     # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
@@ -690,7 +641,7 @@ def main():
 
                     # Plot the TOD
                     plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}")
-                    if args.no_fit:
+                    if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
                         L.normal(_msg)
                         msg += _msg
@@ -770,7 +721,7 @@ def main():
                     msg += msg
 
                 # Get ready to save
-                if args.no_fit:
+                if args.plot_only:
                     to_save = (None, None, None)
                     continue
                 if len(rsets) == 0:

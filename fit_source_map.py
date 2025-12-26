@@ -1,4 +1,3 @@
-import argparse
 import os
 import sys
 import time
@@ -21,7 +20,7 @@ from lat_beams.beam_utils import (
 )
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
-from lat_beams.utils import set_tag, setup_jobs, init_log
+from lat_beams.utils import set_tag, setup_jobs, init_log, get_args_cfg
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -74,42 +73,7 @@ def get_tags(mjob):
     }
     return tags
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument("cfg", help="Path to the config file")
-parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
-parser.add_argument(
-    "--overwrite", "-o", action="store_true", help="Overwrite an existing fit"
-)
-parser.add_argument(
-    "--start_from", "-s", default=0, type=int, help="Skip to the nth obs (0 indexed)"
-)
-parser.add_argument(
-    "--job_memory",
-    "-m",
-    type=float,
-    help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
-)
-parser.add_argument(
-    "--job_memory_buffer",
-    "-mb",
-    default=0,
-    type=float,
-    help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
-)
-parser.add_argument(
-    "--lookback",
-    "-l",
-    type=float,
-    help="Amount of time to lookback for query, overides start time from config",
-)
-parser.add_argument(
-    "--retry_failed", "-r", action="store_true", help="Retry failed maps"
-)
-args = parser.parse_args()
-
-with open(args.cfg, "r") as f:
-    cfg = yaml.safe_load(f)
+args, cfg = get_args_cfg()
 
 # Setup logger
 L = init_log()

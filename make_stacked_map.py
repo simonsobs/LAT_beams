@@ -1,4 +1,3 @@
-import argparse
 import os
 
 import astropy.units as u
@@ -10,7 +9,7 @@ from sotodlib.core import Context
 from pixell import enmap
 
 from lat_beams import beam_utils as bu
-from lat_beams.utils import make_jobdb
+from lat_beams.utils import make_jobdb, get_args_cfg
 from lat_beams.plotting import plot_map
 
 
@@ -24,12 +23,7 @@ def view_TQU(imap):
 
 nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
-parser = argparse.ArgumentParser()
-parser.add_argument("cfg", help="Path to the config file")
-args = parser.parse_args()
-
-with open(args.cfg, "r") as f:
-    cfg = yaml.safe_load(f)
+args, cfg = get_args_cfg()
 
 # Get some global setting
 epochs = cfg.get("epochs", [(0, 2e10)])
