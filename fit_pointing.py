@@ -324,7 +324,7 @@ def main():
     start_time = cfg["start_time"]
     if args.lookback is not None:
         start_time = time.time() - 3600 * args.lookback
-    stop_time = cft["stop_time"]
+    stop_time = cfg["stop_time"]
     jdb, all_jobs = setup_jobs(
         comm,
         data_dir,
@@ -346,6 +346,7 @@ def main():
         args.job_memory,
         args.job_memory_buffer,
         False,
+        L,
     )
 
     # MPI Splitting
@@ -363,10 +364,7 @@ def main():
     master_comm = comm.Split(ismaster, myrank)
     P = local_comm.Get_size()
     if ismaster:
-        obs_idx = np.array_split(np.arange(len(joblist)), master_comm.Get_size())[
-            master_comm.Get_rank()
-        ]
-        joblist = [job for i, job in enumerate(joblist) if i in obs_idx]
+        joblist = np.array_split(all_jobs, master_comm.Get_size())[master_comm.Get_rank()].tolist()
         n_fits = master_comm.allgather(len(joblist))
         max_fits = np.max(n_fits)
         if n_fits[0] != max_fits:
@@ -387,6 +385,7 @@ def main():
     source_list = set(source_list)
 
     # Run from the masters
+    job = None
     with MPICommExecutor(local_comm, 0) as executor:
         if executor is not None:
             for i, j in enumerate(joblist):
@@ -446,9 +445,9 @@ def main():
                 set_tag(job, "preprocess", preprocess_str)
 
                 # Get metadata
-                obs = ctx.obsdb.get(obs_id, tags=True)
                 lvl = L.level
                 L.setLevel(logging.ERROR)
+                obs = ctx.obsdb.get(obs_id, tags=True)
                 meta = ctx.get_meta(obs_id)
                 L.setLevel(lvl)
                 if meta.dets.count == 0:
@@ -491,8 +490,8 @@ def main():
                     h5_file.create_group(obs["obs_id"])
 
                 # Load and process the TOD
-                aman_path = load_aman(
-                    obs["obs_id"], preprocess_cfg, {"wafer_slot": ws}, job, min_dets, fp_flag=False
+                aman = load_aman(
+                    obs["obs_id"], preprocess_cfg, {"wafer_slot": ws}, job, min_dets, L, fp_flag=False
                 )
                 if aman is None:
                     continue
@@ -692,7 +691,7 @@ def main():
                     # Plot the TOD
                     plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}")
                     if args.no_fit:
-                        _msg = "{band_name} Ran in no fit mode"
+                        _msg = f"{band_name} Ran in no fit mode"
                         L.normal(_msg)
                         msg += _msg
                         continue
@@ -766,8 +765,8 @@ def main():
                             count=focal_plane.dets.count,
                         )
                         rsets += [metadata.ResultSet.from_friend(sarray)]
-                    _msg = "{band_name} Success!"
-                    L.normal(_msg)
+                    _msg = f"{band_name} Success!"
+                    L.normal(f"\t{_msg}")
                     msg += msg
 
                 # Get ready to save
@@ -842,9 +841,12 @@ def main():
                 # Ready to save
                 L.normal(f"\tSaving {len(rset)} fits ({np.sum(msk)} good).")
                 if pad:
+                    lvl = L.level
+                    L.setLevel(logging.ERROR)
                     all_dets = ctx.get_det_info(obs["obs_id"], dets={"stream_id": ufm})[
                         "readout_id"
                     ]
+                    L.setLevel(lvl)
                     pad_dets = all_dets[~np.isin(all_dets, rset["dets:readout_id"])]
                     if outdt[0][1] is None:
                         outdt[0][1] = pad_dets.dtype

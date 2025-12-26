@@ -15,7 +15,7 @@ archive:
   policy:
     type: 'simple'
     # filename: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/preprocess_archive.h5'
-  filename: '/global/cfs/cdirs/sobs/users/skh/fp_preprocess_archive.h5'
+    filename: '/global/cfs/cdirs/sobs/users/skh/fp_preprocess_archive.h5'
 
 process_pipe:
     - name: "correct_iir_params"
