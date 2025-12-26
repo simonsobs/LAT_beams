@@ -15,13 +15,13 @@ context: 'contexts/nersc_pointing_model_atm.yaml'
 start_time: 1756699200
 stop_time: 20000000000
 n_med: 3
-mask_size: .1
+mask_size: .2
 search_mask:
   shape: "circle"
   xyr:
     - 0.
     - 0.
-    - .5
+    - 1
 epochs:
     - [1756699200, 20000000000]
 append: "atm_relcal"
