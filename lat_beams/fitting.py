@@ -19,7 +19,7 @@ from astropy.convolution import (
     convolve_fft,
 )
 from numpy.typing import NDArray
-from scipy.optimize import direct, minimize
+from scipy.optimize import minimize
 from scipy.signal import detrend
 from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat

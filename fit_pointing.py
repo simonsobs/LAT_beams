@@ -33,7 +33,7 @@ from typing_extensions import cast
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
-from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log, get_args_cfg
+from lat_beams.utils import get_args_cfg, init_log, load_aman, set_tag, setup_jobs
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -315,7 +315,9 @@ def main():
     master_comm = comm.Split(ismaster, myrank)
     P = local_comm.Get_size()
     if ismaster:
-        joblist = np.array_split(all_jobs, master_comm.Get_size())[master_comm.Get_rank()].tolist()
+        joblist = np.array_split(all_jobs, master_comm.Get_size())[
+            master_comm.Get_rank()
+        ].tolist()
         n_fits = master_comm.allgather(len(joblist))
         max_fits = np.max(n_fits)
         if n_fits[0] != max_fits:
@@ -386,9 +388,7 @@ def main():
                 obs_id = job.tags["obs_id"]
                 ufm = job.tags["stream_id"]
                 ws = job.tags["wafer_slot"]
-                L.normal(
-                    f"Fitting {obs_id} {ufm} ({i+1}/{len(joblist)})"
-                )
+                L.normal(f"Fitting {obs_id} {ufm} ({i+1}/{len(joblist)})")
 
                 # Save metadata and config info
                 set_tag(job, "config", cfg_str)
@@ -442,7 +442,13 @@ def main():
 
                 # Load and process the TOD
                 aman = load_aman(
-                    obs["obs_id"], preprocess_cfg, {"wafer_slot": ws}, job, min_dets, L, fp_flag=False
+                    obs["obs_id"],
+                    preprocess_cfg,
+                    {"wafer_slot": ws},
+                    job,
+                    min_dets,
+                    L,
+                    fp_flag=False,
                 )
                 if aman is None:
                     continue
@@ -582,7 +588,9 @@ def main():
                         idx = np.flatnonzero(m[:-1] != m[1:])
                         max_idx = (idx[1::2] - idx[::2]).argmax()
                         samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
-                        L.debug(f"\t\tFound {len(samp_idx)} continously flagged samples")
+                        L.debug(
+                            f"\t\tFound {len(samp_idx)} continously flagged samples"
+                        )
 
                     # Not enough samples flagged => won't bother fitting
                     if len(samp_idx) < min(block_size, min_samps / 2):
@@ -604,7 +612,9 @@ def main():
                     )
                     if stop - start < min_samps:
                         if not args.plot_only:
-                            _msg = f"{band_name} Too few samples found in blind flagging."
+                            _msg = (
+                                f"{band_name} Too few samples found in blind flagging."
+                            )
                             L.error(_msg)
                             msg += _msg
                             continue
@@ -632,7 +642,9 @@ def main():
                     aman = aman.restrict("dets", msk)
                     sig_filt = sig_filt[msk]
                     if aman.dets.count < min_dets:
-                        _msg = f"{band_name} Too few detectors after final sanity check."
+                        _msg = (
+                            f"{band_name} Too few detectors after final sanity check."
+                        )
                         L.error(f"\t{msg}")
                         msg += _msg
                         continue

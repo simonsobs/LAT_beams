@@ -3,7 +3,6 @@ import os
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
-import yaml
 from astropy import constants as const
 from healpy.sphtfunc import beam2bl
 from sotodlib.core import Context

@@ -1,16 +1,13 @@
 import os
 
 import astropy.units as u
-import matplotlib.pyplot as plt
 import numpy as np
-import yaml
-from astropy import constants as const
-from sotodlib.core import Context
 from pixell import enmap
+from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
-from lat_beams.utils import make_jobdb, get_args_cfg
 from lat_beams.plotting import plot_map
+from lat_beams.utils import get_args_cfg, make_jobdb
 
 
 def view_TQU(imap):

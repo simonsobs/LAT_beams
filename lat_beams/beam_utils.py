@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from scipy.interpolate import interp1d
-from scipy.ndimage import gaussian_filter, sobel
 from sotodlib.core import AxisManager
 
 
@@ -205,7 +204,9 @@ def load_beam_fits_from_jobs(fpath, jobs):
         ("aman", "O"),
     ]
     all_fits = np.fromiter(
-        zip(obs_ids, wafer_slot, stream_ids, bands, sources, times, tdelt, amans), dtype, count=len(amans)
+        zip(obs_ids, wafer_slot, stream_ids, bands, sources, times, tdelt, amans),
+        dtype,
+        count=len(amans),
     )
     return all_fits
 
@@ -224,6 +225,7 @@ def get_fit_vec(all_fits, name, fall_back=None):
     if dat.unit == u.Unit(3):
         dat = dat.value * u.pW
     return dat
+
 
 def get_split_vec(fits, split, ctx, round_to=2):
     split_vecs = []
@@ -244,7 +246,6 @@ def get_split_vec(fits, split, ctx, round_to=2):
     return np.array(["+".join(v) for v in split_vecs])
 
 
-
 def estimate_cent(imap, sigma=5, buf=30):
     smoothed = imap.copy()
     smoothed[smoothed == 0] = np.nan
@@ -257,6 +258,7 @@ def estimate_cent(imap, sigma=5, buf=30):
     cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
 
     return cent
+
 
 def subpix_shift(imap, ishape, iwcs):
     crdelt = iwcs.wcs.crval - imap.wcs.wcs.crval
@@ -313,5 +315,3 @@ def recenter(imap, obs_id, stream_id, band, fit_file, norm=True, extent=None):
         )[0]
 
     return imap
-
-

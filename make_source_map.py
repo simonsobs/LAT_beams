@@ -16,7 +16,7 @@ from sotodlib.core import Context, metadata
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map
-from lat_beams.utils import load_aman, set_tag, setup_jobs, init_log, get_args_cfg
+from lat_beams.utils import get_args_cfg, init_log, load_aman, set_tag, setup_jobs
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -31,6 +31,7 @@ nproc = comm.Get_size()
 
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 comps = "TQU"
+
 
 def get_jobdict(jdb):
     jobdict = {
@@ -56,9 +57,13 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
             md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")
         ]
         if len(dbs) > 1:
-            if myrank == 0: L.warning("Multiple pointing metadata entries found, using the first one")
+            if myrank == 0:
+                L.warning(
+                    "Multiple pointing metadata entries found, using the first one"
+                )
         elif len(dbs) == 0:
-            if myrank == 0: L.error("No pointing metadata entries found")
+            if myrank == 0:
+                L.error("No pointing metadata entries found")
             sys.exit()
         L.info(f"Using ManifestDb at {dbs[0]}")
         db = metadata.ManifestDb(dbs[0])
@@ -116,6 +121,7 @@ def get_tags(info):
         "preprocess": "",
     }
     return tags
+
 
 def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh):
     pixsize = solved.wcs.wcs.cdelt[1] * (60 * 60)
@@ -263,6 +269,7 @@ def make_map(
                 set_tag(job, name, "")
         return None, None
     return out, cent
+
 
 args, cfg = get_args_cfg()
 
@@ -597,7 +604,15 @@ for i, j in enumerate(joblist):
     # Plot
     try:
         make_plots(
-            out["solved"], cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh
+            out["solved"],
+            cent,
+            extent,
+            obs_plot_dir,
+            obs_id,
+            ufm,
+            band,
+            zoom,
+            log_thresh,
         )
     except Exception as e:
         L.warning(f"Plotting failed with error: {e}")

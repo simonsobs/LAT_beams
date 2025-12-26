@@ -1,23 +1,18 @@
+import argparse
+import logging
 import os
 import sys
 import time
-import argparse
-import yaml
+from logging.handlers import MemoryHandler
 
 import numpy as np
 import sqlalchemy as sqy
-from astropy import units as u
-from pixell import enmap, utils
-from sotodlib.core import AxisManager, metadata
+import yaml
+from sotodlib.mapmaking import ColoredFormatter, init
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
-from tqdm import tqdm
-from sotodlib.mapmaking import init, ColoredFormatter
-import logging
-from logging.handlers import MemoryHandler
 
-from .beam_utils import crop_maps
 
 try:
     import mpi4py.rc
@@ -29,28 +24,35 @@ try:
 except:
     comm = None
 
+
 def init_log(level=logging.DEBUG, comm=comm):
     # Uses a crappy version of https://stackoverflow.com/a/35804945
     def lognormal(self, message, *args, **kwargs):
         if self.isEnabledFor(25):
             self._log(25, message, args, **kwargs)
+
     def flush_log(self):
         for handler in self.handlers:
             if hasattr(handler, "flush"):
                 handler.flush()
+
     rank = 0
     if comm is not None:
         rank = comm.Get_rank()
     logging.addLevelName(25, "NORMAL")
-    setattr(logging.getLoggerClass(), "normal", lognormal) 
-    setattr(logging.getLoggerClass(), "flush", flush_log) 
-    L = init(level, rank = rank)
+    setattr(logging.getLoggerClass(), "normal", lognormal)
+    setattr(logging.getLoggerClass(), "flush", flush_log)
+    L = init(level, rank=rank)
     for handler in L.handlers:
         if isinstance(handler.formatter, ColoredFormatter):
-            handler.formatter.colors['NORMAL'] = "\033[1;34m"
-    L.handlers = [MemoryHandler(1000, flushLevel=logging.CRITICAL, target=h, flushOnClose=True) for h in L.handlers]
+            handler.formatter.colors["NORMAL"] = "\033[1;34m"
+    L.handlers = [
+        MemoryHandler(1000, flushLevel=logging.CRITICAL, target=h, flushOnClose=True)
+        for h in L.handlers
+    ]
 
     return L
+
 
 def print_once(*args):
     """
@@ -65,6 +67,7 @@ def print_once(*args):
     if comm is None or comm.Get_rank() == 0:
         print(*args)
         sys.stdout.flush()
+
 
 def set_tag(job, key, new_val):
     # This should be provided by the Job class but it's not...
@@ -189,7 +192,9 @@ def setup_jobs(
             job = jobdict[jobstr]
         else:
             tags = get_tags(info)
-            job = jdb.create_job(jclass=jclass, tags=tags, check_existing=False, commit=False)
+            job = jdb.create_job(
+                jclass=jclass, tags=tags, check_existing=False, commit=False
+            )
             jobs_to_make += [job]
             ignore_lock = True
         if job.lock and not ignore_lock:
@@ -238,23 +243,62 @@ def setup_jobs(
 
     return jdb, all_jobs
 
+
 def get_args_cfg():
     # Only the config is necessary; the rest are just for ease of use.
     parser = argparse.ArgumentParser()
     parser.add_argument("cfg", help="Path to the config file")
-    parser.add_argument( "--plot_only", "-p", action="store_true", help="Don't do any fitting or mamaking, just plot TODs or existing maps",)
+    parser.add_argument(
+        "--plot_only",
+        "-p",
+        action="store_true",
+        help="Don't do any fitting or mamaking, just plot TODs or existing maps",
+    )
     # Control which obs are used
     parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
-    parser.add_argument( "--lookback", "-l", type=float, help="Amount of time to lookback for query, overides start time from config",)
+    parser.add_argument(
+        "--lookback",
+        "-l",
+        type=float,
+        help="Amount of time to lookback for query, overides start time from config",
+    )
     # JobDB stuff
-    parser.add_argument( "--overwrite", "-o", action="store_true", help="Overwrite an existing fit")
-    parser.add_argument( "--retry_failed", "-r", action="store_true", help="Retry failed jobs")
-    parser.add_argument( "--job_memory", "-m", type=float, help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",)
-    parser.add_argument( "--job_memory_buffer", "-mb", default=0, type=float, help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",)
+    parser.add_argument(
+        "--overwrite", "-o", action="store_true", help="Overwrite an existing fit"
+    )
+    parser.add_argument(
+        "--retry_failed", "-r", action="store_true", help="Retry failed jobs"
+    )
+    parser.add_argument(
+        "--job_memory",
+        "-m",
+        type=float,
+        help="If job was run within this many hours of this script starting then don't rerun even if overwrite or retry_failed is passed",
+    )
+    parser.add_argument(
+        "--job_memory_buffer",
+        "-mb",
+        default=0,
+        type=float,
+        help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
+    )
     # fit_pointing exclusive args
-    parser.add_argument( "--forced_ws", "-ws", nargs="+", help="Force these wafer slots into the fit (only for fit_pointing)")
-    parser.add_argument( "--parallel_factor", "-f", default=4, type=int, help="Per-obs parallelization factor (only for fit_pointing)",)
-    parser.add_argument("--profile", action="store_true", help="Run a profile (only for fit_pointing)")
+    parser.add_argument(
+        "--forced_ws",
+        "-ws",
+        nargs="+",
+        help="Force these wafer slots into the fit (only for fit_pointing)",
+    )
+    parser.add_argument(
+        "--parallel_factor",
+        "-f",
+        default=4,
+        type=int,
+        help="Per-obs parallelization factor (only for fit_pointing)",
+    )
+    parser.add_argument(
+        "--profile", action="store_true", help="Run a profile (only for fit_pointing)"
+    )
     args = parser.parse_args()
 
     with open(args.cfg, "r") as f:

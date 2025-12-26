@@ -20,7 +20,7 @@ from lat_beams.beam_utils import (
 )
 from lat_beams.fitting import fit_gauss_beam
 from lat_beams.plotting import plot_map
-from lat_beams.utils import set_tag, setup_jobs, init_log, get_args_cfg
+from lat_beams.utils import get_args_cfg, init_log, set_tag, setup_jobs
 
 plt.rcParams["image.cmap"] = "RdGy_r"
 
@@ -72,6 +72,7 @@ def get_tags(mjob):
         "config": "",
     }
     return tags
+
 
 args, cfg = get_args_cfg()
 
