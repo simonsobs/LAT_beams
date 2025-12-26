@@ -38,25 +38,6 @@ def avg_prof(aman_list, prof="rprof", r="r"):
     return np.column_stack((all_rs, avg_prof, err_prof, n_vals))  # , msk
 
 
-def get_split_vec(fits, split, ctx, round_to=2):
-    split_vecs = []
-    for spl in split.split("+"):
-        if spl in fits.dtype.names:
-            split_vecs += [fits[spl].astype(str)]
-            continue
-        split_vec = []
-        for fit in fits:
-            obs = ctx.obsdb.get(fit["obs_id"])
-            split_vec += [obs[spl]]
-        split_vec = np.array(split_vec)
-        if np.issubdtype(split_vec.dtype, np.number):
-            split_vec = np.round(split_vec, round_to)
-        split_vecs += [split_vec.astype(str)]
-    split_vecs = np.column_stack(split_vecs)
-
-    return np.array(["+".join(v) for v in split_vecs])
-
-
 nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
 parser = argparse.ArgumentParser()
@@ -125,7 +106,7 @@ all_fits = all_fits[msk]
 # Plot by splits
 for split in split_by:
     print(f"Splitting by {split}")
-    split_vec = get_split_vec(all_fits, split, ctx)
+    split_vec = bu.get_split_vec(all_fits, split, ctx)
     for spl in np.unique(split_vec):
         profiles = []
         windows = []
