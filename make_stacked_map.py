@@ -2,7 +2,7 @@ import os
 
 import astropy.units as u
 import numpy as np
-from pixell import enmap
+from pixell import enmap, reproject
 from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
@@ -13,7 +13,7 @@ from lat_beams.utils import get_args_cfg, make_jobdb
 def view_TQU(imap):
     padded = imap
     if len(imap) == 1:
-        padded = enmap.zeros((3,) + imap.shape[0:], imap.wcs)
+        padded = enmap.zeros((3,) + imap.shape[1:], imap.wcs)
         padded[0][:] = imap[0][:]
     return padded
 
@@ -25,6 +25,7 @@ args, cfg = get_args_cfg()
 # Get some global setting
 epochs = cfg.get("epochs", [(0, 2e10)])
 pointing_type = cfg.get("pointing_type", "pointing_model")
+append = cfg["append"] = cfg.get("append", "")
 nominal_fwhm = cfg.get("nominal_fwhm", nominal_fwhm)
 split_by = cfg.get(
     "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
@@ -34,7 +35,7 @@ mask_size = cfg.get("mask_size", 0.1)
 mask_size *= u.degree
 res = cfg["res"] = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
 pixsize = 3600 * np.rad2deg(res)
-log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
+log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-5)
 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
@@ -70,19 +71,21 @@ fjobdict = {
     for job in jdb.get_jobs(jclass="fit_map", jstate="done")
 }
 alljobstr = list(set(list(mjobdict.keys())) & set(list(fjobdict.keys())))
-mjobs = [mjobdict[jobstr] for jobstr in alljobstr]
-fjobs = [fjobdict[jobstr] for jobstr in alljobstr]
+mjobs = np.array([mjobdict[jobstr] for jobstr in alljobstr])
+fjobs = np.array([fjobdict[jobstr] for jobstr in alljobstr])
+
+print(f"{len(alljobstr)} maps to add")
+if len(alljobstr) == 0: sys.exit(0)
 
 # Load fits
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
 
 # Make template map
-pix_extent = extent // pixsize
+pix_extent = int(extent // pixsize)
 twcs = enmap.wcsutils.build(
-    [0, 0], res=res, shape=(pix_extent, pix_extent), system="tan"
+    [0, 0], res=np.rad2deg(res), shape=(pix_extent, pix_extent), system="tan"
 )
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
-tweight = enmap.zeros((3, pix_extent, pix_extent), twcs)
 [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(tmap.corners(corner=False))
 plt_extent = (ra_min, ra_max, dec_min, dec_max)
 
@@ -112,16 +115,16 @@ for split in split_by:
         smjobs = smjobs[msk]
         sfjobs = sfjobs[msk]
         for epoch in epochs:
-            print(f"\tEpoch {epoch}")
+            print(f"\t{spl} {epoch}")
             times = sfits["time"]
             tmsk = (times >= epoch[0]) * (times < epoch[1])
             if np.sum(tmsk) == 0:
                 print(f"\t\tNo maps found! Skipping...")
                 continue
-            mcoadd = enmap.zeros_like(tmap)
-            wcoadd = enmap.zeros_like(tweight)
-            rmcoadd = enmap.zeros_like(tmap)
-            rwcoadd = enmap.zeros_like(tweight)
+            mcoadd = enmap.zeros(tmap.shape, tmap.wcs)
+            wcoadd = enmap.zeros(tmap.shape, tmap.wcs)
+            rmcoadd = enmap.zeros(tmap.shape, tmap.wcs)
+            rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             for fit, mjob, fjob in zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]):
                 # Load
                 try:
@@ -143,7 +146,6 @@ for split in split_by:
                 except FileNotFoundError:
                     print(f"Maps missing for job: {mjob}")
                     continue
-
                 # Make everything look like TQU
                 solved = view_TQU(solved)
                 weights = view_TQU(weights)
@@ -151,7 +153,8 @@ for split in split_by:
                 resid_weights = view_TQU(resid_weights)
                 if not np.all(
                     np.array(
-                        [len(solved), len(weights), len(resid), len(resid_weights)]
+                        [len(solved), len(weights), len(resid), len(resid_weights),
+                         len(solved.shape), len(weights.shape), len(resid.shape), len(resid_weights.shape)]
                     )
                     == 3
                 ):
@@ -161,32 +164,32 @@ for split in split_by:
                 cent = np.array(
                     (fit["aman"].eta0.to(u.rad).value, fit["aman"].xi0.to(u.rad).value)
                 )
-                solved = enmap.reproject.thumbnails(
+                solved = reproject.thumbnails(
                     solved,
                     coords=cent,
-                    oshape=((len(solved),) + (pix_extent, pix_extent)),
+                    oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
                 solved = (
                     solved - np.array([fit["aman"].off.value, 0, 0]).reshape((3, 1, 1))
                 ) / fit["aman"].amp.value
-                weights = enmap.reproject.thumbnails_ivar(
+                weights = reproject.thumbnails_ivar(
                     weights,
                     coords=cent,
-                    oshape=((len(solved),) + (pix_extent, pix_extent)),
+                    oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
-                resid = enmap.reproject.thumbnails(
+                resid = reproject.thumbnails(
                     resid,
                     coords=cent,
-                    oshape=((len(resid),) + (pix_extent, pix_extent)),
+                    oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
                 resid = resid / fit["aman"].amp.value
-                resid_weights = enmap.reproject.thumbnails_ivar(
+                resid_weights = reproject.thumbnails_ivar(
                     resid_weights,
                     coords=cent,
-                    oshape=((len(redid),) + (pix_extent, pix_extent)),
+                    oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
 
@@ -218,12 +221,12 @@ for split in split_by:
                     "fits",
                     allow_modify=True,
                 )
-                for comp in ("T", "Q", "U"):
+                for c, comp in enumerate(["T", "Q", "U"]):
                     for log in [False, True]:
                         plot_map(
-                            omap,
+                            omap[c],
                             pixsize,
-                            extent,
+                            extent/2,
                             plt_extent,
                             twcs.wcs.crpix.astype(int),
                             [0, 0],

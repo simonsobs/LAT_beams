@@ -161,11 +161,11 @@ def load_beam_fits(fpath):
     return all_fits
 
 
-def load_beam_fits_from_jobs(fpath, jobs):
+def load_beam_fits_from_jobs(fpath, joblist):
     f = h5py.File(fpath, mode="r")
     obs_ids = np.array([job.tags["obs_id"] for job in joblist])
     times = np.array([float(o.split("_")[1]) for o in obs_ids])
-    wafer_slots = np.array([job.tags["wafer_slots"] for job in joblist])
+    wafer_slots = np.array([job.tags["wafer_slot"] for job in joblist])
     stream_ids = np.array([job.tags["stream_id"] for job in joblist])
     bands = np.array([job.tags["band"] for job in joblist])
     sources = np.array([job.tags["source"] for job in joblist])
@@ -204,7 +204,7 @@ def load_beam_fits_from_jobs(fpath, jobs):
         ("aman", "O"),
     ]
     all_fits = np.fromiter(
-        zip(obs_ids, wafer_slot, stream_ids, bands, sources, times, tdelt, amans),
+        zip(obs_ids, wafer_slots, stream_ids, bands, sources, times, tdelt, amans),
         dtype,
         count=len(amans),
     )

@@ -137,7 +137,7 @@ def make_jobdb(comm, data_dir):
         jdb = jobdb.JobManager(engine=engine)
         jdb.clear_locks(jobs="all")
         if comm is None:
-            return jobdb
+            return jdb
     comm.barrier()
     if myrank != 0:
         engine = sqy.create_engine(
