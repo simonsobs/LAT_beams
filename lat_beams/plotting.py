@@ -32,7 +32,7 @@ def plot_map(
         label += f"_{append}"
     rprof = radial_profile(data, cent[::-1])[: int(0.5 * min(*data.shape))]
     if log:
-        _norm = SymLogNorm(linthresh=log_thresh * np.max(data), clip=True)
+        _norm = SymLogNorm(linthresh=log_thresh, clip=True, vmin=-1, vmax=1)
         label += f"_log10"
         with np.errstate(divide="ignore", invalid="ignore"):
             rprof = np.sign(rprof) * np.log10(np.abs(rprof))
