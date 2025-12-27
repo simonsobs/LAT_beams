@@ -10,6 +10,7 @@ from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
+import h5py
 
 from lat_beams.beam_utils import (
     crop_maps,
@@ -114,6 +115,8 @@ data_dir = os.path.join(
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 outfile = None
+if myrank == 0:
+    outfile = h5py.File(os.path.join(data_dir, "beam_pars.h5"), "a")
 
 # Get the jobs, make them if we need to
 start_time = cfg["start_time"]
@@ -405,6 +408,8 @@ for i, j in enumerate(joblist):
     job.jstate = "done"
 
 comm.barrier()
+if outfile is not None:
+    outfile.close()
 sys.stdout.flush()
 L.info("Done with all fits")
 L.flush()
