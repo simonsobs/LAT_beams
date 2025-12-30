@@ -6,7 +6,7 @@ from matplotlib.colors import SymLogNorm
 
 from .beam_utils import radial_profile
 
-plt.rcParams["image.cmap"] = "RdGy_r"
+plt.rcParams["image.cmap"] = "coolwarm" #"RdGy_r"
 
 
 def plot_map(
@@ -26,6 +26,7 @@ def plot_map(
     log_thresh=1e-3,
     append="",
 ):
+    plt.close()
     _norm = None
     label = f"_{comp}"
     if append != "":
@@ -36,8 +37,10 @@ def plot_map(
         label += f"_log10"
         with np.errstate(divide="ignore", invalid="ignore"):
             rprof = np.sign(rprof) * np.log10(np.abs(rprof))
-    plt.close()
-    plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
+        plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
+    else:
+        vminmax = np.percentile(np.abs(data), 99)
+        plt.imshow(data, origin="lower", extent=plt_extent, vmin=-1*vminmax, vmax=vminmax)
     plt.colorbar()
     plt.grid()
     plt.xlabel('Xi (")')
