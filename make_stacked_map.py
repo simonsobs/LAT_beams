@@ -76,7 +76,8 @@ mjobs = np.array([mjobdict[jobstr] for jobstr in alljobstr])
 fjobs = np.array([fjobdict[jobstr] for jobstr in alljobstr])
 
 print(f"{len(alljobstr)} maps to add")
-if len(alljobstr) == 0: sys.exit(0)
+if len(alljobstr) == 0:
+    sys.exit(0)
 
 # Load fits
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
@@ -84,7 +85,13 @@ all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
 # Make template map
 pix_extent = int(extent // pixsize)
 # rowmajor = True here to match sotodlib
-twcs = enmap.wcsutils.build( [0, 0], res=np.rad2deg(res), shape=(pix_extent, pix_extent), system="tan", rowmajor=True)
+twcs = enmap.wcsutils.build(
+    [0, 0],
+    res=np.rad2deg(res),
+    shape=(pix_extent, pix_extent),
+    system="tan",
+    rowmajor=True,
+)
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(tmap.corners(corner=False))
 plt_extent = (ra_min, ra_max, dec_min, dec_max)
@@ -157,8 +164,16 @@ for split in split_by:
                 resid_weights = view_TQU(resid_weights)
                 if not np.all(
                     np.array(
-                        [len(solved), len(weights), len(resid), len(resid_weights),
-                         len(solved.shape), len(weights.shape), len(resid.shape), len(resid_weights.shape)]
+                        [
+                            len(solved),
+                            len(weights),
+                            len(resid),
+                            len(resid_weights),
+                            len(solved.shape),
+                            len(weights.shape),
+                            len(resid.shape),
+                            len(resid_weights.shape),
+                        ]
                     )
                     == 3
                 ):
@@ -167,7 +182,7 @@ for split in split_by:
                 # Crop, recenter, and normalize
                 cent = np.array(
                     (fit["aman"].eta0.to(u.rad).value, fit["aman"].xi0.to(u.rad).value)
-                    )
+                )
                 solved = reproject.thumbnails(
                     solved,
                     coords=cent,
@@ -177,30 +192,41 @@ for split in split_by:
                 solved = (
                     solved - np.array([fit["aman"].off.value, 0, 0]).reshape((3, 1, 1))
                 ) / fit["aman"].amp.value
-                weights = reproject.thumbnails_ivar(
-                    weights,
-                    coords=cent,
-                    oshape=(pix_extent, pix_extent),
-                    owcs=twcs,
-                ) * fit["aman"].amp.value**2
-                resid = reproject.thumbnails(
-                    resid,
-                    coords=cent,
-                    oshape=(pix_extent, pix_extent),
-                    owcs=twcs,
-                ) / fit["aman"].amp.value
-                resid_weights = reproject.thumbnails_ivar(
-                    resid_weights,
-                    coords=cent,
-                    oshape=(pix_extent, pix_extent),
-                    owcs=twcs,
-                ) * fit["aman"].amp.value**2
+                weights = (
+                    reproject.thumbnails_ivar(
+                        weights,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    * fit["aman"].amp.value**2
+                )
+                resid = (
+                    reproject.thumbnails(
+                        resid,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    / fit["aman"].amp.value
+                )
+                resid_weights = (
+                    reproject.thumbnails_ivar(
+                        resid_weights,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    * fit["aman"].amp.value**2
+                )
 
                 # If the new center seems very far from the origin then lets skip
                 cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
                 dist = np.linalg.norm(cent_est - solved.wcs.wcs.crpix)
                 if dist > miscenter_thresh:
-                    print(f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems miscentered! Skipping!")
+                    print(
+                        f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems miscentered! Skipping!"
+                    )
                     continue
 
                 # Add
@@ -223,21 +249,31 @@ for split in split_by:
                 (rmcoadd, "resid_stack"),
                 (rwcoadd, "resid_stack_weights"),
             ]:
-                path = os.path.join(data_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_{name}.fits")
+                path = os.path.join(
+                    data_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_{name}.fits"
+                )
                 if args.plot_only:
                     if not os.path.isfile(path):
                         print("\t\tMaps do not exist!")
                         continue
                     omap = enmap.read_map(path)
                 else:
-                    enmap.write_map(path, omap, "fits", allow_modify=True,)
-                for append, smap in [("", omap), ("_smooth3pix", enmap.smooth_gauss(omap, 3*res))]:
+                    enmap.write_map(
+                        path,
+                        omap,
+                        "fits",
+                        allow_modify=True,
+                    )
+                for append, smap in [
+                    ("", omap),
+                    ("_smooth3pix", enmap.smooth_gauss(omap, 3 * res)),
+                ]:
                     for c, comp in enumerate(["T", "Q", "U"]):
                         for log in [False, True]:
                             plot_map(
                                 smap[c],
                                 pixsize,
-                                extent/2,
+                                extent / 2,
                                 plt_extent,
                                 twcs.wcs.crpix.astype(int),
                                 [0, 0],

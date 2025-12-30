@@ -3,6 +3,7 @@ import sys
 import time
 from functools import partial
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
@@ -10,7 +11,6 @@ from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
-import h5py
 
 from lat_beams.beam_utils import (
     crop_maps,

@@ -13,7 +13,6 @@ from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 
-
 try:
     import mpi4py.rc
 

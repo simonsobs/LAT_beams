@@ -6,7 +6,7 @@ from matplotlib.colors import SymLogNorm
 
 from .beam_utils import radial_profile
 
-plt.rcParams["image.cmap"] = "coolwarm" #"RdGy_r"
+plt.rcParams["image.cmap"] = "coolwarm"  # "RdGy_r"
 
 
 def plot_map(
@@ -40,7 +40,9 @@ def plot_map(
         plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
     else:
         vminmax = np.percentile(np.abs(data), 99)
-        plt.imshow(data, origin="lower", extent=plt_extent, vmin=-1*vminmax, vmax=vminmax)
+        plt.imshow(
+            data, origin="lower", extent=plt_extent, vmin=-1 * vminmax, vmax=vminmax
+        )
     plt.colorbar()
     plt.grid()
     plt.xlabel('Xi (")')
