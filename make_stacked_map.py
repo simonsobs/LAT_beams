@@ -36,7 +36,7 @@ mask_size *= u.degree
 res = cfg["res"] = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
 miscenter_thresh = cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
 pixsize = 3600 * np.rad2deg(res)
-log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-5)
+log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
@@ -89,6 +89,8 @@ tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(tmap.corners(corner=False))
 plt_extent = (ra_min, ra_max, dec_min, dec_max)
 
+if args.plot_only:
+    print("Running in plot only mode!")
 
 # Loop through splits
 for split in split_by:
@@ -126,6 +128,8 @@ for split in split_by:
             rmcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             for fit, mjob, fjob in zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]):
+                if args.plot_only:
+                    continue
                 # Load
                 try:
                     solved = enmap.read_map(os.path.join(data_dir, mjob.tags["solved"]))
@@ -178,20 +182,19 @@ for split in split_by:
                     coords=cent,
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
-                )
+                ) * fit["aman"].amp.value**2
                 resid = reproject.thumbnails(
                     resid,
                     coords=cent,
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
-                )
-                resid = resid / fit["aman"].amp.value
+                ) / fit["aman"].amp.value
                 resid_weights = reproject.thumbnails_ivar(
                     resid_weights,
                     coords=cent,
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
-                )
+                ) * fit["aman"].amp.value**2
 
                 # If the new center seems very far from the origin then lets skip
                 cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
@@ -220,30 +223,31 @@ for split in split_by:
                 (rmcoadd, "resid_stack"),
                 (rwcoadd, "resid_stack_weights"),
             ]:
-                enmap.write_map(
-                    os.path.join(
-                        data_dir_spl, "{spl}_{epoch[0]}_{epoch[1]}_{name}.fits"
-                    ),
-                    omap,
-                    "fits",
-                    allow_modify=True,
-                )
-                for c, comp in enumerate(["T", "Q", "U"]):
-                    for log in [False, True]:
-                        plot_map(
-                            omap[c],
-                            pixsize,
-                            extent/2,
-                            plt_extent,
-                            twcs.wcs.crpix.astype(int),
-                            [0, 0],
-                            1.0,
-                            plot_dir_spl,
-                            spl,
-                            epoch[0],
-                            epoch[1],
-                            comp,
-                            log,
-                            log_thresh,
-                            name,
-                        )
+                path = os.path.join(data_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_{name}.fits")
+                if args.plot_only:
+                    if not os.path.isfile(path):
+                        print("\t\tMaps do not exist!")
+                        continue
+                    omap = enmap.read_map(path)
+                else:
+                    enmap.write_map(path, omap, "fits", allow_modify=True,)
+                for append, smap in [("", omap), ("_smooth3pix", enmap.smooth_gauss(omap, 3*res))]:
+                    for c, comp in enumerate(["T", "Q", "U"]):
+                        for log in [False, True]:
+                            plot_map(
+                                smap[c],
+                                pixsize,
+                                extent/2,
+                                plt_extent,
+                                twcs.wcs.crpix.astype(int),
+                                [0, 0],
+                                1.0,
+                                plot_dir_spl,
+                                spl,
+                                epoch[0],
+                                epoch[1],
+                                comp,
+                                log,
+                                log_thresh,
+                                name + append,
+                            )
