@@ -34,6 +34,7 @@ extent = cfg["extent"] = cfg.get("extent", 900)
 mask_size = cfg.get("mask_size", 0.1)
 mask_size *= u.degree
 res = cfg["res"] = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
+miscenter_thresh = cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
 pixsize = 3600 * np.rad2deg(res)
 log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-5)
 ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
@@ -82,9 +83,8 @@ all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
 
 # Make template map
 pix_extent = int(extent // pixsize)
-twcs = enmap.wcsutils.build(
-    [0, 0], res=np.rad2deg(res), shape=(pix_extent, pix_extent), system="tan"
-)
+# rowmajor = True here to match sotodlib
+twcs = enmap.wcsutils.build( [0, 0], res=np.rad2deg(res), shape=(pix_extent, pix_extent), system="tan", rowmajor=True)
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(tmap.corners(corner=False))
 plt_extent = (ra_min, ra_max, dec_min, dec_max)
@@ -163,7 +163,7 @@ for split in split_by:
                 # Crop, recenter, and normalize
                 cent = np.array(
                     (fit["aman"].eta0.to(u.rad).value, fit["aman"].xi0.to(u.rad).value)
-                )
+                    )
                 solved = reproject.thumbnails(
                     solved,
                     coords=cent,
@@ -192,6 +192,13 @@ for split in split_by:
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
+
+                # If the new center seems very far from the origin then lets skip
+                cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
+                dist = np.linalg.norm(cent_est - solved.wcs.wcs.crpix)
+                if dist > miscenter_thresh:
+                    print(f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems miscentered! Skipping!")
+                    continue
 
                 # Add
                 mcoadd.insert(solved * weights, op=op)
