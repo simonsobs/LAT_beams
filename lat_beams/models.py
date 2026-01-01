@@ -1,3 +1,4 @@
+import astropy.units as u
 import numpy as np
 from scipy.special import jv
 
@@ -27,14 +28,15 @@ def bessel_beam(x, y, n_modes, n_multipoles, dx, dy, off, l_max, coeffs):
     return beam_model + off
 
 
-def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
+def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
     Stolen from analyze_bright_ptsrc
 
     Simulate a time stream with an Gaussian beam model
     Args
     ------
-    xi, eta: cordinates in the detector's system
+    pixmap:
+        (eta, xi) of model.
     a: float
         amplitude of the Gaussian beam model
     xi0, eta0: float, float
@@ -49,7 +51,7 @@ def gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     sim_data: 1d array of float
         Time stream at sampling points given by xieta
     """
-    xi, eta = xieta
+    eta, xi = posmap
     xi_sft = xi - xi0
     eta_sft = eta - eta0
     xi_rot = xi_sft * np.cos(phi) - eta_sft * np.sin(phi)
@@ -67,9 +69,7 @@ def multipole(theta, mp, sin):
         order = 2 ** (mp - 1)
     elif mp < 0:
         raise ValueError("Negetive multipole orders not allowed!")
-    if sin:
-        return np.sin(theta * order)
-    return np.cos(theta * order)
+    return np.cos(theta * order - sin * np.pi / 2)
 
 
 def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
@@ -78,7 +78,8 @@ def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
     mod = imap
     if gs:
         beam = imap.copy()
-        mod = np.zeros_like(beam)
+        mod = imap.copy()
+        mod[:] = 0.0
     for m, n in enumerate(multipoles):
         if gs:
             mod[:] = 0.0
@@ -109,6 +110,38 @@ def multipole_expansion(base_beam, amps, multipoles, theta):
             j = (2 * m) + i
             beam += amps[j] * mp * base_beam
     return beam
+
+
+def gaussian2d_from_aman(posmap, aman):
+    if "gaussian" in aman._fields:
+        aman = aman.gaussian
+    return gaussian2d(
+        posmap,
+        aman.amp.value,
+        aman.xi0.to(u.radian).value,
+        aman.eta0.to(u.radian).value,
+        aman.fwhm_xi.to(u.radian).value,
+        aman.fwhm_eta.to(u.radian).value,
+        aman.phi.to(u.radian).value,
+        aman.off.value,
+    )
+
+
+def gaussian2d_multipoles_from_aman(posmap, aman):
+    base_beam = gaussian2d_from_aman(posmap, aman.gaussian)
+    base_beam -= aman.gaussian.off.value
+    base_beam /= aman.gaussian.amp.value
+    y, x = posmap
+    theta = np.arctan2(
+        y - aman.gaussian.eta0.to(u.radian).value,
+        x - aman.gaussian.eta0.to(u.radian).value,
+    )
+    amps = np.zeros(len(multipoles) * 2)
+    for m, n in enumerate(aman.gauss_multipoles.multipoles):
+        for i in (0, 1):
+            j = 2 * m + i
+            amps[j] = aman.gauss_multipole[f"amp_m{m}_{i}"]
+    return multipole_expansion(base_beam, amps, aman.gauss_multipole.multipoles, theta)
 
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):

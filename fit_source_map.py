@@ -12,14 +12,15 @@ from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
 
+import lat_beams.models as bm
 from lat_beams.beam_utils import (
     crop_maps,
     estimate_cent,
-    estimate_solid_angle,
     get_fwhm_radial_bins,
+    process_model,
     radial_profile,
 )
-from lat_beams.fitting import fit_gauss_beam
+from lat_beams.fitting import fit_gauss_beam, fit_multipole_model
 from lat_beams.plotting import plot_map
 from lat_beams.utils import get_args_cfg, init_log, set_tag, setup_jobs
 
@@ -228,6 +229,7 @@ for i, j in enumerate(joblist):
         job.jstate = "failed"
         to_save = (None, None)
         continue
+
     # Estimatr SNR
     snr_extent_pix = int(snr_extent // pixsize)
     cent = estimate_cent(solved, smooth_kern / pixsize, buf)
@@ -251,21 +253,29 @@ for i, j in enumerate(joblist):
 
     # Slice things
     solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
-    pixmap = enmap.pixmap(solved.shape, solved.wcs)
+    posmap = enmap.posmap(solved.shape, solved.wcs)
 
-    # Fit
+    # Make weights and zero things out
+    weights[~np.isfinite(weights)] = 0
+    weights[~np.isfinite(solved)] = 0
+    solved[~np.isfinite(solved)] = 0
+
+    # Setup aman for output
+    aman = AxisManager()
+    aman.wrap("noise", noise * u.pW)
+
+    # Fit gaussian model
     cent = estimate_cent(solved, smooth_kern / pixsize, buf)
-    fit_params, model = fit_gauss_beam(
+    gauss_params, model = fit_gauss_beam(
         solved,
         weights,
-        pixmap,
+        posmap,
         cent,
-        gauss_multipoles,
         sym_gauss,
         "pW",
-        60 * fwhm[band],
+        np.deg2rad(60 * fwhm[band]),
     )
-    if fit_params is None or model is None:
+    if gauss_params is None or model is None:
         msg = "Fit failed"
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -273,23 +283,22 @@ for i, j in enumerate(joblist):
         to_save = (None, None)
         continue
 
-    # Check SNR again
-    if np.nanmax(model) / noise < min_snr:
-        msg = "Model SNR too low"
-        L.error(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        to_save = (None, None)
-        continue
+    # Compute the gaussian model
+    model = bm.gaussian2d_from_aman(posmap, gauss_params)
+
+    # Remove offset
+    gauss_params -= gauss_params.off.value
+    model -= gauss_params.off.value
 
     # Get FWHM from data
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
-    rprof = radial_profile(solved - fit_params["off"].value, c[::-1])
-    mprof = radial_profile(model, c[::-1])
+    rprof = radial_profile(solved, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
-    model_fwhm = get_fwhm_radial_bins(r, mprof, interpolate=True)
-    rmsk = r < 3 * model_fwhm / 2.355
+    rmsk = r < 3 * 60 * fwhm[band] / 2.355
     data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True)
+    aman.wrap("data_fwhm", data_fwhm * u.arcsec)
+    aman.wrap("r", r * u.arcsec)
+    aman.wrap("rprof", rprof * u.pW)
 
     # FWHM check
     if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
@@ -299,28 +308,51 @@ for i, j in enumerate(joblist):
         job.jstate = "failed"
         to_save = (None, None)
         continue
-    if abs(1 - model_fwhm / (60 * fwhm[band])) > fwhm_tol:
-        msg = "Model FWHM out of tolerance"
-        L.eror(f"\t{msg}")
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        to_save = (None, None)
-        continue
 
-    # Get solid angle
-    (
-        data_solid_angle_meas,
-        model_solid_angle_meas,
-        model_solid_angle_true,
-        data_solid_angle_corr,
-    ) = estimate_solid_angle(
-        solved, model, pixsize, data_fwhm, c, fit_params["off"].value, min_sigma
+    # Process and save fit model
+    gauss_params = process_model(
+        gauss_params,
+        solved,
+        model,
+        noise,
+        min_snr,
+        c,
+        u.pW,
+        pixsize,
+        data_fwhm,
+        min_sigma,
+        job,
+        L,
     )
+    if gauss_params is None:
+        to_save = (None, None)
+    aman.wrap("gauss", gauss_params)
+    for to_parent in ["amp", "off", "xi0", "eta0"]:
+        aman.wrap(to_parent, gauss_params["to_parent"])
+    aman.wrap("final_model", "gauss")
 
-    # Adjust shift
-    dec, ra = 3600 * np.rad2deg(solved.pix2sky((0, 0)))
-    fit_params["xi0"] = ra * u.arcsec - fit_params["xi0"]
-    fit_params["eta0"] += dec * u.arcsec
+    # Get gauss multipoles if we want them
+    if len(gauss_multipoles) > 0:
+        base_beam = model / gauss_params.amp.value
+        gauss_multipole_params, model = fit_multipole_model(
+            solved, weights, posmap, base_beam, gauss_params, gauss_multipoles
+        )
+        gauss_multipole_params = process_model(
+            gauss_multipole_params,
+            solved,
+            model,
+            noise,
+            min_snr,
+            c,
+            u.pW,
+            pixsize,
+            data_fwhm,
+            min_sigma,
+            job,
+            L,
+        )
+        aman.wrap("gauss_multipole", gauss_multipole_params)
+        aman.final_model = "gauss_multipole"
 
     # Save residual
     resid = solved.copy()
@@ -389,18 +421,7 @@ for i, j in enumerate(joblist):
             )
 
     # Save
-    aman = AxisManager()
-    for name, par in fit_params.items():
-        aman.wrap(name, par)
-    aman.wrap("data_fwhm", data_fwhm * u.arcsec)
-    aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
-    aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
-    aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
-    aman.wrap("model_solid_angle_true", model_solid_angle_true * u.sr)
-    aman.wrap("noise", noise * u.pW)
-    aman.wrap("r", r * u.arcsec)
-    aman.wrap("rprof", rprof * u.pW)
-    aman.wrap("mprof", mprof * u.pW)
+    aman.wrap("data_solid_angle_corr", aman[aman.final_model].data_solid_angle_corr)
     aman_path = os.path.join(obs_id, ufm, band)
     to_save = (aman, aman_path)
 

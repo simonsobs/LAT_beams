@@ -24,6 +24,7 @@ from scipy.signal import detrend
 from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
+from sotodlib.core import AxisManager
 from sotodlib.core.context import AxisManager
 from sotodlib.tod_ops.fft_ops import (
     RFFTObj,
@@ -286,7 +287,7 @@ def fit_tod_pointing(
     def fit_func(x, fit_am, filt, rfft):
         xi0, eta0, amp, fwhm, offset = x
         model = gaussian2d(
-            (fit_am.xi, fit_am.eta), amp, xi0, eta0, fwhm, fwhm, 0, offset
+            (fit_am.eta, fit_am.xi), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
@@ -457,7 +458,6 @@ def fit_gauss_beam(
     ivar,
     pixmap,
     cent,
-    multipoles=(0,),
     force_sym=False,
     map_units="pW",
     fwhm_start=60.0,
@@ -472,13 +472,10 @@ def fit_gauss_beam(
         Input map.
     ivar : (ny, nx) enmap
         Inverse-variance map.
-    pixmap : (2, ny, nx) array
-        X and Y pixel indices for each pixel.
+    posmap: (2, ny, nx) array
+        X and Y coordinates for each pixel.
     cent : tuple
         The index of the map center
-    multipoles : tuple, default: (0,)
-        The multipoles to include in the fit.
-        0 is the monopole, 1 is the dipole, 2 the quadropole, 3 the octopole, etc.
     force_sym : bool, default: False
         If True don't allow ellipticity in the fit.
     map_units : str, default: pW
@@ -492,19 +489,10 @@ def fit_gauss_beam(
         Multipoles will have '_m{multipole_index}_{0 or 1} appended,
         where the 0 or 1 is 0 for the sin term and 1 for the cos term.
     """
-    res = imap.wcs.wcs.cdelt[1] * (60 * 60)
-    pixmap = (pixmap[0] * res, pixmap[1] * res)  # convert to arcsec
-    nx, ny = imap.shape[-2:]
-
-    # Make weights and zero things out
-    sigma = np.sqrt(ivar)
-    sigma[~np.isfinite(sigma)] = 0
-    sigma[~np.isfinite(imap)] = 0
-    imap[~np.isfinite(imap)] = 0
-
+    y, x = pixmap
     guess = [
-        pixmap[0][cent[0], cent[1]],
-        pixmap[1][cent[0], cent[1]],
+        x[cent[0], cent[1]],
+        y[cent[0], cent[1]],
         0,
         imap[cent[0], cent[1]],
         fwhm_start,
@@ -512,10 +500,18 @@ def fit_gauss_beam(
         0,
     ]
     bounds = [
-        [0, 0, -5 * np.max(np.abs(imap)), 0, fwhm_start / 3, fwhm_start / 3, 0],
         [
-            nx * res,
-            ny * res,
+            np.min(x) - fwhm_start,
+            np.min(y) - fwhm_start,
+            -5 * np.max(np.abs(imap)),
+            0,
+            fwhm_start / 3,
+            fwhm_start / 3,
+            0,
+        ],
+        [
+            np.max(x) + fwhm_start,
+            np.max(y) + fwhm_start,
             5 * np.max(imap),
             5 * np.max(imap),
             fwhm_start * 3,
@@ -525,14 +521,12 @@ def fit_gauss_beam(
     ]
     map_units = u.Unit(map_units)
     par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
-    par_units = [u.arcsec, u.arcsec, map_units, map_units, u.arcsec, u.arcsec, u.radian]  # type: ignore
+    par_units = [u.radian, u.radian, map_units, map_units, u.radian, u.radian, u.radian]  # type: ignore
     if force_sym:
         guess = guess[:-2]
         bounds[0] = bounds[0][:-2]
         bounds[1] = bounds[1][:-2]
     bounds = [(lb, ub) for lb, ub in zip(*bounds)]
-
-    pixmap = (pixmap[0].astype(float), pixmap[1].astype(float))
 
     def _to_pars(coeffs):
         dx, dy, off, amp = coeffs[:4]
@@ -546,10 +540,7 @@ def fit_gauss_beam(
         return dx, dy, off, amp, fwhm_xi, fwhm_eta, phi
 
     def _get_base_theta(dx, dy, off, fwhm_xi, fwhm_eta, phi):
-        x, y = pixmap[0], pixmap[1]
-        theta = np.arctan2(y - dy, x - dx)
-        xieta = (x, y)
-        base_beam = gaussian2d(xieta, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
+        base_beam = gaussian2d(posmap, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
 
         return base_beam, theta
 
@@ -557,32 +548,48 @@ def fit_gauss_beam(
         coeffs,
     ):
         dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = _to_pars(coeffs)
-        beam = gaussian2d(pixmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
+        beam = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
 
         diff = imap - beam
-        chisq = np.nansum((diff * sigma) ** 2)
+        chisq = np.nansum((diff**2) * ivar)
         return chisq
 
     res = minimize(_objective, guess, bounds=bounds)
     if not res.success:
         return None, None
 
-    # Compute model
+    # Convert to aman
+    aman = AxisManager()
     dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = pars = _to_pars(res.x)
-    base_beam, theta = _get_base_theta(dx, dy, 0, fwhm_xi, fwhm_eta, phi)
+    for n, u, v in zip(par_names, par_units, pars):
+        aman.wrap(n, v * u)
+    model = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
+
+    return aman, model
+
+
+def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, multipoles):
+    y, x = posmap
+    theta = np.arctan2(
+        y - gauss_fit.eta0.to(u.radian).value, x - gauss_fit.eta0.to(u.radian).value
+    )
+
+    # Compute model
     if len(multipoles) == 0:
         amps = []
-        model = amp * base_beam
-    amps = multipole_decomp(base_beam, imap - off, sigma, multipoles, theta, True)
-    base_beam = gaussian2d(pixmap, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
+        model = gauss_fit.amp.value * base_beam
+    amps = multipole_decomp(base_beam, imap, ivar, multipoles, theta, True)
     model = multipole_expansion(base_beam, amps, multipoles, theta)
 
-    # Convert to a dict
+    # Convert to aman
+    map_units = gauss_fit.amp.unit
+    aman = AxisManager()
     params = {n: v * u for n, u, v in zip(par_names, par_units, pars)}
     for m, n in enumerate(multipoles):
         for i in (0, 1):
             j = 2 * m + i
-            params[f"amp_m{m}_{i}"] = amps[j] * map_units
+            aman.wrap(f"amp_m{m}_{i}", amps[j] * map_units)
+    aman.wrap("multipoles", multipoles)
 
     return params, model
 

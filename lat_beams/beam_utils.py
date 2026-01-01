@@ -35,14 +35,14 @@ def solid_angle(az, el, beam, cent, r1, norm):
     return integral_inner - integral_outer
 
 
-def estimate_solid_angle(imap, model, res, data_fwhm, c, off, min_sigma):
+def estimate_solid_angle(imap, model, res, data_fwhm, c, min_sigma):
     fwhm_pix = int(data_fwhm / res)
     # Get solid angles
     y = np.linspace(-imap.shape[0] * res / 2, imap.shape[0] * res / 2, imap.shape[0])
     x = np.linspace(-imap.shape[1] * res / 2, imap.shape[1] * res / 2, imap.shape[1])
     kern = Gaussian2DKernel((data_fwhm / 2.3548) / res, (data_fwhm / 2.3548) / res)
-    imap_smooth = convolve_fft(imap - off, kern)
-    model_smooth = convolve_fft(model - off, kern)
+    imap_smooth = convolve_fft(imap, kern)
+    model_smooth = convolve_fft(model, kern)
     norm = np.max(
         imap_smooth[
             max(0, c[0] - fwhm_pix) : min(imap_smooth.shape[0], c[0] + fwhm_pix),
@@ -279,3 +279,45 @@ def coadd(imaps, iweights):
     np.nan_to_num(omap, copy=False, nan=0, posinf=0, neginf=0)
 
     return omap, oweight
+
+
+def process_model(
+    aman,
+    solved,
+    model,
+    noise,
+    min_snr,
+    c,
+    map_units,
+    pixsize,
+    data_fwhm,
+    min_sigma,
+    job,
+    L,
+):
+    # Check snr
+    if np.nanmax(model) / noise < min_snr:
+        msg = "Model SNR too low"
+        L.error(f"\t{msg}")
+        if job is not None:
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+        return None
+
+    # Get model profile
+    mprof = radial_profile(model, c[::-1])
+    aman.wrap("mprof", mprof * map_units)
+
+    # Get solid angle
+    (
+        data_solid_angle_meas,
+        model_solid_angle_meas,
+        model_solid_angle_true,
+        data_solid_angle_corr,
+    ) = estimate_solid_angle(solved, model, pixsize, data_fwhm, c, min_sigma)
+    aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
+    aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
+    aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)
+    aman.wrap("model_solid_angle_true", model_solid_angle_true * u.sr)
+
+    return aman
