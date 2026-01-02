@@ -15,7 +15,7 @@ from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
 
 from lat_beams.beam_utils import estimate_cent
-from lat_beams.plotting import plot_map
+from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, init_log, load_aman, set_tag, setup_jobs
 
 mpi4py.rc.threads = False
@@ -121,53 +121,6 @@ def get_tags(info):
         "preprocess": "",
     }
     return tags
-
-
-def make_plots(solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh):
-    pixsize = solved.wcs.wcs.cdelt[1] * (60 * 60)
-    ufm_plot_dir = os.path.join(obs_plot_dir, ufm)
-    os.makedirs(ufm_plot_dir, exist_ok=True)
-    [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
-        solved.corners(corner=False)
-    )
-    plt_extent = [ra_min, ra_max, dec_min, dec_max]
-    plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-    map_norm = 1.0 / solved[0][cent]
-    if not np.isfinite(map_norm):
-        map_norm = 0.0
-    for i, comp in enumerate(comps):
-        plot_map(
-            solved[i],
-            pixsize,
-            extent,
-            plt_extent,
-            cent,
-            plt_cent,
-            zoom,
-            ufm_plot_dir,
-            obs_id,
-            ufm,
-            band,
-            comp,
-            False,
-            log_thresh,
-        )
-        plot_map(
-            map_norm * solved[i],
-            pixsize,
-            extent,
-            plt_extent,
-            cent,
-            plt_cent,
-            zoom,
-            ufm_plot_dir,
-            obs_id,
-            ufm,
-            band,
-            comp,
-            True,
-            log_thresh,
-        )
 
 
 def make_cuts(aman, source_flags, n_modes, job, L):
@@ -289,8 +242,7 @@ min_det_secs = cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 5)
 n_modes = cfg["n_modes"] = cfg.get("n_modes", 10)
 del_map = cfg["del_map"] = cfg.get("del_map", True)
-extent = cfg["extent"] = cfg.get("extent", 1800)
-zoom = cfg["zoom"] = cfg.get("zoom", 5)
+extent = cfg["extent"] = cfg.get("extent", 900)
 buf = cfg["buf"] = cfg.get("buffer", 30)
 log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
 smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
@@ -430,8 +382,18 @@ for i, j in enumerate(joblist):
             plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
         )
         cent = estimate_cent(solved[0], smooth_kern / pixsize, buf)
-        make_plots(
-            solved, cent, extent, obs_plot_dir, obs_id, ufm, band, zoom, log_thresh
+        posmap = solved.posmap()
+        posmap = np.rad2deg(posmap) * 3600
+        plot_map_complete(
+            solved,
+            posmap,
+            solved.wcs.wcs.cdelt[1] * (60 * 60),
+            extent,
+            (posmap[1][cent[1]], posmap[0][cent[0]]),
+            obs_plot_dir,
+            f"{obs_id} {ufm} {band}",
+            log_thresh=log_thresh,
+            lognorm=1.0 / solved[0][cent],
         )
         continue
 
@@ -603,16 +565,18 @@ for i, j in enumerate(joblist):
 
     # Plot
     try:
-        make_plots(
+        posmap = out["solved"].posmap()
+        posmap = np.rad2deg(posmap) * 3600
+        plot_map_complete(
             out["solved"],
-            cent,
+            posmap,
+            out["solved"].wcs.wcs.cdelt[1] * (60 * 60),
             extent,
+            (posmap[1][cent[1]], posmap[0][cent[0]]),
             obs_plot_dir,
-            obs_id,
-            ufm,
-            band,
-            zoom,
-            log_thresh,
+            f"{obs_id} {ufm} {band}",
+            log_thresh=log_thresh,
+            lognorm=1.0 / out["solved"][0][cent],
         )
     except Exception as e:
         L.warning(f"Plotting failed with error: {e}")

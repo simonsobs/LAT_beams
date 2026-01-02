@@ -11,22 +11,25 @@ plt.rcParams["image.cmap"] = "coolwarm"  # "RdGy_r"
 
 def plot_map(
     data,
+    posmap,
     pixsize,
     extent,
-    plt_extent,
     cent,
-    plt_cent,
-    zoom,
-    ufm_plot_dir,
-    obs_id,
-    ufm,
-    band_name,
+    plot_dir,
+    title,
     comp="T",
     log=False,
     log_thresh=1e-3,
     append="",
+    units='"',
 ):
     plt.close()
+    # Use posmap to setup coordinates
+    # posmap, pixsize, extent, and cent must all be in the same units
+    # We are assuming square pixels here
+    plt_extent = (posmap[1].min(), posmap[1].max(), posmap[0].min(), posmap[0].max())
+
+    # Get radial profile and plot map with appropriate norm
     _norm = None
     label = f"_{comp}"
     if append != "":
@@ -45,44 +48,57 @@ def plot_map(
         )
     plt.colorbar()
     plt.grid()
-    plt.xlabel('Xi (")')
-    plt.ylabel('Eta (")')
-    plt.title(f"{obs_id}_{ufm}_{band_name}{label.replace('_', ' ')}")
-    plt.xlim((plt_cent[0] - extent, plt_cent[0] + extent))
-    plt.ylim((plt_cent[1] - extent, plt_cent[1] + extent))
-    plt.savefig(
-        os.path.join(ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_map{label}.png")
-    )
-    if zoom != 1:
-        plt.xlim((plt_cent[0] - extent / zoom, plt_cent[0] + extent / zoom))
-        plt.ylim((plt_cent[1] - extent / zoom, plt_cent[1] + extent / zoom))
-        plt.savefig(
-            os.path.join(
-                ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_map{label}_zoom.png"
-            )
-        )
+    plt.xlabel(f"Xi ({units})")
+    plt.ylabel(f"Eta ({units})")
+    plt.title(f"{title}{label.replace('_', ' ')}")
 
+    plt.xlim((cent[0] - extent, cent[0] + extent))
+    plt.ylim((cent[1] - extent, cent[1] + extent))
+    plt.savefig(os.path.join(plot_dir, f"{title.replace(' ', '_')}_map{label}.png"))
+
+    # Profile
     plt.close()
     x = np.linspace(0, pixsize * len(rprof), len(rprof))
     plt.plot(x, rprof)
-    plt.xlabel('Radius (")')
-    plt.title(f"{obs_id}_{ufm}_{band_name}{label.replace('_', ' ')}")
+    plt.xlabel(f"Radius ({units})")
+    plt.title(f"{title}{label.replace('_', ' ')}")
     plt.xlim((0, extent))
     plt.savefig(
-        os.path.join(ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_prof{label}.png"),
+        os.path.join(ufm_plot_dir, f"{title.replace(' ', '_')}_prof{label}.png"),
         bbox_inches="tight",
     )
-    if zoom != 1:
-        plt.xlim((0, extent / zoom))
-        lims = plt.gca().get_xlim()
-        i = np.where((x >= lims[0]) & (x <= lims[1]))[0]
-        plt.gca().set_ylim(np.nanmin(rprof[i]), np.nanmax(rprof[i]))
-        plt.savefig(
-            os.path.join(
-                ufm_plot_dir, f"{obs_id}_{ufm}_{band_name}_prof{label}_zoom.png"
-            ),
-            bbox_inches="tight",
-        )
+
+
+def plot_map_complete(
+    data,
+    posmap,
+    pixsize,
+    extent,
+    cent,
+    plot_dir,
+    title,
+    comps="TQU",
+    log_thresh=1e-3,
+    append="",
+    units='"',
+    lognorm=1,
+):
+    for i, comp in enumerate(comps):
+        for log in (False, True):
+            plot_map(
+                data[i] * (lognorm * log + (not log)),
+                posmap,
+                pixsize,
+                extent,
+                cent,
+                plot_dir,
+                title,
+                comp=comp,
+                log=log,
+                log_thresh=1e-3,
+                append=append,
+                units=units,
+            )
 
 
 def plot_tod(aman, sig_filt, tod_plot_dir, file_label):

@@ -21,7 +21,7 @@ from lat_beams.beam_utils import (
     radial_profile,
 )
 from lat_beams.fitting import fit_gauss_beam, fit_multipole_model
-from lat_beams.plotting import plot_map
+from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, init_log, set_tag, setup_jobs
 
 plt.rcParams["image.cmap"] = "RdGy_r"
@@ -394,31 +394,24 @@ for i, j in enumerate(joblist):
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
         solved.corners(corner=False)
     )
-    plt_extent = (ra_min, ra_max, dec_min, dec_max)
-    plt_cent = (ra_min - pixsize * cent[1], dec_min + pixsize * cent[0])
-    norm = 1.0 / sig
+    plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec))
+    norm = 1.0 / aman.amp.value
+    posmap = np.rad2deg(posmap) * 3600
     for dat, label in [(model, "model"), (resid, "resid")]:
-        for log in [False, True]:
-            _norm = 1
-            if log:
-                _norm = norm
-            plot_map(
-                norm * dat,
-                pixsize,
-                extent,
-                plt_extent,
-                cent,
-                plt_cent,
-                1.0,
-                ufm_plot_dir,
-                obs_id,
-                ufm,
-                band,
-                "T",
-                log,
-                log_thresh,
-                label,
-            )
+        plot_map_complete(
+            dat,
+            posmap,
+            pixsize,
+            extent,
+            plt_cent,
+            ufm_plot_dir,
+            f"{obs_id} {ufm} {band}",
+            comps="T",
+            log_thresh=log_thresh,
+            append=label,
+            units='"',
+            lognorm=norm,
+        )
 
     # Save
     aman.wrap("data_solid_angle_corr", aman[aman.final_model].data_solid_angle_corr)

@@ -1,4 +1,5 @@
 import os
+import sys
 
 import astropy.units as u
 import numpy as np
@@ -6,7 +7,7 @@ from pixell import enmap, reproject
 from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
-from lat_beams.plotting import plot_map
+from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, make_jobdb
 
 
@@ -83,7 +84,7 @@ if len(alljobstr) == 0:
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
 
 # Make template map
-pix_extent = int(extent // pixsize)
+pix_extent = int(2 * extent // pixsize)
 # rowmajor = True here to match sotodlib
 twcs = enmap.wcsutils.build(
     [0, 0],
@@ -264,26 +265,20 @@ for split in split_by:
                         "fits",
                         allow_modify=True,
                     )
+                posmap = omap.posmap()
+                posmap = np.rad2deg(posmap) * 3600
                 for append, smap in [
                     ("", omap),
                     ("_smooth3pix", enmap.smooth_gauss(omap, 3 * res)),
                 ]:
-                    for c, comp in enumerate(["T", "Q", "U"]):
-                        for log in [False, True]:
-                            plot_map(
-                                smap[c],
-                                pixsize,
-                                extent / 2,
-                                plt_extent,
-                                twcs.wcs.crpix.astype(int),
-                                [0, 0],
-                                1.0,
-                                plot_dir_spl,
-                                spl,
-                                epoch[0],
-                                epoch[1],
-                                comp,
-                                log,
-                                log_thresh,
-                                name + append,
-                            )
+                    plot_map_complete(
+                        smap,
+                        posmap,
+                        pixsize,
+                        extent,
+                        (0, 0),
+                        plot_dir_spl,
+                        f"{spl} {epoch[0]} {epoch[1]}",
+                        log_thresh=log_thresh,
+                        append=name + append,
+                    )
