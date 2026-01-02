@@ -27,14 +27,20 @@ def plot_map(
     # Use posmap to setup coordinates
     # posmap, pixsize, extent, and cent must all be in the same units
     # We are assuming square pixels here
-    plt_extent = (posmap[1].min(), posmap[1].max(), posmap[0].min(), posmap[0].max())
+    plt_extent = (posmap[1].max(), posmap[1].min(), posmap[0].min(), posmap[0].max())
 
     # Get radial profile and plot map with appropriate norm
     _norm = None
     label = f"_{comp}"
     if append != "":
         label += f"_{append}"
-    rprof = radial_profile(data, cent[::-1])[: int(0.5 * min(*data.shape))]
+    rprof = radial_profile(
+        data,
+        np.unravel_index(
+            np.argmin((posmap[0] - cent[1]) ** 2 + (posmap[1] - cent[0]) ** 2),
+            data.shape,
+        )[::-1],
+    )[: int(0.5 * min(*data.shape))]
     if log:
         _norm = SymLogNorm(linthresh=log_thresh, clip=True, vmin=-1, vmax=1)
         label += f"_log10"
@@ -42,7 +48,7 @@ def plot_map(
             rprof = np.sign(rprof) * np.log10(np.abs(rprof))
         plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
     else:
-        vminmax = np.percentile(np.abs(data), 99)
+        vminmax = np.max(np.abs(data))
         plt.imshow(
             data, origin="lower", extent=plt_extent, vmin=-1 * vminmax, vmax=vminmax
         )
@@ -64,7 +70,7 @@ def plot_map(
     plt.title(f"{title}{label.replace('_', ' ')}")
     plt.xlim((0, extent))
     plt.savefig(
-        os.path.join(ufm_plot_dir, f"{title.replace(' ', '_')}_prof{label}.png"),
+        os.path.join(plot_dir, f"{title.replace(' ', '_')}_prof{label}.png"),
         bbox_inches="tight",
     )
 
@@ -83,6 +89,8 @@ def plot_map_complete(
     units='"',
     lognorm=1,
 ):
+    if len(data.shape) == 2:
+        data = data[None, ...]
     for i, comp in enumerate(comps):
         for log in (False, True):
             plot_map(

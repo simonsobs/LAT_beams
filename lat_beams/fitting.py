@@ -456,11 +456,11 @@ def fit_tod_pointing(
 def fit_gauss_beam(
     imap,
     ivar,
-    pixmap,
+    posmap,
     cent,
     force_sym=False,
     map_units="pW",
-    fwhm_start=60.0,
+    fwhm_start=np.deg2rad(1 / 60.0),
 ):
     """
     Fit 2d Gaussian to input map.
@@ -489,7 +489,7 @@ def fit_gauss_beam(
         Multipoles will have '_m{multipole_index}_{0 or 1} appended,
         where the 0 or 1 is 0 for the sin term and 1 for the cos term.
     """
-    y, x = pixmap
+    y, x = posmap
     guess = [
         x[cent[0], cent[1]],
         y[cent[0], cent[1]],
@@ -539,11 +539,6 @@ def fit_gauss_beam(
 
         return dx, dy, off, amp, fwhm_xi, fwhm_eta, phi
 
-    def _get_base_theta(dx, dy, off, fwhm_xi, fwhm_eta, phi):
-        base_beam = gaussian2d(posmap, 1, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
-
-        return base_beam, theta
-
     def _objective(
         coeffs,
     ):
@@ -561,8 +556,8 @@ def fit_gauss_beam(
     # Convert to aman
     aman = AxisManager()
     dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = pars = _to_pars(res.x)
-    for n, u, v in zip(par_names, par_units, pars):
-        aman.wrap(n, v * u)
+    for n, un, v in zip(par_names, par_units, pars):
+        aman.wrap(n, v * un)
     model = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
 
     return aman, model
@@ -584,14 +579,13 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, multipoles):
     # Convert to aman
     map_units = gauss_fit.amp.unit
     aman = AxisManager()
-    params = {n: v * u for n, u, v in zip(par_names, par_units, pars)}
     for m, n in enumerate(multipoles):
         for i in (0, 1):
             j = 2 * m + i
-            aman.wrap(f"amp_m{m}_{i}", amps[j] * map_units)
-    aman.wrap("multipoles", multipoles)
+            aman.wrap(f"amp_m{n}_{i}", amps[j] * map_units)
+    aman.wrap("multipoles", np.array(multipoles))
 
-    return params, model
+    return aman, model
 
 
 def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps):
@@ -657,8 +651,8 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps):
     pars[0] *= ell_0
     pars[1] *= r_0
     params = {
-        n: (v * uf).to(u)
-        for n, u, uf, v in zip(par_names, par_units, par_units_fit, pars)
+        n: (v * uf).to(un)
+        for n, un, uf, v in zip(par_names, par_units, par_units_fit, pars)
     }
     # TODO: include uncertainties here
     mprofile = np.column_stack((r.value, model))

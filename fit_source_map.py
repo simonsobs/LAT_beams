@@ -1,4 +1,4 @@
-import os
+60impor os
 import sys
 import time
 from functools import partial
@@ -23,8 +23,6 @@ from lat_beams.beam_utils import (
 from lat_beams.fitting import fit_gauss_beam, fit_multipole_model
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, init_log, set_tag, setup_jobs
-
-plt.rcParams["image.cmap"] = "RdGy_r"
 
 
 comm = MPI.COMM_WORLD
@@ -83,7 +81,7 @@ L = init_log()
 
 # Get some global settings
 source_list = cfg["source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
-extent = cfg["extent"] = cfg.get("extent", 900)
+extent = cfg["extent"] = cfg.get("extent", 600)
 snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
 min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
@@ -254,6 +252,7 @@ for i, j in enumerate(joblist):
     # Slice things
     solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
+    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
 
     # Make weights and zero things out
     weights[~np.isfinite(weights)] = 0
@@ -273,7 +272,7 @@ for i, j in enumerate(joblist):
         cent,
         sym_gauss,
         "pW",
-        np.deg2rad(60 * fwhm[band]),
+        np.deg2rad(fwhm[band]/60.),
     )
     if gauss_params is None or model is None:
         msg = "Fit failed"
@@ -287,7 +286,7 @@ for i, j in enumerate(joblist):
     model = bm.gaussian2d_from_aman(posmap, gauss_params)
 
     # Remove offset
-    gauss_params -= gauss_params.off.value
+    solved -= gauss_params.off.value
     model -= gauss_params.off.value
 
     # Get FWHM from data
@@ -328,7 +327,7 @@ for i, j in enumerate(joblist):
         to_save = (None, None)
     aman.wrap("gauss", gauss_params)
     for to_parent in ["amp", "off", "xi0", "eta0"]:
-        aman.wrap(to_parent, gauss_params["to_parent"])
+        aman.wrap(to_parent, gauss_params[to_parent])
     aman.wrap("final_model", "gauss")
 
     # Get gauss multipoles if we want them
@@ -394,7 +393,7 @@ for i, j in enumerate(joblist):
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
         solved.corners(corner=False)
     )
-    plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec))
+    plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
     norm = 1.0 / aman.amp.value
     posmap = np.rad2deg(posmap) * 3600
     for dat, label in [(model, "model"), (resid, "resid")]:

@@ -247,7 +247,7 @@ min_det_secs = cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 5)
 n_modes = cfg["n_modes"] = cfg.get("n_modes", 10)
 del_map = cfg["del_map"] = cfg.get("del_map", True)
-extent = cfg["extent"] = cfg.get("extent", 900)
+extent = cfg["extent"] = cfg.get("extent", 600)
 buf = cfg["buf"] = cfg.get("buffer", 30)
 log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
 smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
@@ -394,8 +394,8 @@ for i, j in enumerate(joblist):
             posmap,
             solved.wcs.wcs.cdelt[1] * (60 * 60),
             extent,
-            (posmap[1][cent[1]], posmap[0][cent[0]]),
-            obs_plot_dir,
+            (posmap[1][cent], posmap[0][cent]),
+            os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
             log_thresh=log_thresh,
             lognorm=1.0 / solved[0][cent],
@@ -571,8 +571,8 @@ for i, j in enumerate(joblist):
             posmap,
             out["solved"].wcs.wcs.cdelt[1] * (60 * 60),
             extent,
-            (posmap[1][cent[1]], posmap[0][cent[0]]),
-            obs_plot_dir,
+            (posmap[1][cent], posmap[0][cent]),
+            os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
             log_thresh=log_thresh,
             lognorm=1.0 / out["solved"][0][cent],

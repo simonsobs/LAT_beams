@@ -90,10 +90,12 @@ def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
             _sigma[~np.isfinite(model)] = 0
             model[~np.isfinite(model)] = 0
             j = (2 * m) + i
-            norm = np.sum(_sigma * model * model)
+            norm = np.nansum(_sigma * model * model)
             if norm == 0:
                 continue
-            amp = np.sum(_sigma * beam * model) / norm
+            amp = np.nansum(_sigma * beam * model) / norm
+            if np.isnan(amp):
+                continue
             amps[j] = amp
             if gs:
                 mod += amp * model
@@ -140,7 +142,7 @@ def gaussian2d_multipoles_from_aman(posmap, aman):
     for m, n in enumerate(aman.gauss_multipoles.multipoles):
         for i in (0, 1):
             j = 2 * m + i
-            amps[j] = aman.gauss_multipole[f"amp_m{m}_{i}"]
+            amps[j] = aman.gauss_multipole[f"amp_m{n}_{i}"]
     return multipole_expansion(base_beam, amps, aman.gauss_multipole.multipoles, theta)
 
 
