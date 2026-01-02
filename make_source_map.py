@@ -16,7 +16,14 @@ from sotodlib.core import Context, metadata
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
-from lat_beams.utils import get_args_cfg, init_log, load_aman, set_tag, setup_jobs
+from lat_beams.utils import (
+    get_args_cfg,
+    init_log,
+    load_aman,
+    log_lvl,
+    set_tag,
+    setup_jobs,
+)
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -42,57 +49,57 @@ def get_jobdict(jdb):
 
 
 def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L):
-    lvl = metadata.loader.logger.level
-    metadata.loader.logger.setLevel(25)
-    if obs_ids is not None:
-        obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
-    else:
-        src_str = "==1 or ".join(source_list) + "==1"
-        obslist = ctx.obsdb.query(
-            f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and {src_str}",
-            tags=source_list,
-        )
-    if pointing_type != "pointing_model":
-        dbs = [
-            md["db"] for md in ctx["metadata"] if "focal_plane" in md.get("name", "")
-        ]
-        if len(dbs) > 1:
-            if myrank == 0:
-                L.warning(
-                    "Multiple pointing metadata entries found, using the first one"
-                )
-        elif len(dbs) == 0:
-            if myrank == 0:
-                L.error("No pointing metadata entries found")
-            sys.exit()
-        L.info(f"Using ManifestDb at {dbs[0]}")
-        db = metadata.ManifestDb(dbs[0])
-        obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
-        obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
-        L.info(f"Only {len(obslist)} observations with pointing metadata")
+    with log_lvl(L, 25):
+        if obs_ids is not None:
+            obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
+        else:
+            src_str = "==1 or ".join(source_list) + "==1"
+            obslist = ctx.obsdb.query(
+                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and {src_str}",
+                tags=source_list,
+            )
+        if pointing_type != "pointing_model":
+            dbs = [
+                md["db"]
+                for md in ctx["metadata"]
+                if "focal_plane" in md.get("name", "")
+            ]
+            if len(dbs) > 1:
+                if myrank == 0:
+                    L.warning(
+                        "Multiple pointing metadata entries found, using the first one"
+                    )
+            elif len(dbs) == 0:
+                if myrank == 0:
+                    L.error("No pointing metadata entries found")
+                sys.exit()
+            L.info(f"Using ManifestDb at {dbs[0]}")
+            db = metadata.ManifestDb(dbs[0])
+            obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
+            obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
+            L.info(f"Only {len(obslist)} observations with pointing metadata")
 
-    obslist = np.array_split(obslist, nproc)[myrank]
-    obsit = []
-    for obs in obslist:
-        try:
-            det_info = ctx.get_det_info(obs["obs_id"])
-        except:
-            continue
-        wsufmsband = np.unique(
-            np.column_stack(
-                [
-                    det_info["wafer_slot"],
-                    det_info["stream_id"],
-                    det_info["wafer.bandpass"],
-                ]
-            ),
-            axis=0,
-        )
-        for ws, ufm, band in wsufmsband:
-            if band[0] != "f":
+        obslist = np.array_split(obslist, nproc)[myrank]
+        obsit = []
+        for obs in obslist:
+            try:
+                det_info = ctx.get_det_info(obs["obs_id"])
+            except:
                 continue
-            obsit += [(obs, ws, ufm, band)]
-    metadata.loader.logger.setLevel(lvl)
+            wsufmsband = np.unique(
+                np.column_stack(
+                    [
+                        det_info["wafer_slot"],
+                        det_info["stream_id"],
+                        det_info["wafer.bandpass"],
+                    ]
+                ),
+                axis=0,
+            )
+            for ws, ufm, band in wsufmsband:
+                if band[0] != "f":
+                    continue
+                obsit += [(obs, ws, ufm, band)]
     return obsit
 
 
@@ -183,20 +190,18 @@ def make_map(
         return None, None
 
     # Initial map
-    lvl = L.level
-    L.setLevel(logging.WARNING)
-    out = cp.make_map(
-        aman,
-        center_on=src_to_map,
-        res=res,
-        cuts=cuts,
-        source_flags=source_flags,
-        comps=comps,
-        filename=filename,
-        n_modes=n_modes,
-        info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
-    )
-    L.setLevel(lvl)
+    with log_lvl(L, logging.WARNING):
+        out = cp.make_map(
+            aman,
+            center_on=src_to_map,
+            res=res,
+            cuts=cuts,
+            source_flags=source_flags,
+            comps=comps,
+            filename=filename,
+            n_modes=n_modes,
+            info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
+        )
 
     # Smooth and find the center
     cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
@@ -406,10 +411,8 @@ for i, j in enumerate(joblist):
     set_tag(job, "comps", comps)
 
     # Get metadata
-    lvl = L.level
-    L.setLevel(logging.ERROR)
-    meta = ctx.get_meta(obs_id)
-    L.setLevel(lvl)
+    with log_lvl(L, logging.ERROR):
+        meta = ctx.get_meta(obs_id)
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
         L.error(f"\t{msg}")
@@ -468,18 +471,16 @@ for i, j in enumerate(joblist):
         continue
 
     # Get initial source_flags
-    lvl = L.level
-    L.setLevel(logging.WARNING)
-    source_flags = cp.compute_source_flags(
-        tod=aman,
-        P=None,
-        mask=search_mask,
-        center_on=src_to_map,
-        res=res,
-        max_pix=4e8,
-        wrap=None,
-    )
-    L.setLevel(lvl)
+    with log_lvl(L, logging.WARNING):
+        source_flags = cp.compute_source_flags(
+            tod=aman,
+            P=None,
+            mask=search_mask,
+            center_on=src_to_map,
+            res=res,
+            max_pix=4e8,
+            wrap=None,
+        )
 
     # Do an aggressive filter and flag dets without the source
     cuts = make_cuts(aman, source_flags, 2 * n_modes, job, L)
@@ -516,18 +517,16 @@ for i, j in enumerate(joblist):
             mask_size * fscale_fac,
         ),
     }
-    lvl = L.level
-    L.setLevel(logging.WARNING)
-    source_flags = cp.compute_source_flags(
-        tod=aman,
-        P=None,
-        mask=mask,
-        center_on=src_to_map,
-        res=res,
-        max_pix=4e8,
-        wrap=None,
-    )
-    L.setLevel(lvl)
+    with log_lvl(L, logging.WARNING):
+        source_flags = cp.compute_source_flags(
+            tod=aman,
+            P=None,
+            mask=mask,
+            center_on=src_to_map,
+            res=res,
+            max_pix=4e8,
+            wrap=None,
+        )
 
     # Make final map
     out, cent = make_map(

@@ -33,7 +33,14 @@ from typing_extensions import cast
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
-from lat_beams.utils import get_args_cfg, init_log, load_aman, set_tag, setup_jobs
+from lat_beams.utils import (
+    get_args_cfg,
+    init_log,
+    load_aman,
+    log_lvl,
+    set_tag,
+    setup_jobs,
+)
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -57,38 +64,36 @@ def get_jobdict(jdb):
 
 
 def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source):
-    lvl = metadata.loader.logger.level
-    metadata.loader.logger.setLevel(25)
-    if obs_ids is not None:
-        obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
-    else:
-        obslist = ctx.obsdb.query(
-            f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {stop_time}",
-            tags=[f"{source}=1"],
-        )
+    with log_lvl(L, 25):
+        if obs_ids is not None:
+            obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
+        else:
+            obslist = ctx.obsdb.query(
+                f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {stop_time}",
+                tags=[f"{source}=1"],
+            )
 
-    obslist = np.array_split(obslist, nproc)[myrank]
-    obsit = []
-    for obs in obslist:
-        try:
-            det_info = ctx.get_det_info(obs["obs_id"])
-        except:
-            continue
-        wsufms = np.unique(
-            np.column_stack(
-                [
-                    det_info["wafer_slot"],
-                    det_info["stream_id"],
-                ]
-            ),
-            axis=0,
-        )
-        for (
-            ws,
-            ufm,
-        ) in wsufms:
-            obsit += [(obs, ws, ufm)]
-    metadata.loader.logger.setLevel(lvl)
+        obslist = np.array_split(obslist, nproc)[myrank]
+        obsit = []
+        for obs in obslist:
+            try:
+                det_info = ctx.get_det_info(obs["obs_id"])
+            except:
+                continue
+            wsufms = np.unique(
+                np.column_stack(
+                    [
+                        det_info["wafer_slot"],
+                        det_info["stream_id"],
+                    ]
+                ),
+                axis=0,
+            )
+            for (
+                ws,
+                ufm,
+            ) in wsufms:
+                obsit += [(obs, ws, ufm)]
     return obsit
 
 
@@ -134,18 +139,16 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
         [(0, "dets")],
     )
     aman_dummy.wrap("focal_plane", fp)
-    lvl = cp.logger.level
-    cp.logger.setLevel(logging.WARNING)
-    source_flags = cp.compute_source_flags(
-        tod=aman_dummy,
-        P=None,
-        mask=mask,
-        center_on=source_name,
-        res=res * 10,
-        max_pix=4e8,
-        wrap=None,
-    )
-    cp.logger.setLevel(lvl)
+    with log_lvl(L, logging.WARNING):
+        source_flags = cp.compute_source_flags(
+            tod=aman_dummy,
+            P=None,
+            mask=mask,
+            center_on=source_name,
+            res=res * 10,
+            max_pix=4e8,
+            wrap=None,
+        )
     if len(source_flags.ranges[0].ranges()) == 0:
         start = -1
         stop = -1
@@ -396,11 +399,9 @@ def main():
                 set_tag(job, "preprocess", preprocess_str)
 
                 # Get metadata
-                lvl = L.level
-                L.setLevel(logging.ERROR)
-                obs = ctx.obsdb.get(obs_id, tags=True)
-                meta = ctx.get_meta(obs_id)
-                L.setLevel(lvl)
+                with log_lvl(L, logging.ERROR):
+                    obs = ctx.obsdb.get(obs_id, tags=True)
+                    meta = ctx.get_meta(obs_id)
                 if meta.dets.count == 0:
                     msg = "Looks like we don't have real metadata for this observation!"
                     L.error(f"\t{msg}")
@@ -804,12 +805,10 @@ def main():
                 # Ready to save
                 L.normal(f"\tSaving {len(rset)} fits ({np.sum(msk)} good).")
                 if pad:
-                    lvl = L.level
-                    L.setLevel(logging.ERROR)
-                    all_dets = ctx.get_det_info(obs["obs_id"], dets={"stream_id": ufm})[
-                        "readout_id"
-                    ]
-                    L.setLevel(lvl)
+                    with log_lvl(L, logging.ERROR):
+                        all_dets = ctx.get_det_info(
+                            obs["obs_id"], dets={"stream_id": ufm}
+                        )["readout_id"]
                     pad_dets = all_dets[~np.isin(all_dets, rset["dets:readout_id"])]
                     if outdt[0][1] is None:
                         outdt[0][1] = pad_dets.dtype

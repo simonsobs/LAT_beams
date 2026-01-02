@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import time
+from contextlib import contextmanager
 from logging.handlers import MemoryHandler
 
 import numpy as np
@@ -24,7 +25,7 @@ except:
     comm = None
 
 
-def init_log(level=logging.DEBUG, comm=comm):
+def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL):
     # Uses a crappy version of https://stackoverflow.com/a/35804945
     def lognormal(self, message, *args, **kwargs):
         if self.isEnabledFor(25):
@@ -46,26 +47,29 @@ def init_log(level=logging.DEBUG, comm=comm):
         if isinstance(handler.formatter, ColoredFormatter):
             handler.formatter.colors["NORMAL"] = "\033[1;34m"
     L.handlers = [
-        MemoryHandler(1000, flushLevel=logging.CRITICAL, target=h, flushOnClose=True)
+        MemoryHandler(1000, flushLevel=flushLevel, target=h, flushOnClose=True)
         for h in L.handlers
     ]
 
     return L
 
 
-def print_once(*args):
-    """
-    Helper function to print only once when running with MPI.
-    Only the rank 0 process will print.
-
-    Parameters
-    ----------
-    *args : Unpack[tuple[Any, ...]]
-        Arguments to pass to print.
-    """
-    if comm is None or comm.Get_rank() == 0:
-        print(*args)
-        sys.stdout.flush()
+@contextmanager
+def log_lvl(logger, level=None):
+    "Run body with logger at a different level."
+    # https://stackoverflow.com/q/78035371/850781
+    saved_logger_level = logger.level
+    saved_handler_levels = [ha.level for ha in logger.handlers]
+    new_level = logger.getEffectiveLevel() + 10 if level is None else level
+    logger.setLevel(new_level)
+    for ha in logger.handlers:
+        ha.setLevel(new_level)
+    try:
+        yield saved_logger_level, saved_handler_levels
+    finally:
+        logger.setLevel(saved_logger_level)
+        for ha, le in zip(logger.handlers, saved_handler_levels):
+            ha.setLevel(le)
 
 
 def set_tag(job, key, new_val):
@@ -79,20 +83,17 @@ def set_tag(job, key, new_val):
 
 
 def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
-    lvl = L.level
     try:
-        L.setLevel(logging.ERROR)
-        err, _, _, aman = preproc_or_load_group(
-            obs_id,
-            preprocess_cfg,
-            dets=dets,
-            save_archive=False,
-            overwrite=True,
-            logger=L,
-        )
-        L.setLevel(lvl)
+        with log_lvl(L, logging.ERROR):
+            err, _, _, aman = preproc_or_load_group(
+                obs_id,
+                preprocess_cfg,
+                dets=dets,
+                save_archive=False,
+                overwrite=True,
+                logger=L,
+            )
     except:
-        L.setLevel(lvl)
         msg = "Failed to load or preprocess!"
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
