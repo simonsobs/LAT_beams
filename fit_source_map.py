@@ -1,4 +1,4 @@
-60impor os
+import os
 import sys
 import time
 from functools import partial
@@ -85,8 +85,8 @@ extent = cfg["extent"] = cfg.get("extent", 600)
 snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
 min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
-gauss_multipoles = cfg["gauss_multipoles"] = cfg.get("gauss_multipoles", (0,))
-gauss_multipoles = tuple(gauss_multipoles)
+gauss_multipole = cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
+n_multipoles = cfg["n_multipoles"] = cfg.get("n_multipole", 3)
 sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
@@ -331,10 +331,10 @@ for i, j in enumerate(joblist):
     aman.wrap("final_model", "gauss")
 
     # Get gauss multipoles if we want them
-    if len(gauss_multipoles) > 0:
+    if gauss_multipole:
         base_beam = model / gauss_params.amp.value
         gauss_multipole_params, model = fit_multipole_model(
-            solved, weights, posmap, base_beam, gauss_params, gauss_multipoles
+            solved, weights, posmap, base_beam, gauss_params, n_multipoles
         )
         gauss_multipole_params = process_model(
             gauss_multipole_params,

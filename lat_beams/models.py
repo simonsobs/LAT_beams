@@ -1,32 +1,7 @@
 import astropy.units as u
 import numpy as np
 from scipy.special import jv
-
-
-def bessel_beam(x, y, n_modes, n_multipoles, dx, dy, off, l_max, coeffs):
-    x = x - dx
-    y = y - dy
-    r = np.sqrt(x**2 + y**2)
-    theta = np.arctan2(y, x)
-
-    rl = r * l_max
-    # This only makes sense because I assume O(n_modes) ~ 1
-    # If its expected to be >>1 then we should not cache
-    with np.errstate(divide="ignore", invalid="ignore"):
-        bessels = np.array([jv(2 * i + 1, rl) / rl for i in range(n_modes)])
-
-    beam_model = np.sum(coeffs[:n_modes][..., None, None] * bessels, axis=0)
-    coeffs = coeffs[n_modes:]
-    for m in range(n_multipoles):
-        order = 2**m
-        for i, op in enumerate((np.sin, np.cos)):
-            mp = op(theta * order)
-            cf = coeffs[(2 * m + i) * n_modes : (2 * m + i + 1) * n_modes][
-                ..., None, None
-            ]
-            beam_model += np.sum(bessels * cf * mp, axis=0)
-    return beam_model + off
-
+from functools import lru_cache
 
 def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
@@ -72,15 +47,15 @@ def multipole(theta, mp, sin):
     return np.cos(theta * order - sin * np.pi / 2)
 
 
-def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
-    amps = np.zeros(len(multipoles) * 2)
+def multipole_decomp(base_beam, imap, sigma, n_multipoles, theta, gs=False):
+    amps = np.zeros((n_multipoles, 2))
     beam = imap
     mod = imap
     if gs:
         beam = imap.copy()
         mod = imap.copy()
         mod[:] = 0.0
-    for m, n in enumerate(multipoles):
+    for n in range(n_multipoles):
         if gs:
             mod[:] = 0.0
         for i in (0, 1):
@@ -89,14 +64,13 @@ def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
             _sigma = sigma.copy()
             _sigma[~np.isfinite(model)] = 0
             model[~np.isfinite(model)] = 0
-            j = (2 * m) + i
             norm = np.nansum(_sigma * model * model)
             if norm == 0:
                 continue
             amp = np.nansum(_sigma * beam * model) / norm
             if np.isnan(amp):
                 continue
-            amps[j] = amp
+            amps[n, i] = amp
             if gs:
                 mod += amp * model
         if gs:
@@ -104,15 +78,37 @@ def multipole_decomp(base_beam, imap, sigma, multipoles, theta, gs=False):
     return amps
 
 
-def multipole_expansion(base_beam, amps, multipoles, theta):
+def multipole_expansion(base_beam, amps, theta):
     beam = np.zeros_like(base_beam)
-    for m, n in enumerate(multipoles):
+    for n in range(len(amps)):
         for i in (0, 1):
             mp = multipole(theta, n, i)
-            j = (2 * m) + i
-            beam += amps[j] * mp * base_beam
+            beam += amps[n, i] * mp * base_beam
     return beam
 
+@lru_cache
+def bessel_term(r, ell_max, i):
+    with np.errstate(divide="ignore", invalid="ignore"):
+        bessel = jv(2*i+1, r*ell_max)/(r*ell_max)
+    return bessel
+
+def bessel_beam(posmap, xi0, eta0, off, ell_max, amps):
+    eta, xi = posmap
+    xi_sft = xi - xi0
+    eta_sft = eta - eta0
+    r = np.sqrt(xi**2 + eta**2)
+    theta = np.arctan2(eta, xi)
+
+
+    beam_model = np.zeros_like(xi)
+    multipoles = np.arange(amps.shape[1]).astype(int)
+    for i in range(len(amps)):
+        base_beam = bessel_term(r, ell_max, i)
+        for m in range(len(amps[i])):
+            for o in range(len(amps[i][m])):
+                pass
+
+    return beam_model + off
 
 def gaussian2d_from_aman(posmap, aman):
     if "gaussian" in aman._fields:
@@ -138,12 +134,7 @@ def gaussian2d_multipoles_from_aman(posmap, aman):
         y - aman.gaussian.eta0.to(u.radian).value,
         x - aman.gaussian.eta0.to(u.radian).value,
     )
-    amps = np.zeros(len(multipoles) * 2)
-    for m, n in enumerate(aman.gauss_multipoles.multipoles):
-        for i in (0, 1):
-            j = 2 * m + i
-            amps[j] = aman.gauss_multipole[f"amp_m{n}_{i}"]
-    return multipole_expansion(base_beam, amps, aman.gauss_multipole.multipoles, theta)
+    return multipole_expansion(base_beam, aman.gauss_multipole.amps, theta)
 
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):

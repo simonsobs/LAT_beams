@@ -141,11 +141,11 @@ def load_beam_fits(fpath):
         ]
     )
     # check that all fits have the same pars
-    par_list = np.sort(list(amans[0]._fields.keys()))
-    for aman in amans:
-        pars = np.sort(list(aman._fields.keys()))
-        if not np.array_equal(par_list, pars):
-            raise ValueError("Not all fits have the same pars!")
+    # par_list = np.sort(list(amans[0]._fields.keys()))
+    # for aman in amans:
+    #     pars = np.sort(list(aman._fields.keys()))
+    #     if not np.array_equal(par_list, pars):
+    #         raise ValueError("Not all fits have the same pars!")
     f.close()
     dtype = [
         ("obs_id", obs_ids.dtype),

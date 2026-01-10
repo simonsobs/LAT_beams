@@ -24,8 +24,7 @@ from scipy.signal import detrend
 from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
-from sotodlib.core import AxisManager
-from sotodlib.core.context import AxisManager
+from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.fft_ops import (
     RFFTObj,
     find_inferior_integer,
@@ -563,27 +562,24 @@ def fit_gauss_beam(
     return aman, model
 
 
-def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, multipoles):
+def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
     y, x = posmap
     theta = np.arctan2(
         y - gauss_fit.eta0.to(u.radian).value, x - gauss_fit.eta0.to(u.radian).value
     )
 
     # Compute model
-    if len(multipoles) == 0:
-        amps = []
-        model = gauss_fit.amp.value * base_beam
-    amps = multipole_decomp(base_beam, imap, ivar, multipoles, theta, True)
-    model = multipole_expansion(base_beam, amps, multipoles, theta)
+    if n_multipoles == 0:
+        amps = np.array([[gauss_fit.amp.values, 0]])
+    amps = multipole_decomp(base_beam, imap, ivar, n_multipoles, theta, True)
+    model = multipole_expansion(base_beam, amps, theta)
 
     # Convert to aman
     map_units = gauss_fit.amp.unit
     aman = AxisManager()
-    for m, n in enumerate(multipoles):
-        for i in (0, 1):
-            j = 2 * m + i
-            aman.wrap(f"amp_m{n}_{i}", amps[j] * map_units)
-    aman.wrap("multipoles", np.array(multipoles))
+    mp_ax = IndexAxis("multipoles", n_multipoles) 
+    sc_ax = LabelAxis("term", ["cos", "sin"])
+    aman.wrap("amps", amps * map_units, [(0, mp_ax), (1, sc_ax)])
 
     return aman, model
 
