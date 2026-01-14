@@ -1,0 +1,15 @@
+map_data_dir: "/global/homes/a/andrs/data/beams/lat/pointing_model_bs_relcal/"
+
+# Must be the same context as the used mapmaking conf context
+context: "/global/homes/a/andrs/BeamChar/Work/make_maps/preproc/use_this_local.yaml"
+
+# Path to save the referential h5 file with map metadata and fit info
+map_ref: "/global/homes/a/andrs/BeamChar/Work/analyze_maps/"
+
+
+# Label your epochs to make reference easier!
+epochs:
+    - ['ep1', 1744848000, 1745150000]
+    - ['ep2', 1745150000, 1749355200]
+    - ['ep3', 1749600000, 1755576000]
+    - ['ep4', 1756699200, 20000000000]
