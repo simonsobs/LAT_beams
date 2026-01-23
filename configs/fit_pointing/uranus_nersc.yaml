@@ -1,26 +1,34 @@
-source: "saturn"
+source: "uranus"
 min_samps: 20000
 context: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
 preprocess: "preproc/preproc_fit_point.yaml"
+
 # start_time: 1739923200 # First light 
 # start_time: 1744848000 # Everything aligned
-# start_time: 1746187200 # Corotator moved
+# start_time: 1745150000
+# stop_time: 1746187200 # Corotator moved
 # start_time: 1748476800 # Autoschedular
 start_time: 1756699200
 stop_time: 2748476800
+
+fwhm: # arcmin LAT; change per platform
+  f090: 2
+  f150: 1.3
+  f220: 0.95
+  f280: 0.83
+    
 try_all: True
+
 n_med: 5
+
 mask:
   shape: "circle"
   xyr:
     - 0.
     - 0.
     - 1.5 
+    
 project_dir: 'pointing/lat'
 nominal: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/ID9/focal_plane.h5'
+
 src_msk: False
-fwhm: # arcmin LAT; change per platform
-  f090: 2
-  f150: 1.3
-  f220: 0.95
-  f280: 0.83
