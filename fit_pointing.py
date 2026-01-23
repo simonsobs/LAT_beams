@@ -63,7 +63,7 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source):
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source, L):
     with log_lvl(L, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
@@ -291,6 +291,7 @@ def main():
             start_time=start_time,
             stop_time=stop_time,
             source=source,
+            L=L
         ),
         get_jobstr,
         get_tags,
@@ -349,7 +350,11 @@ def main():
                 master_comm.barrier()
                 to_save = master_comm.gather(to_save, root=0)
                 if myrank == 0 and to_save is not None and h5_file is not None:
-                    for rset, obs_id, ufm in to_save:
+                    print(to_save)
+                    for ts in to_save:
+                        if ts is None:
+                            continue
+                        rset, obs_id, ufm = ts
                         if rset is None:
                             continue
                         path = f"{obs['obs_id']}/{ufm}"

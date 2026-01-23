@@ -2,6 +2,8 @@ import logging
 
 import numpy as np
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
+from .log import log_lvl
+from .jobs import set_tag
 
 
 def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
