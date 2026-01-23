@@ -88,6 +88,7 @@ def plot_map_complete(
     append="",
     units='"',
     lognorm=1,
+    qrur=False,
 ):
     if len(data.shape) == 2:
         data = data[None, ...]
@@ -103,10 +104,37 @@ def plot_map_complete(
                 title,
                 comp=comp,
                 log=log,
-                log_thresh=1e-3,
+                log_thresh=log_thresh,
                 append=append,
                 units=units,
             )
+    if not qrur:
+        return
+    if "Q" not in comps or "U" not in comps:
+        raise ValueError("Cannot plot Qr and Ur without Q and U")
+    Q = data[comps.find("Q")]
+    U = data[comps.find("U")]
+    eta, xi = posmap
+    theta = np.arctan2(eta, xi)
+    Q_r = Q*np.cos(2*theta) + U*np.sin(2*theta)
+    U_r = U*np.cos(2*theta) - Q*np.sin(2*theta)
+    for dat, comp in [(Q_r, "Qr"), (U_r, "Ur")]:
+        for log in (False, True):
+            plot_map(
+                dat * (lognorm * log + (not log)),
+                posmap,
+                pixsize,
+                extent,
+                cent,
+                plot_dir,
+                title,
+                comp=comp,
+                log=log,
+                log_thresh=log_thresh,
+                append=append,
+                units=units,
+            )
+
 
 
 def plot_tod(aman, sig_filt, tod_plot_dir, file_label):

@@ -31,7 +31,7 @@ nominal_fwhm = cfg.get("nominal_fwhm", nominal_fwhm)
 split_by = cfg.get(
     "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
 )
-extent = cfg["extent"] = cfg.get("extent", 900)
+extent = cfg["extent"] = cfg.get("extent", 500)
 mask_size = cfg.get("mask_size", 0.1)
 mask_size *= u.degree
 res = cfg["res"] = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
@@ -84,7 +84,7 @@ if len(alljobstr) == 0:
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
 
 # Make template map
-pix_extent = int(2 * extent // pixsize)
+pix_extent = 2 * int(extent // pixsize)
 # rowmajor = True here to match sotodlib
 twcs = enmap.wcsutils.build(
     [0, 0],
@@ -281,4 +281,5 @@ for split in split_by:
                         f"{spl} {epoch[0]} {epoch[1]}",
                         log_thresh=log_thresh,
                         append=name + append,
+                        qrur=True
                     )
