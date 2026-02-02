@@ -350,7 +350,6 @@ def main():
                 master_comm.barrier()
                 to_save = master_comm.gather(to_save, root=0)
                 if myrank == 0 and to_save is not None and h5_file is not None:
-                    print(to_save)
                     for ts in to_save:
                         if ts is None:
                             continue
@@ -379,6 +378,7 @@ def main():
                 master_comm.barrier()
                 # To avoid multiproc issues where the database is locked we lock and unlock serially
                 # with jdb.locked(j) as job:
+                to_save = (None, None, None)
                 for r in range(nproc):
                     if r == myrank:
                         L.flush()
@@ -389,7 +389,6 @@ def main():
                             job = jdb.lock(j.id)
                     master_comm.barrier()
                 if job is None:
-                    to_save = (None, None, None)
                     continue
 
                 job.mark_visited()
@@ -424,7 +423,6 @@ def main():
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
                     L.debug(f"\t\tTags were: {obs['tags']}")
-                    to_save = (None, None, None)
                     continue
                 set_tag(job, "source", source)
 
