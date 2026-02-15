@@ -8,11 +8,12 @@ from functools import partial
 import mpi4py.rc
 import numpy as np
 import yaml
-from pixell import enmap
+from pixell import enmap, utils
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
+from sotodlib import mapmaking
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
@@ -24,9 +25,6 @@ from lat_beams.utils import (
     set_tag,
     setup_jobs,
 )
-
-mpi4py.rc.threads = False
-from mpi4py import MPI
 
 mpi4py.rc.threads = False
 from mpi4py import MPI
@@ -54,10 +52,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
             src_str = "==1 or ".join(source_list) + "==1"
-            obslist = ctx.obsdb.query(
-                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and {src_str}",
-                tags=source_list,
-            )
+            obslist = ctx.obsdb.query( f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and ({src_str})", tags=source_list,)
         if pointing_type != "pointing_model":
             dbs = [
                 md["db"]
@@ -121,6 +116,10 @@ def get_tags(info):
         "detweights": "",
         "solved": "",
         "weights": "",
+        "ml_map": "",
+        "ml_div": "",
+        "ml_rhs": "",
+        "ml_bin": "",
         "comps": "",
         "source": "",
         "config": "",
@@ -254,12 +253,16 @@ smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
 append = cfg["append"] = cfg.get("append", "")
 preprocess_cfg = cfg.get("preprocess", None)
+# ds = cfg["ds"] = cfg.get("ds", 5)
+cgiters = cfg["cgiters"] = cfg.get("cgiters", 30)
+mlpass = cfg["cgpass"] = cfg.get("cgpass", 3)
 cfg_str = yaml.dump(cfg)
 
 if preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
 with open(preprocess_cfg, "r") as f:
-    preprocess_str = yaml.dump(yaml.safe_load(preprocess_cfg))
+    preprocess_cfg = yaml.safe_load(f)
+    preprocess_str = yaml.dump(preprocess_cfg)
 
 # Check pointing_type
 if pointing_type not in ["pointing_model", "per_obs", "raw"]:
@@ -286,6 +289,11 @@ data_dir = os.path.join(
 os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 
+# Modify preproc with our paths
+preprocess_cfg['archive']['index'] = os.path.join(data_dir, preprocess_cfg['archive']['index'])
+preprocess_cfg['archive']['policy']['filename'] = os.path.join(data_dir, preprocess_cfg['archive']['policy']['filename'])
+os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
+os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
 
 # Get context
 ctx_path = cfg["context"] = cfg.get(
@@ -344,6 +352,18 @@ mask_size = cfg.get("mask_size", 0.1)
 search_mask = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
 mask_fac = search_mask["xyr"][-1] / mask_size
 
+# Setup passes
+dsstr = "1"
+maxiter = str(cgiters)
+interpol = "bilinear"
+for i in range(1, mlpass):
+    interpol = "nearest," + interpol
+    maxiter = f"{max(1, max(cgiters//2, cgiters//(i + 1)))}," + maxiter
+passes = mapmaking.setup_passes(downsample=dsstr, maxiter=maxiter, interpol=interpol)
+
+# Local comm for ML map
+l_comm = comm.Split(myrank, myrank)
+
 # Mapping loop
 source_list = set(source_list)
 job = None
@@ -370,6 +390,7 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
+    sub_id = f"{obs_id}:{ws}:{band}"
     obs = ctx.obsdb.get(obs_id, tags=True)
 
     if args.plot_only:
@@ -563,6 +584,7 @@ for i, j in enumerate(joblist):
         )
 
     # Plot
+    os.makedirs(os.path.join(obs_plot_dir, ufm), exist_ok=True)
     try:
         posmap = out["solved"].posmap()
         posmap = np.rad2deg(posmap) * 3600
@@ -576,6 +598,108 @@ for i, j in enumerate(joblist):
             f"{obs_id} {ufm} {band}",
             log_thresh=log_thresh,
             lognorm=1.0 / out["solved"][0][cent],
+        )
+    except Exception as e:
+        L.warning(f"Plotting failed with error: {e}")
+
+
+    # Now make the ML map
+    P = out['P']
+    aman_clean = aman
+    utils.deslope(aman_clean.signal, w=5, inplace=True)
+    aman_clean.wrap("weather", np.full(1, "typical"))
+    aman_clean.wrap("site",    np.full(1, "so_lat"))
+    mlmap_path = ""
+    rhs_path = ""
+    div_path = ""
+    bin_path = ""
+    outmap = None
+    for ipass, passinfo in enumerate(passes):
+        L.debug("Starting pass %d/%d maxit %d down %d interp %s" % (ipass+1, len(passes), passinfo.maxiter, passinfo.downsample, passinfo.interpol))
+        pass_prefix = os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_pass{ipass+1}_")
+        noise_model = mapmaking.NmatDetvecs(verbose=True)
+        signal_cut = mapmaking.SignalCut(l_comm, dtype=np.float32)
+        signal_map = mapmaking.SignalMap(out["solved"].shape, out["solved"].wcs, l_comm, comps=comps, dtype=np.float64, tiled=False, interpol=passinfo.interpol)
+        signals    = [signal_cut, signal_map]
+        mapmaker   = mapmaking.MLMapmaker(signals, noise_model=None, dtype=np.float32, verbose=True)
+
+        if passinfo.downsample != 1:
+            aman = mapmaking.downsample_obs(aman_clean, passinfo.downsample)
+        else:
+            aman = aman_clean.copy()
+        aman.signal = aman.signal.astype(np.float32)
+
+        # Estimate noise
+        if ipass == 0:
+            signal_estimate = P.from_map(out["solved"])
+        else:
+            signal_estimate = eval_prev.evaluate(mapmaker_prev.data[len(mapmaker.data)])
+        signal_estimate = mapmaking.resample.resample_fft_simple(signal_estimate, aman.samps.count)
+        mapmaker.add_obs(sub_id, aman, noise_model=None, signal_estimate=signal_estimate, pmap=P)
+        del signal_estimate
+
+        # Write the starting maps
+        mapmaker.prepare()
+        rhs_path = signal_map.write(obs_data_dir + "/", "rhs", signal_map.rhs, unit='pW^-1')
+        div_path = signal_map.write(obs_data_dir + "/", "div", signal_map.div, unit='pW^-2')
+        bin_path = signal_map.write(obs_data_dir + "/", "bin", enmap.map_mul(signal_map.idiv, signal_map.rhs), unit='pW')
+        L.debug("\tWrote rhs, div, bin")
+
+        # Set up initial condition
+        x0 = None if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
+
+        # Solve
+        t1 = time.time()
+        for step in mapmaker.solve(maxiter=passinfo.maxiter, x0=x0):
+            t2 = time.time()
+            dump = step.i % 10 == 0
+            L.debug("\tCG step %4d %15.7e %8.3f %s" % (step.i, step.err, t2-t1, "" if not dump else "(write)"))
+            if dump:
+                for signal, val in zip(signals, step.x):
+                    if signal.output:
+                        mlmap_path = signal.write(pass_prefix, "map%04d" % step.i, val)
+            t1 = time.time()
+
+        L.debug("Done with ML map")
+        for signal, val in zip(signals, step.x):
+            if signal.output:
+                outmap = val
+                mlmap_path = signal.write(pass_prefix, "map", val, unit='pW')
+
+        mapmaker_prev = mapmaker
+        eval_prev     = mapmaker.evaluator(step.x_zip)
+
+    if mlmap_path == "" or outmap is None:
+        msg = "Failed to make ML map"
+        L.error(msg)
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        continue
+
+    # Add paths to job
+    for name, path in [
+        ("ml_map", mlmap_path), 
+        ("ml_rhs", rhs_path), 
+        ("ml_div", div_path), 
+        ("ml_bin", bin_path), 
+    ]:
+        set_tag(job, name, path,)
+
+    # Plot
+    cent = estimate_cent(outmap[0], smooth_kern / pixsize, buf)
+    try:
+        posmap = outmap.posmap()
+        posmap = np.rad2deg(posmap) * 3600
+        plot_map_complete(
+            outmap,
+            posmap,
+            outmap.wcs.wcs.cdelt[1] * (60 * 60),
+            extent,
+            (posmap[1][cent], posmap[0][cent]),
+            os.path.join(obs_plot_dir, ufm),
+            f"{obs_id} {ufm} {band} MLmap",
+            log_thresh=log_thresh,
+            lognorm=1.0 / outmap[0][cent],
         )
     except Exception as e:
         L.warning(f"Plotting failed with error: {e}")
