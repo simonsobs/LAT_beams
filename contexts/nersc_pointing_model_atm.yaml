@@ -24,20 +24,21 @@ metadata:
     label: wafer_info
     det_info: true
     on_missing: fail
-  - db: '{manifestdir}/det_cal/lat_det_cal_250515m/det_cal_local.sqlite'
+  - db: '{manifestdir}/det_cal/lat_det_cal_250516m/det_cal_local.sqlite'
     label: det_cal
     unpack: det_cal
     # on_missing: fail  ## work-around for variable mask
     on_missing: trim
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_251110r1/db.sqlite'
+  # - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_251110r1/db.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_260208r1/db.sqlite'
     label: pointing_model
     unpack: pointing_model
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r2/db.sqlite'
+  # - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r2/db.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r4/db.sqlite'
     label: focal_plane
     unpack: focal_plane
     on_missing: fail
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/relcal/20251107/relcal.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/twmorris/shared/lat/relcal/20260129/lat_relcal_20260129.sqlite'
     label: relcal
     unpack: relcal
     on_missing: trim
-

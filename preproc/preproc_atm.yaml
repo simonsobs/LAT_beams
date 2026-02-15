@@ -11,11 +11,11 @@ subobs:
 
 archive:
   # index: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/process_archive.sqlite'
-  index: '/global/cfs/cdirs/sobs/users/skh/process_archive.sqlite'
+  index: 'preproc/process_archive.sqlite'
   policy:
     type: 'simple'
     # filename: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/preprocess_archive.h5'
-    filename: '/global/cfs/cdirs/sobs/users/skh/preprocess_archive.h5'
+    filename: 'preproc/preprocess_archive.h5'
 
 process_pipe:
     - name: "pointing_model"
@@ -99,12 +99,11 @@ process_pipe:
 
     - name: "psd"
       wrap: "psdT"
-      calc:
+      process:
         freq_spacing: .05
         average: "median"
         noverlap: 0
         full_output: True
-      save: True
 
     - name: "noise"
       fit: False

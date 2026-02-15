@@ -29,5 +29,6 @@ epochs:
     - [1749600000, 1755576000]
     - [1756699200, 20000000000]
 append: "bs_relcal"
-gauss_multipoles: [0, 1, 2, 3]
 sym_gauss: False 
+n_bessel: 20
+n_multipoles: 4

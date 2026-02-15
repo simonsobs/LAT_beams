@@ -1,18 +1,22 @@
 map_source_list:
   - "mars"
   - "saturn"
+  - "neptune"
+  - "uranus"
   - "taua"
 fit_source_list:
   - "mars"
+  - "neptune"
+  - "uranus"
   - "saturn"
 pointing_type: "pointing_model" 
 preprocess: "preproc/preproc_atm.yaml"
-min_samps: 500
+min_det_secs: 300
 min_dets: 50
 min_hits: 1
 min_snr: 1
 context: 'contexts/nersc_pointing_model_atm.yaml'
-start_time: 1756699200
+start_time: 1749600000 
 stop_time: 20000000000
 n_med: 3
 mask_size: .2
@@ -21,8 +25,9 @@ search_mask:
   xyr:
     - 0.
     - 0.
-    - 1
+    - .5
 epochs:
+    - [1749600000, 1756699200]
     - [1756699200, 20000000000]
 append: "atm_relcal"
 gauss_multipoles: [0, 1, 2, 3]

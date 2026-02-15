@@ -93,12 +93,11 @@ process_pipe:
 
     - name: "psd"
       wrap: "psdT"
-      calc:
+      process:
         freq_spacing: .05
         average: "median"
         noverlap: 0
         full_output: True
-      save: True
 
     - name: "noise"
       fit: False

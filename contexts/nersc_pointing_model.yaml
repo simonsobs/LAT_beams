@@ -36,8 +36,3 @@ metadata:
     label: focal_plane
     unpack: focal_plane
     on_missing: fail
-  - db: '{manifestdir}/abscal/lat_abscal_250602/db_local.sqlite'
-    label: abscal
-    unpack:
-    - abscal
-
