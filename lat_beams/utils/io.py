@@ -9,11 +9,11 @@ from .jobs import set_tag
 def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
     try:
         with log_lvl(L, logging.ERROR):
-            err, _, _, aman = preproc_or_load_group(
+            aman, _, _, err = preproc_or_load_group(
                 obs_id,
                 preprocess_cfg,
                 dets=dets,
-                save_archive=False,
+                save_archive=True,
                 overwrite=True,
                 logger=L,
             )
