@@ -208,7 +208,8 @@ def main():
     if preprocess_cfg is None:
         raise ValueError("Must specify a valid preprocess config!")
     with open(preprocess_cfg, "r") as f:
-        preprocess_str = yaml.dump(yaml.safe_load(preprocess_cfg))
+        preprocess_cfg = yaml.safe_load(f)
+        preprocess_str = yaml.dump(preprocess_cfg)
 
     if fwhm is None:
         raise ValueError("FWHM not found in config file.")
@@ -221,6 +222,12 @@ def main():
     if myrank == 0:
         os.makedirs(plot_dir, exist_ok=True)
         os.makedirs(data_dir, exist_ok=True)
+
+    # Modify preproc with our paths
+    preprocess_cfg['archive']['index'] = os.path.join(data_dir, preprocess_cfg['archive']['index'])
+    preprocess_cfg['archive']['policy']['filename'] = os.path.join(data_dir, preprocess_cfg['archive']['policy']['filename'])
+    os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
+    os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
 
     # Get context
     ctx_path = cfg["context"] = cfg.get(
