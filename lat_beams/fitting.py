@@ -36,7 +36,7 @@ from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
-from .models import dr4_beam, gaussian2d, multipole_decomp, multipole_expansion
+from .models import dr4_beam, gaussian2d, multipole_decomp, multipole_expansion, bessel_term, multipole
 
 flog.setLevel(logging.ERROR)
 
@@ -582,6 +582,38 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
     aman.wrap("amps", amps * map_units, [(0, mp_ax), (1, sc_ax)])
 
     return aman, model
+
+def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd): 
+    ell_max = (np.pi * d / lmd).decompose().value
+    eta, xi = posmap
+    eta0 = gauss_fit.eta0.to(u.radian).value
+    xi0 = gauss_fit.xi0.to(u.radian).value 
+    xi = xi - xi0
+    eta = eta - eta0
+    theta = np.arctan2(eta, xi)
+    r = np.sqrt(xi**2 + eta**2)
+
+    # Compute model
+    amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
+    beam_model = np.zeros_like(xi)
+    for n0 in range(len(amps)):
+        b0 = bessel_term(r, ell_max, n0)
+        for n1 in range(len(amps)):
+            b1 = bessel_term(r, ell_max, n1)
+            base_beam = b0*b1
+            amps[n0, n1] = multipole_decomp(base_beam, imap - beam_model, ivar, n_multipoles, theta, True, True)
+            beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
+
+    # Convert to aman
+    map_units = gauss_fit.amp.unit
+    aman = AxisManager()
+    b_ax = IndexAxis("bessel", n_bessel) 
+    mp_ax = IndexAxis("multipoles", n_multipoles) 
+    sc_ax = LabelAxis("term", ["cos", "sin"])
+    aman.wrap("amps", amps * map_units, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
+    aman.wrap("ell_max", ell_max)
+
+    return aman, beam_model
 
 
 def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps):

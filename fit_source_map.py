@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from astropy import units as u
+from astropy import constants as const
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
@@ -20,7 +21,7 @@ from lat_beams.beam_utils import (
     process_model,
     radial_profile,
 )
-from lat_beams.fitting import fit_gauss_beam, fit_multipole_model
+from lat_beams.fitting import fit_gauss_beam, fit_multipole_model, fit_bessel_model
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, init_log, set_tag, setup_jobs
 
@@ -86,7 +87,9 @@ snr_extent = cfg["snr_extent"] = cfg.get("snr_extent", 500)
 min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
 gauss_multipole = cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
+bessel_beam = cfg["bessel_beam"] = cfg.get("bessel_beam", True)
 n_multipoles = cfg["n_multipoles"] = cfg.get("n_multipole", 3)
+n_bessel = cfg["n_bessel"] = cfg.get("n_bessel", 10)
 sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
@@ -94,6 +97,8 @@ buf = cfg["buf"] = cfg.get("buffer", 30)
 log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
 smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
 append = cfg["append"] = cfg.get("append", "")
+aperature = cfg["aperature"] = cfg.get("aperature", 6)
+aperature *= u.m
 cfg_str = yaml.dump(cfg)
 
 # Setup folders and files
@@ -351,6 +356,28 @@ for i, j in enumerate(joblist):
             L,
         )
         aman.wrap("gauss_multipole", gauss_multipole_params)
+        aman.final_model = "gauss_multipole"
+
+    # Get bessel beam if we want
+    if bessel_beam:
+        bessel_beam_params, model = fit_bessel_model(
+                solved, weights, posmap, gauss_params, n_bessel, n_multipoles, aperature, const.c / (float(band[1:]) * u.GHz)
+        )
+        gauss_multipole_params = process_model(
+            bessel_beam_params,
+            solved,
+            model,
+            noise,
+            min_snr,
+            c,
+            u.pW,
+            pixsize,
+            data_fwhm,
+            min_sigma,
+            job,
+            L,
+        )
+        aman.wrap("bessel", bessel_beam_params)
         aman.final_model = "gauss_multipole"
 
     # Save residual
