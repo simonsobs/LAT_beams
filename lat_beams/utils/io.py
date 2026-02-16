@@ -6,19 +6,19 @@ from .log import log_lvl
 from .jobs import set_tag
 
 
-def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False):
+def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False, save=False):
     try:
         with log_lvl(L, logging.ERROR):
             aman, _, _, err = preproc_or_load_group(
                 obs_id,
                 preprocess_cfg,
                 dets=dets,
-                save_archive=True,
+                save_archive=save,
                 overwrite=True,
                 logger=L,
             )
-    except:
-        msg = "Failed to load or preprocess!"
+    except Exception as e:
+        msg = f"Failed to load or preprocess with error {e}"
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"

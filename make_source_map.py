@@ -487,6 +487,7 @@ for i, j in enumerate(joblist):
         min_dets,
         L,
         fp_flag=True,
+        save=(nproc == 1),
     )
     if aman is None:
         continue

@@ -460,6 +460,7 @@ def main():
                     min_dets,
                     L,
                     fp_flag=False,
+                    save=(nproc == 1),
                 )
                 if aman is None:
                     continue
