@@ -15,6 +15,8 @@ from astropy import units as u
 from astropy.convolution import (
     Gaussian1DKernel,
     Gaussian2DKernel,
+    Tophat2DKernel,
+    interpolate_replace_nans,
     convolve,
     convolve_fft,
 )
@@ -460,6 +462,7 @@ def fit_gauss_beam(
     force_sym=False,
     map_units="pW",
     fwhm_start=np.deg2rad(1 / 60.0),
+    mask_size = -1,
 ):
     """
     Fit 2d Gaussian to input map.
@@ -472,21 +475,25 @@ def fit_gauss_beam(
     ivar : (ny, nx) enmap
         Inverse-variance map.
     posmap: (2, ny, nx) array
-        X and Y coordinates for each pixel.
+        X and Y coordinates for each pixel in radians.
     cent : tuple
         The index of the map center
     force_sym : bool, default: False
         If True don't allow ellipticity in the fit.
     map_units : str, default: pW
         The units of the map.
+    fwhm_start : float, default: np.deg2rad(1/60)
+        The starting guess of fwhm in radians.
+    mask_size : float, default: -1
+        If this is >0 then a mask will be applies to ivar
+        such that only data withing mask_size*fwhm_start of cent
+        is used in the fit.
 
     Returns
     -------
     fit_params : dict
         The fit params.
         Base params are: xi0, eta0, off, amp, fwhm_xi, fwhm_eta, phi.
-        Multipoles will have '_m{multipole_index}_{0 or 1} appended,
-        where the 0 or 1 is 0 for the sin term and 1 for the cos term.
     """
     y, x = posmap
     guess = [
@@ -526,6 +533,12 @@ def fit_gauss_beam(
         bounds[0] = bounds[0][:-2]
         bounds[1] = bounds[1][:-2]
     bounds = [(lb, ub) for lb, ub in zip(*bounds)]
+
+    # Mask out things too far from the starting center
+    if mask_size > 0:
+        r = np.sqrt((x - guess[0])**2 + (y - guess[1])**2)
+        ivar = ivar.copy()
+        ivar[r > mask_size*fwhm_start] = 0
 
     def _to_pars(coeffs):
         dx, dy, off, amp = coeffs[:4]
@@ -583,7 +596,7 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
 
     return aman, model
 
-def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd): 
+def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=True): 
     ell_max = (np.pi * d / lmd).decompose().value
     eta, xi = posmap
     eta0 = gauss_fit.eta0.to(u.radian).value
@@ -604,6 +617,18 @@ def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, l
             amps[n0, n1] = multipole_decomp(base_beam, imap - beam_model, ivar, n_multipoles, theta, True, True)
             beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
 
+    # Deal with numerical errors near the center from having r in the denom
+    if force_cent:
+        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])
+        beam_model[cent_pix] = gauss_fit.amp.value
+        cent_ring = (r < 2*np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix) * (beam_model >= gauss_fit.amp.value)
+        # Radial interp
+        ci, cj = np.where(cent_pix)
+        for i, j in zip(*np.where(cent_ring)):
+            if i > beam_model.shape[0] or j > beam_model.shape[1]:
+                beam_model[i, j] = gauss_fit.amp.value
+            beam_model[i, j] = .5*(gauss_fit.amp.value + beam_model[2*i - ci[0], 2*j - cj[0]])
+
     # Convert to aman
     map_units = gauss_fit.amp.unit
     aman = AxisManager()
@@ -612,6 +637,7 @@ def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, l
     sc_ax = LabelAxis("term", ["cos", "sin"])
     aman.wrap("amps", amps * map_units, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
     aman.wrap("ell_max", ell_max)
+    aman.wrap("force_cent", force_cent)
 
     return aman, beam_model
 

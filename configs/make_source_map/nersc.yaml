@@ -31,4 +31,4 @@ epochs:
 append: "bs_relcal"
 sym_gauss: False 
 n_bessel: 20
-n_multipoles: 4
+n_multipoles: 5

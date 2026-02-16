@@ -93,11 +93,13 @@ n_bessel = cfg["n_bessel"] = cfg.get("n_bessel", 10)
 sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
-buf = cfg["buf"] = cfg.get("buffer", 30)
+buf = cfg["buffer"] = cfg.get("buffer", 30)
+buf_crop = cfg["buffer_cropped"] = cfg.get("buffer_cropped", 5)
 log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
 smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
 append = cfg["append"] = cfg.get("append", "")
 aperature = cfg["aperature"] = cfg.get("aperature", 6)
+mask_size = cfg["mask_size"] = cfg.get("mask_size", 0.1)
 aperature *= u.m
 cfg_str = yaml.dump(cfg)
 
@@ -255,9 +257,11 @@ for i, j in enumerate(joblist):
         continue
 
     # Slice things
+    # fscale_fac = 90.0 / float(band[1:])
+    # solved, weights = crop_maps([solved, weights], cent, 2*int((fscale_fac * mask_size * 3600) // pixsize))
     solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
-    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
+    cent = estimate_cent(solved, smooth_kern / pixsize, buf_crop)
 
     # Make weights and zero things out
     weights[~np.isfinite(weights)] = 0
@@ -269,7 +273,7 @@ for i, j in enumerate(joblist):
     aman.wrap("noise", noise * u.pW)
 
     # Fit gaussian model
-    cent = estimate_cent(solved, smooth_kern / pixsize, buf)
+    cent = estimate_cent(solved, smooth_kern / pixsize, buf_crop)
     gauss_params, model = fit_gauss_beam(
         solved,
         weights,
@@ -278,6 +282,7 @@ for i, j in enumerate(joblist):
         sym_gauss,
         "pW",
         np.deg2rad(fwhm[band]/60.),
+        7,
     )
     if gauss_params is None or model is None:
         msg = "Fit failed"

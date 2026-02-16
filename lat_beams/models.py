@@ -93,7 +93,7 @@ def bessel_term(r, ell_max, i):
         bessel = spherical_jn(i, r*ell_max)/(r*ell_max)
     return bessel
 
-def bessel_beam(posmap, xi0, eta0, off, ell_max, amps):
+def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
     eta, xi = posmap
     xi = xi - xi0
     eta = eta - eta0
@@ -107,6 +107,16 @@ def bessel_beam(posmap, xi0, eta0, off, ell_max, amps):
             b1 = bessel_term(r, ell_max, n1)
             base_beam = b0*b1
             beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
+    if force_cent:
+        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])
+        beam_model[cent_pix] = gauss_amp
+        cent_ring = (r < 2*np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix) * (beam_model >= gauss_amp)
+        # Radial interp
+        ci, cj = np.where(cent_pix)
+        for i, j in zip(*np.where(cent_ring)):
+            if i > beam_model.shape[0] or j > beam_model.shape[1]:
+                beam_model[i, j] = gauss_amp
+            beam_model[i, j] = .5*(gauss_amp + beam_model[2*i - ci[0], 2*j - cj[0]])
 
     return beam_model + off
 
@@ -145,6 +155,8 @@ def bessel_beam_from_aman(posmap, aman):
         aman.gaussian.off.value,
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
+        aman.gaussian.amp.value,
+        aman.bessel.force_cent
         )
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
