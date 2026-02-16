@@ -108,7 +108,7 @@ def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
             base_beam = b0*b1
             beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
     if force_cent:
-        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])
+        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])/2
         beam_model[cent_pix] = gauss_amp
         cent_ring = (r < 2*np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix) * (beam_model >= gauss_amp)
         # Radial interp
@@ -116,7 +116,7 @@ def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
         for i, j in zip(*np.where(cent_ring)):
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_amp
-            beam_model[i, j] = .5*(gauss_amp + beam_model[2*i - ci[0], 2*j - cj[0]])
+            beam_model[i, j] = (gauss_fit.amp.value + .5*beam_model[i, j] + beam_model[2*i - ci[0], 2*j - cj[0]])/2.5
 
     return beam_model + off
 

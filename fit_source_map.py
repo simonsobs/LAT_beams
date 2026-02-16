@@ -88,8 +88,9 @@ min_sigma = cfg["min_sigma"] = cfg.get("min_sigma_fit", 3)
 min_snr = cfg["min_snr"] = cfg.get("min_snr", 10)
 gauss_multipole = cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
 bessel_beam = cfg["bessel_beam"] = cfg.get("bessel_beam", True)
-n_multipoles = cfg["n_multipoles"] = cfg.get("n_multipole", 3)
+n_multipoles = cfg["n_multipoles"] = cfg.get("n_multipoles", 3)
 n_bessel = cfg["n_bessel"] = cfg.get("n_bessel", 10)
+force_bessel_cent = cfg["force_bessel_cent"] = cfg.get("force_bessel_cent", False)
 sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
@@ -366,7 +367,7 @@ for i, j in enumerate(joblist):
     # Get bessel beam if we want
     if bessel_beam:
         bessel_beam_params, model = fit_bessel_model(
-                solved, weights, posmap, gauss_params, n_bessel, n_multipoles, aperature, const.c / (float(band[1:]) * u.GHz)
+                solved, weights, posmap, gauss_params, n_bessel, n_multipoles, aperature, const.c / (float(band[1:]) * u.GHz), force_bessel_cent
         )
         gauss_multipole_params = process_model(
             bessel_beam_params,
@@ -383,7 +384,7 @@ for i, j in enumerate(joblist):
             L,
         )
         aman.wrap("bessel", bessel_beam_params)
-        aman.final_model = "gauss_multipole"
+        aman.final_model = "bessel"
 
     # Save residual
     resid = solved.copy()

@@ -596,7 +596,7 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
 
     return aman, model
 
-def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=True): 
+def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=False): 
     ell_max = (np.pi * d / lmd).decompose().value
     eta, xi = posmap
     eta0 = gauss_fit.eta0.to(u.radian).value
@@ -619,7 +619,7 @@ def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, l
 
     # Deal with numerical errors near the center from having r in the denom
     if force_cent:
-        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])
+        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])/2
         beam_model[cent_pix] = gauss_fit.amp.value
         cent_ring = (r < 2*np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix) * (beam_model >= gauss_fit.amp.value)
         # Radial interp
@@ -627,7 +627,7 @@ def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, l
         for i, j in zip(*np.where(cent_ring)):
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_fit.amp.value
-            beam_model[i, j] = .5*(gauss_fit.amp.value + beam_model[2*i - ci[0], 2*j - cj[0]])
+            beam_model[i, j] = (gauss_fit.amp.value + .5*beam_model[i, j] + beam_model[2*i - ci[0], 2*j - cj[0]])/2.5
 
     # Convert to aman
     map_units = gauss_fit.amp.unit
