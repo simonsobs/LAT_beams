@@ -295,10 +295,6 @@ for i, j in enumerate(joblist):
     # Compute the gaussian model
     model = bm.gaussian2d_from_aman(posmap, gauss_params)
 
-    # Remove offset
-    solved -= gauss_params.off.value
-    model -= gauss_params.off.value
-
     # Get FWHM from data
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
     rprof = radial_profile(solved, c[::-1])
@@ -322,7 +318,7 @@ for i, j in enumerate(joblist):
     gauss_params = process_model(
         gauss_params,
         solved,
-        model,
+        model - gauss_params.off.value,
         noise,
         min_snr,
         c,
@@ -342,9 +338,9 @@ for i, j in enumerate(joblist):
 
     # Get gauss multipoles if we want them
     if gauss_multipole:
-        base_beam = model / gauss_params.amp.value
+        base_beam = (model - gauss_params.off.value) / gauss_params.amp.value
         gauss_multipole_params, model = fit_multipole_model(
-            solved, weights, posmap, base_beam, gauss_params, n_multipoles
+            solved - gauss_params.off.value, weights, posmap, base_beam, gauss_params, n_multipoles
         )
         gauss_multipole_params = process_model(
             gauss_multipole_params,
