@@ -2,11 +2,14 @@ import logging
 
 import numpy as np
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
-from .log import log_lvl
+
 from .jobs import set_tag
+from .log import log_lvl
 
 
-def load_aman(obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False, save=False):
+def load_aman(
+    obs_id, preprocess_cfg, dets, job, min_dets, L, fp_flag=False, save=False
+):
     try:
         with log_lvl(L, logging.ERROR):
             aman, _, _, err = preproc_or_load_group(

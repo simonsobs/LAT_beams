@@ -281,5 +281,5 @@ for split in split_by:
                         f"{spl} {epoch[0]} {epoch[1]}",
                         log_thresh=log_thresh,
                         append=name + append,
-                        qrur=True
+                        qrur=True,
                     )

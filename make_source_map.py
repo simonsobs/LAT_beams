@@ -10,10 +10,9 @@ import numpy as np
 import yaml
 from pixell import enmap, utils
 from so3g.proj import RangesMatrix
-from sotodlib import tod_ops
+from sotodlib import mapmaking, tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
-from sotodlib import mapmaking
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
@@ -52,7 +51,10 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
             src_str = "==1 or ".join(source_list) + "==1"
-            obslist = ctx.obsdb.query( f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and ({src_str})", tags=source_list,)
+            obslist = ctx.obsdb.query(
+                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and ({src_str})",
+                tags=source_list,
+            )
         if pointing_type != "pointing_model":
             dbs = [
                 md["db"]
@@ -192,7 +194,7 @@ def make_map(
     with log_lvl(L, logging.WARNING):
         out = cp.make_map(
             aman.copy(),
-            thread_algo='domdir',
+            thread_algo="domdir",
             center_on=src_to_map,
             res=res,
             cuts=cuts,
@@ -257,7 +259,7 @@ preprocess_cfg = cfg.get("preprocess", None)
 # ds = cfg["ds"] = cfg.get("ds", 5)
 cgiters = cfg["cgiters"] = cfg.get("cgiters", 30)
 mlpass = cfg["cgpass"] = cfg.get("cgpass", 3)
-relcal_range = cfg["relcal_range"] = cfg.get("relcal_range", [.3, 2])
+relcal_range = cfg["relcal_range"] = cfg.get("relcal_range", [0.3, 2])
 cfg_str = yaml.dump(cfg)
 
 if preprocess_cfg is None:
@@ -292,10 +294,14 @@ os.makedirs(plot_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 
 # Modify preproc with our paths
-preprocess_cfg['archive']['index'] = os.path.join(data_dir, preprocess_cfg['archive']['index'])
-preprocess_cfg['archive']['policy']['filename'] = os.path.join(data_dir, preprocess_cfg['archive']['policy']['filename'])
-os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
-os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
+preprocess_cfg["archive"]["index"] = os.path.join(
+    data_dir, preprocess_cfg["archive"]["index"]
+)
+preprocess_cfg["archive"]["policy"]["filename"] = os.path.join(
+    data_dir, preprocess_cfg["archive"]["policy"]["filename"]
+)
+os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
+os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 
 # Get context
 ctx_path = cfg["context"] = cfg.get(
@@ -369,6 +375,7 @@ l_comm = comm.Split(myrank, myrank)
 # Profiler setup
 if args.profile:
     from pyinstrument import Profiler
+
     profiler = Profiler()
     L.info("Running in profiler mode! Only one job will be run per process")
     joblist = [joblist[0]]
@@ -504,7 +511,11 @@ for i, j in enumerate(joblist):
 
     # Relcal cut
     if "relcal" in aman._fields:
-        aman.restrict("dets", (aman.relcal.relcal >= relcal_range[0]) * (aman.relcal.relcal <= relcal_range[1]))
+        aman.restrict(
+            "dets",
+            (aman.relcal.relcal >= relcal_range[0])
+            * (aman.relcal.relcal <= relcal_range[1]),
+        )
 
     # Get initial source_flags
     with log_lvl(L, logging.WARNING):
@@ -617,26 +628,46 @@ for i, j in enumerate(joblist):
     except Exception as e:
         L.warning(f"Plotting failed with error: {e}")
 
-
     # Now make the ML map
-    P = out['P']
+    P = out["P"]
     aman_clean = aman
     utils.deslope(aman_clean.signal, w=5, inplace=True)
     aman_clean.wrap("weather", np.full(1, "typical"))
-    aman_clean.wrap("site",    np.full(1, "so_lat"))
+    aman_clean.wrap("site", np.full(1, "so_lat"))
     mlmap_path = ""
     rhs_path = ""
     div_path = ""
     bin_path = ""
     outmap = None
     for ipass, passinfo in enumerate(passes):
-        L.debug("Starting pass %d/%d maxit %d down %d interp %s" % (ipass+1, len(passes), passinfo.maxiter, passinfo.downsample, passinfo.interpol))
-        pass_prefix = os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_pass{ipass+1}_")
+        L.debug(
+            "Starting pass %d/%d maxit %d down %d interp %s"
+            % (
+                ipass + 1,
+                len(passes),
+                passinfo.maxiter,
+                passinfo.downsample,
+                passinfo.interpol,
+            )
+        )
+        pass_prefix = os.path.join(
+            obs_data_dir, f"{obs_id}_{ufm}_{band}_pass{ipass+1}_"
+        )
         noise_model = mapmaking.NmatDetvecs(verbose=True)
         signal_cut = mapmaking.SignalCut(l_comm, dtype=np.float32)
-        signal_map = mapmaking.SignalMap(out["solved"].shape, out["solved"].wcs, l_comm, comps=comps, dtype=np.float64, tiled=False, interpol=passinfo.interpol)
-        signals    = [signal_cut, signal_map]
-        mapmaker   = mapmaking.MLMapmaker(signals, noise_model=None, dtype=np.float32, verbose=True)
+        signal_map = mapmaking.SignalMap(
+            out["solved"].shape,
+            out["solved"].wcs,
+            l_comm,
+            comps=comps,
+            dtype=np.float64,
+            tiled=False,
+            interpol=passinfo.interpol,
+        )
+        signals = [signal_cut, signal_map]
+        mapmaker = mapmaking.MLMapmaker(
+            signals, noise_model=None, dtype=np.float32, verbose=True
+        )
 
         if passinfo.downsample != 1:
             aman = mapmaking.downsample_obs(aman_clean, passinfo.downsample)
@@ -649,26 +680,42 @@ for i, j in enumerate(joblist):
             signal_estimate = P.from_map(out["solved"])
         else:
             signal_estimate = eval_prev.evaluate(mapmaker_prev.data[len(mapmaker.data)])
-        signal_estimate = mapmaking.resample.resample_fft_simple(signal_estimate, aman.samps.count)
-        mapmaker.add_obs(sub_id, aman, noise_model=None, signal_estimate=signal_estimate, pmap=P)
+        signal_estimate = mapmaking.resample.resample_fft_simple(
+            signal_estimate, aman.samps.count
+        )
+        mapmaker.add_obs(
+            sub_id, aman, noise_model=None, signal_estimate=signal_estimate, pmap=P
+        )
         del signal_estimate
 
         # Write the starting maps
         mapmaker.prepare()
-        rhs_path = signal_map.write(obs_data_dir + "/", "rhs", signal_map.rhs, unit='pW^-1')
-        div_path = signal_map.write(obs_data_dir + "/", "div", signal_map.div, unit='pW^-2')
-        bin_path = signal_map.write(obs_data_dir + "/", "bin", enmap.map_mul(signal_map.idiv, signal_map.rhs), unit='pW')
+        rhs_path = signal_map.write(
+            obs_data_dir + "/", "rhs", signal_map.rhs, unit="pW^-1"
+        )
+        div_path = signal_map.write(
+            obs_data_dir + "/", "div", signal_map.div, unit="pW^-2"
+        )
+        bin_path = signal_map.write(
+            obs_data_dir + "/",
+            "bin",
+            enmap.map_mul(signal_map.idiv, signal_map.rhs),
+            unit="pW",
+        )
         L.debug("\tWrote rhs, div, bin")
 
         # Set up initial condition
-        x0 = None # if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
+        x0 = None  # if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
 
         # Solve
         t1 = time.time()
         for step in mapmaker.solve(maxiter=passinfo.maxiter, x0=x0):
             t2 = time.time()
             dump = step.i % 10 == 0
-            L.debug("\tCG step %4d %15.7e %8.3f %s" % (step.i, step.err, t2-t1, "" if not dump else "(write)"))
+            L.debug(
+                "\tCG step %4d %15.7e %8.3f %s"
+                % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
+            )
             if dump:
                 for signal, val in zip(signals, step.x):
                     if signal.output:
@@ -680,10 +727,10 @@ for i, j in enumerate(joblist):
         for signal, val in zip(signals, step.x):
             if signal.output:
                 outmap = val
-                mlmap_path = signal.write(pass_prefix, "map", val, unit='pW')
+                mlmap_path = signal.write(pass_prefix, "map", val, unit="pW")
 
         mapmaker_prev = mapmaker
-        eval_prev     = mapmaker.evaluator(step.x_zip)
+        eval_prev = mapmaker.evaluator(step.x_zip)
 
     if mlmap_path == "" or outmap is None:
         msg = "Failed to make ML map"
@@ -694,12 +741,16 @@ for i, j in enumerate(joblist):
 
     # Add paths to job
     for name, path in [
-        ("ml_map", mlmap_path), 
-        ("ml_rhs", rhs_path), 
-        ("ml_div", div_path), 
-        ("ml_bin", bin_path), 
+        ("ml_map", mlmap_path),
+        ("ml_rhs", rhs_path),
+        ("ml_div", div_path),
+        ("ml_bin", bin_path),
     ]:
-        set_tag(job, name, path,)
+        set_tag(
+            job,
+            name,
+            path,
+        )
 
     # Plot
     cent = estimate_cent(outmap[0], smooth_kern / pixsize, buf)

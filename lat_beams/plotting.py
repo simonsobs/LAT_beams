@@ -37,7 +37,7 @@ def plot_map(
     rsq = (posmap[0] - cent[1]) ** 2 + (posmap[1] - cent[0]) ** 2
     rprof = radial_profile(
         data,
-        np.unravel_index( np.argmin(rsq), data.shape)[::-1],
+        np.unravel_index(np.argmin(rsq), data.shape)[::-1],
     )[: int(0.5 * min(*data.shape))]
     if log:
         _norm = SymLogNorm(linthresh=log_thresh, clip=True, vmin=-1, vmax=1)
@@ -114,8 +114,8 @@ def plot_map_complete(
     U = data[comps.find("U")]
     eta, xi = posmap
     theta = np.arctan2(eta, xi)
-    Q_r = Q*np.cos(2*theta) + U*np.sin(2*theta)
-    U_r = U*np.cos(2*theta) - Q*np.sin(2*theta)
+    Q_r = Q * np.cos(2 * theta) + U * np.sin(2 * theta)
+    U_r = U * np.cos(2 * theta) - Q * np.sin(2 * theta)
     for dat, comp in [(Q_r, "Qr"), (U_r, "Ur")]:
         for log in (False, True):
             plot_map(
@@ -132,7 +132,6 @@ def plot_map_complete(
                 append=append,
                 units=units,
             )
-
 
 
 def plot_tod(aman, sig_filt, tod_plot_dir, file_label):

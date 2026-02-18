@@ -224,10 +224,14 @@ def main():
         os.makedirs(data_dir, exist_ok=True)
 
     # Modify preproc with our paths
-    preprocess_cfg['archive']['index'] = os.path.join(data_dir, preprocess_cfg['archive']['index'])
-    preprocess_cfg['archive']['policy']['filename'] = os.path.join(data_dir, preprocess_cfg['archive']['policy']['filename'])
-    os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
-    os.makedirs(os.path.dirname(preprocess_cfg['archive']['index']), exist_ok=True)
+    preprocess_cfg["archive"]["index"] = os.path.join(
+        data_dir, preprocess_cfg["archive"]["index"]
+    )
+    preprocess_cfg["archive"]["policy"]["filename"] = os.path.join(
+        data_dir, preprocess_cfg["archive"]["policy"]["filename"]
+    )
+    os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
+    os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 
     # Get context
     ctx_path = cfg["context"] = cfg.get(
@@ -298,7 +302,7 @@ def main():
             start_time=start_time,
             stop_time=stop_time,
             source=source,
-            L=L
+            L=L,
         ),
         get_jobstr,
         get_tags,

@@ -43,7 +43,9 @@ def get_args_cfg():
     )
     # Shared useful stuff
     parser.add_argument(
-        "--profile", action="store_true", help="Run a profile (only for fit_pointing and make_source_mask)"
+        "--profile",
+        action="store_true",
+        help="Run a profile (only for fit_pointing and make_source_mask)",
     )
     # fit_pointing exclusive args
     parser.add_argument(

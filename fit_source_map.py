@@ -7,8 +7,8 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from astropy import units as u
 from astropy import constants as const
+from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
@@ -21,10 +21,9 @@ from lat_beams.beam_utils import (
     process_model,
     radial_profile,
 )
-from lat_beams.fitting import fit_gauss_beam, fit_multipole_model, fit_bessel_model
+from lat_beams.fitting import fit_bessel_model, fit_gauss_beam, fit_multipole_model
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, init_log, set_tag, setup_jobs
-
 
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
@@ -282,7 +281,7 @@ for i, j in enumerate(joblist):
         cent,
         sym_gauss,
         "pW",
-        np.deg2rad(fwhm[band]/60.),
+        np.deg2rad(fwhm[band] / 60.0),
         7,
     )
     if gauss_params is None or model is None:
@@ -367,7 +366,15 @@ for i, j in enumerate(joblist):
     # Get bessel beam if we want
     if bessel_beam:
         bessel_beam_params, model = fit_bessel_model(
-                solved, weights, posmap, gauss_params, n_bessel, n_multipoles, aperature, const.c / (float(band[1:]) * u.GHz), force_bessel_cent
+            solved,
+            weights,
+            posmap,
+            gauss_params,
+            n_bessel,
+            n_multipoles,
+            aperature,
+            const.c / (float(band[1:]) * u.GHz),
+            force_bessel_cent,
         )
         gauss_multipole_params = process_model(
             bessel_beam_params,

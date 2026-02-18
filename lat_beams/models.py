@@ -1,7 +1,9 @@
+from functools import lru_cache
+
 import astropy.units as u
 import numpy as np
-from scipy.special import spherical_jn 
-from functools import lru_cache
+from scipy.special import spherical_jn
+
 
 def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
@@ -47,7 +49,9 @@ def multipole(theta, mp, sin):
     return np.cos(theta * order - sin * np.pi / 2)
 
 
-def multipole_decomp(base_beam, imap, sigma, n_multipoles, theta, gs=False, check_chisq=False):
+def multipole_decomp(
+    base_beam, imap, sigma, n_multipoles, theta, gs=False, check_chisq=False
+):
     amps = np.zeros((n_multipoles, 2))
     beam_model = imap
     _multi_mod = beam_model
@@ -58,7 +62,7 @@ def multipole_decomp(base_beam, imap, sigma, n_multipoles, theta, gs=False, chec
         _multi_mod = beam_model.copy()
     chisq = np.inf
     if check_chisq:
-        chisq = np.nansum(sigma * (imap - beam_model)**2) 
+        chisq = np.nansum(sigma * (imap - beam_model) ** 2)
     for n in range(n_multipoles):
         _amps[:] = 0
         if check_chisq or gs:
@@ -72,18 +76,21 @@ def multipole_decomp(base_beam, imap, sigma, n_multipoles, theta, gs=False, chec
             norm = np.nansum(_sigma * model * model)
             if norm == 0:
                 continue
-            amp = np.nansum(_sigma * (imap - gs*(beam_model + _multi_mod)) * model) / norm
+            amp = (
+                np.nansum(_sigma * (imap - gs * (beam_model + _multi_mod)) * model)
+                / norm
+            )
             if np.isnan(amp):
                 continue
             _amps[i] = amp
-            _multi_mod += amp*model
+            _multi_mod += amp * model
         if check_chisq:
-            new_chisq = np.nansum(sigma * (imap - beam_model - _multi_mod)**2)
+            new_chisq = np.nansum(sigma * (imap - beam_model - _multi_mod) ** 2)
             if new_chisq > chisq:
                 continue
             chisq = new_chisq
         if check_chisq or gs:
-            beam_model += _multi_mod 
+            beam_model += _multi_mod
         amps[n] = _amps
     return amps
 
@@ -96,10 +103,12 @@ def multipole_expansion(base_beam, amps, theta):
             beam += amps[n, i] * mp * base_beam
     return beam
 
+
 def bessel_term(r, ell_max, i):
     with np.errstate(divide="ignore", invalid="ignore"):
-        bessel = spherical_jn(i, r*ell_max)/(r*ell_max)
+        bessel = spherical_jn(i, r * ell_max) / (r * ell_max)
     return bessel
+
 
 def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
     eta, xi = posmap
@@ -113,20 +122,29 @@ def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
         b0 = bessel_term(r, ell_max, n0)
         for n1 in range(len(amps)):
             b1 = bessel_term(r, ell_max, n1)
-            base_beam = b0*b1
+            base_beam = b0 * b1
             beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
     if force_cent:
-        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])/2
+        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
         beam_model[cent_pix] = gauss_amp
-        cent_ring = (r < 2*np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix) * (beam_model >= gauss_amp)
+        cent_ring = (
+            (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1]))
+            * (~cent_pix)
+            * (beam_model >= gauss_amp)
+        )
         # Radial interp
         ci, cj = np.where(cent_pix)
         for i, j in zip(*np.where(cent_ring)):
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_amp
-            beam_model[i, j] = (gauss_fit.amp.value + .5*beam_model[i, j] + beam_model[2*i - ci[0], 2*j - cj[0]])/2.5
+            beam_model[i, j] = (
+                gauss_fit.amp.value
+                + 0.5 * beam_model[i, j]
+                + beam_model[2 * i - ci[0], 2 * j - cj[0]]
+            ) / 2.5
 
     return beam_model + off
+
 
 def gaussian2d_from_aman(posmap, aman):
     if "gaussian" in aman._fields:
@@ -164,8 +182,9 @@ def bessel_beam_from_aman(posmap, aman):
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
         aman.gaussian.amp.value,
-        aman.bessel.force_cent
-        )
+        aman.bessel.force_cent,
+    )
+
 
 def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     factor = 2 * np.sqrt(2 * np.log(2))

@@ -16,9 +16,9 @@ from astropy.convolution import (
     Gaussian1DKernel,
     Gaussian2DKernel,
     Tophat2DKernel,
-    interpolate_replace_nans,
     convolve,
     convolve_fft,
+    interpolate_replace_nans,
 )
 from numpy.typing import NDArray
 from scipy.optimize import minimize
@@ -38,7 +38,14 @@ from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
-from .models import dr4_beam, gaussian2d, multipole_decomp, multipole_expansion, bessel_term, multipole
+from .models import (
+    bessel_term,
+    dr4_beam,
+    gaussian2d,
+    multipole,
+    multipole_decomp,
+    multipole_expansion,
+)
 
 flog.setLevel(logging.ERROR)
 
@@ -462,7 +469,7 @@ def fit_gauss_beam(
     force_sym=False,
     map_units="pW",
     fwhm_start=np.deg2rad(1 / 60.0),
-    mask_size = -1,
+    mask_size=-1,
 ):
     """
     Fit 2d Gaussian to input map.
@@ -536,9 +543,9 @@ def fit_gauss_beam(
 
     # Mask out things too far from the starting center
     if mask_size > 0:
-        r = np.sqrt((x - guess[0])**2 + (y - guess[1])**2)
+        r = np.sqrt((x - guess[0]) ** 2 + (y - guess[1]) ** 2)
         ivar = ivar.copy()
-        ivar[r > mask_size*fwhm_start] = 0
+        ivar[r > mask_size * fwhm_start] = 0
 
     def _to_pars(coeffs):
         dx, dy, off, amp = coeffs[:4]
@@ -590,17 +597,20 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
     # Convert to aman
     map_units = gauss_fit.amp.unit
     aman = AxisManager()
-    mp_ax = IndexAxis("multipoles", n_multipoles) 
+    mp_ax = IndexAxis("multipoles", n_multipoles)
     sc_ax = LabelAxis("term", ["cos", "sin"])
     aman.wrap("amps", amps * map_units, [(0, mp_ax), (1, sc_ax)])
 
     return aman, model
 
-def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=False): 
+
+def fit_bessel_model(
+    imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=False
+):
     ell_max = (np.pi * d / lmd).decompose().value
     eta, xi = posmap
     eta0 = gauss_fit.eta0.to(u.radian).value
-    xi0 = gauss_fit.xi0.to(u.radian).value 
+    xi0 = gauss_fit.xi0.to(u.radian).value
     xi = xi - xi0
     eta = eta - eta0
     theta = np.arctan2(eta, xi)
@@ -613,27 +623,37 @@ def fit_bessel_model(imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, l
         b0 = bessel_term(r, ell_max, n0)
         for n1 in range(len(amps)):
             b1 = bessel_term(r, ell_max, n1)
-            base_beam = b0*b1
-            amps[n0, n1] = multipole_decomp(base_beam, imap - beam_model, ivar, n_multipoles, theta, True, True)
+            base_beam = b0 * b1
+            amps[n0, n1] = multipole_decomp(
+                base_beam, imap - beam_model, ivar, n_multipoles, theta, True, True
+            )
             beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
 
     # Deal with numerical errors near the center from having r in the denom
     if force_cent:
-        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1])/2
+        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
         beam_model[cent_pix] = gauss_fit.amp.value
-        cent_ring = (r < 2*np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix) * (beam_model >= gauss_fit.amp.value)
+        cent_ring = (
+            (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1]))
+            * (~cent_pix)
+            * (beam_model >= gauss_fit.amp.value)
+        )
         # Radial interp
         ci, cj = np.where(cent_pix)
         for i, j in zip(*np.where(cent_ring)):
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_fit.amp.value
-            beam_model[i, j] = (gauss_fit.amp.value + .5*beam_model[i, j] + beam_model[2*i - ci[0], 2*j - cj[0]])/2.5
+            beam_model[i, j] = (
+                gauss_fit.amp.value
+                + 0.5 * beam_model[i, j]
+                + beam_model[2 * i - ci[0], 2 * j - cj[0]]
+            ) / 2.5
 
     # Convert to aman
     map_units = gauss_fit.amp.unit
     aman = AxisManager()
-    b_ax = IndexAxis("bessel", n_bessel) 
-    mp_ax = IndexAxis("multipoles", n_multipoles) 
+    b_ax = IndexAxis("bessel", n_bessel)
+    mp_ax = IndexAxis("multipoles", n_multipoles)
     sc_ax = LabelAxis("term", ["cos", "sin"])
     aman.wrap("amps", amps * map_units, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
     aman.wrap("ell_max", ell_max)
