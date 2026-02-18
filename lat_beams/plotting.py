@@ -34,12 +34,10 @@ def plot_map(
     label = f"_{comp}"
     if append != "":
         label += f"_{append}"
+    rsq = (posmap[0] - cent[1]) ** 2 + (posmap[1] - cent[0]) ** 2
     rprof = radial_profile(
         data,
-        np.unravel_index(
-            np.argmin((posmap[0] - cent[1]) ** 2 + (posmap[1] - cent[0]) ** 2),
-            data.shape,
-        )[::-1],
+        np.unravel_index( np.argmin(rsq), data.shape)[::-1],
     )[: int(0.5 * min(*data.shape))]
     if log:
         _norm = SymLogNorm(linthresh=log_thresh, clip=True, vmin=-1, vmax=1)
@@ -48,7 +46,7 @@ def plot_map(
             rprof = np.sign(rprof) * np.log10(np.abs(rprof))
         plt.imshow(data, origin="lower", extent=plt_extent, norm=_norm)
     else:
-        vminmax = np.max(np.abs(data))
+        vminmax = np.max(np.abs(data)[rsq < extent**2])
         plt.imshow(
             data, origin="lower", extent=plt_extent, vmin=-1 * vminmax, vmax=vminmax
         )
