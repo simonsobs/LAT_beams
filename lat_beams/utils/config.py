@@ -41,6 +41,10 @@ def get_args_cfg():
         type=float,
         help="If job was run within this many minutes of this script starting then rerun even if job_memory is passed",
     )
+    # Shared useful stuff
+    parser.add_argument(
+        "--profile", action="store_true", help="Run a profile (only for fit_pointing and make_source_mask)"
+    )
     # fit_pointing exclusive args
     parser.add_argument(
         "--forced_ws",
@@ -54,9 +58,6 @@ def get_args_cfg():
         default=4,
         type=int,
         help="Per-obs parallelization factor (only for fit_pointing)",
-    )
-    parser.add_argument(
-        "--profile", action="store_true", help="Run a profile (only for fit_pointing)"
     )
     args = parser.parse_args()
 

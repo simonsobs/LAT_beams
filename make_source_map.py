@@ -191,7 +191,8 @@ def make_map(
     # Initial map
     with log_lvl(L, logging.WARNING):
         out = cp.make_map(
-            aman,
+            aman.copy(),
+            thread_algo='domdir',
             center_on=src_to_map,
             res=res,
             cuts=cuts,
@@ -364,6 +365,14 @@ passes = mapmaking.setup_passes(downsample=dsstr, maxiter=maxiter, interpol=inte
 
 # Local comm for ML map
 l_comm = comm.Split(myrank, myrank)
+
+# Profiler setup
+if args.profile:
+    from pyinstrument import Profiler
+    profiler = Profiler()
+    L.info("Running in profiler mode! Only one job will be run per process")
+    joblist = [joblist[0]]
+    profiler.start()
 
 # Mapping loop
 source_list = set(source_list)
@@ -714,6 +723,9 @@ for i, j in enumerate(joblist):
 
     set_tag(job, "message", "Success")
     job.jstate = "done"
+if args.profile:
+    profiler.stop()
+    profiler.write_html(f"profile_{myrank}.html")
 
 L.flush()
 
