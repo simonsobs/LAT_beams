@@ -50,13 +50,19 @@ def multipole(theta, mp, sin):
 def multipole_decomp(base_beam, imap, sigma, n_multipoles, theta, gs=False, check_chisq=False):
     amps = np.zeros((n_multipoles, 2))
     beam_model = imap
+    _multi_mod = beam_model
+    _amps = np.zeros(2)
     if gs or check_chisq:
         beam_model = imap.copy()
         beam_model[:] = 0
+        _multi_mod = beam_model.copy()
     chisq = np.inf
     if check_chisq:
         chisq = np.nansum(sigma * (imap - beam_model)**2) 
     for n in range(n_multipoles):
+        _amps[:] = 0
+        if check_chisq or gs:
+            _multi_mod[:] = 0
         for i in (0, 1):
             mp = multipole(theta, n, i)
             model = mp * base_beam
@@ -66,17 +72,19 @@ def multipole_decomp(base_beam, imap, sigma, n_multipoles, theta, gs=False, chec
             norm = np.nansum(_sigma * model * model)
             if norm == 0:
                 continue
-            amp = np.nansum(_sigma * (imap - gs*beam_model) * model) / norm
+            amp = np.nansum(_sigma * (imap - gs*(beam_model + _multi_mod)) * model) / norm
             if np.isnan(amp):
                 continue
-            if check_chisq:
-                new_chisq = np.nansum(sigma * (imap - beam_model - amp*model)**2)
-                if new_chisq > chisq:
-                    continue
-                chisq = new_chisq
-            if check_chisq or gs:
-                beam_model += amp*model
-            amps[n, i] = amp
+            _amps[i] = amp
+            _multi_mod += amp*model
+        if check_chisq:
+            new_chisq = np.nansum(sigma * (imap - beam_model - _multi_mod)**2)
+            if new_chisq > chisq:
+                continue
+            chisq = new_chisq
+        if check_chisq or gs:
+            beam_model += _multi_mod 
+        amps[n] = _amps
     return amps
 
 
