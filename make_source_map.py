@@ -504,9 +504,7 @@ for i, j in enumerate(joblist):
 
     # Relcal cut
     if "relcal" in aman._fields:
-        print(aman.dets.count)
         aman.restrict("dets", (aman.relcal.relcal >= relcal_range[0]) * (aman.relcal.relcal <= relcal_range[1]))
-        print(aman.dets.count)
 
     # Get initial source_flags
     with log_lvl(L, logging.WARNING):
@@ -663,7 +661,7 @@ for i, j in enumerate(joblist):
         L.debug("\tWrote rhs, div, bin")
 
         # Set up initial condition
-        x0 = None if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
+        x0 = None # if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
 
         # Solve
         t1 = time.time()
@@ -675,6 +673,7 @@ for i, j in enumerate(joblist):
                 for signal, val in zip(signals, step.x):
                     if signal.output:
                         mlmap_path = signal.write(pass_prefix, "map%04d" % step.i, val)
+            L.flush()
             t1 = time.time()
 
         L.debug("Done with ML map")
@@ -723,6 +722,7 @@ for i, j in enumerate(joblist):
 
     set_tag(job, "message", "Success")
     job.jstate = "done"
+
 if args.profile:
     profiler.stop()
     profiler.write_html(f"profile_{myrank}.html")
