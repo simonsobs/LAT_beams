@@ -256,6 +256,7 @@ preprocess_cfg = cfg.get("preprocess", None)
 # ds = cfg["ds"] = cfg.get("ds", 5)
 cgiters = cfg["cgiters"] = cfg.get("cgiters", 30)
 mlpass = cfg["cgpass"] = cfg.get("cgpass", 3)
+relcal_range = cfg["relcal_range"] = cfg.get("relcal_range", [.3, 2])
 cfg_str = yaml.dump(cfg)
 
 if preprocess_cfg is None:
@@ -491,6 +492,12 @@ for i, j in enumerate(joblist):
     )
     if aman is None:
         continue
+
+    # Relcal cut
+    if "relcal" in aman._fields:
+        print(aman.dets.count)
+        aman.restrict("dets", (aman.relcal.relcal >= relcal_range[0]) * (aman.relcal.relcal <= relcal_range[1]))
+        print(aman.dets.count)
 
     # Get initial source_flags
     with log_lvl(L, logging.WARNING):
