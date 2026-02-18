@@ -32,3 +32,4 @@ epochs:
 append: "atm_relcal"
 gauss_multipoles: [0, 1, 2, 3]
 sym_gauss: False 
+cgiters: 30

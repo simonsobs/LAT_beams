@@ -32,3 +32,4 @@ append: "bs_relcal"
 sym_gauss: False 
 n_bessel: 20
 n_multipoles: 5
+force_bessel_cent: True
