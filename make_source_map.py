@@ -13,6 +13,7 @@ from so3g.proj import RangesMatrix
 from sotodlib import mapmaking, tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
+from sotodlib.site_pipeline.jobdb import Job
 
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
@@ -25,8 +26,8 @@ from lat_beams.utils import (
     setup_jobs,
 )
 
-mpi4py.rc.threads = False
 from mpi4py import MPI
+from mpi4py.util.sync import Semaphore
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
 comm = MPI.COMM_WORLD
@@ -45,7 +46,7 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L):
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L, forced_ws):
     with log_lvl(L, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
@@ -83,6 +84,11 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
                 continue
+            obs = ctx.obsdb.get(obs['obs_id'], tags=True)
+            wafers = np.unique(
+                [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]]
+                + forced_ws
+            )
             wsufmsband = np.unique(
                 np.column_stack(
                     [
@@ -95,6 +101,8 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
             )
             for ws, ufm, band in wsufmsband:
                 if band[0] != "f":
+                    continue
+                if ws not in wafers:
                     continue
                 obsit += [(obs, ws, ufm, band)]
     return obsit
@@ -260,6 +268,11 @@ preprocess_cfg = cfg.get("preprocess", None)
 cgiters = cfg["cgiters"] = cfg.get("cgiters", 30)
 mlpass = cfg["cgpass"] = cfg.get("cgpass", 3)
 relcal_range = cfg["relcal_range"] = cfg.get("relcal_range", [0.3, 2])
+forced_ws = args.forced_ws
+if forced_ws is None:
+    forced_ws = []
+if cfg.get("try_all", False):
+    forced_ws = ["ws0", "ws1", "ws2"]
 cfg_str = yaml.dump(cfg)
 
 if preprocess_cfg is None:
@@ -333,6 +346,7 @@ jdb, all_jobs = setup_jobs(
         source_list=source_list,
         pointing_type=pointing_type,
         L=L,
+        forced_ws=forced_ws,
     ),
     get_jobstr,
     get_tags,
@@ -385,20 +399,30 @@ if args.profile:
 source_list = set(source_list)
 job = None
 L.flush()
+joblist = joblist[:3]
+semaphore = Semaphore(comm=comm)
 for i, j in enumerate(joblist):
-    sys.stdout.flush()
-    comm.barrier()
-    # To avoid multiproc issues where the database is locked we lock and unlock serially
-    # with jdb.locked(j) as job:
-    for r in range(nproc):
-        if r == myrank:
-            L.flush()
-            if job is not None:
-                jdb.unlock(job)
-            job = None
-            if j is not None:
-                job = jdb.lock(j.id)
-        comm.barrier()
+    semaphore.acquire()
+    L.flush()
+    t0 = time.time()
+    if job is not None:
+        # jdb.unlock(job)
+        with jdb.session_scope() as session:
+            session.merge(job)
+            session.commit()
+    t1 = time.time()
+    job = None
+    if j is not None:
+        # job = jdb.lock(j.id)
+        with jdb.session_scope() as session:
+            job = session.get(Job, j.id)
+            session.expunge(job)
+    t2 = time.time()
+    semaphore.release()
+
+    # Things sometimes deadlock without this
+    # Ideally we get rid of it
+    comm.barrier() 
     if job is None:
         continue
 
@@ -705,7 +729,7 @@ for i, j in enumerate(joblist):
         L.debug("\tWrote rhs, div, bin")
 
         # Set up initial condition
-        x0 = None  # if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
+        x0 = None if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
 
         # Solve
         t1 = time.time()
@@ -720,7 +744,6 @@ for i, j in enumerate(joblist):
                 for signal, val in zip(signals, step.x):
                     if signal.output:
                         mlmap_path = signal.write(pass_prefix, "map%04d" % step.i, val)
-            L.flush()
             t1 = time.time()
 
         L.debug("Done with ML map")
@@ -753,7 +776,6 @@ for i, j in enumerate(joblist):
         )
 
     # Plot
-    cent = estimate_cent(outmap[0], smooth_kern / pixsize, buf)
     try:
         posmap = outmap.posmap()
         posmap = np.rad2deg(posmap) * 3600

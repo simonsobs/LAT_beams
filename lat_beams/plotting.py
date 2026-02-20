@@ -24,6 +24,14 @@ def plot_map(
     units='"',
 ):
     plt.close()
+    # Restrict to our local patch (oversample by 2)
+    r = np.sqrt((posmap[0] - cent[1]) ** 2 + (posmap[1] - cent[0]) ** 2)
+    ext_msk = r<=extent*np.sqrt(2)
+    w = np.where(ext_msk)
+    ext_sl = (slice(np.min(w[0]), np.max(w[0])+1), slice(np.min(w[1]), np.max(w[1])+1))
+    data = data[ext_sl]
+    posmap = (posmap[0][ext_sl], posmap[1][ext_sl])
+
     # Use posmap to setup coordinates
     # posmap, pixsize, extent, and cent must all be in the same units
     # We are assuming square pixels here

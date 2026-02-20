@@ -70,7 +70,10 @@ def setup_jobs(
     jobs_to_make = []
     L.info("Getting jobdict")
     L.flush()
-    jobdict = get_jobdict(jdb)
+    jobdict = None
+    if myrank == 0:
+        jobdict = get_jobdict(jdb)
+    jobdict = comm.bcast(jobdict)
     L.info("Getting potential jobs")
     L.flush()
     it = get_jobit(jdb)
