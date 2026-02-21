@@ -130,7 +130,6 @@ def bessel_beam(posmap, xi0, eta0, ell_max, amps, gauss_amp, force_cent, r0_wing
         cent_ring = (
             (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1]))
             * (~cent_pix)
-            * (beam_model >= gauss_amp)
         )
         # Radial interp
         ci, cj = np.where(cent_pix)
@@ -138,10 +137,9 @@ def bessel_beam(posmap, xi0, eta0, ell_max, amps, gauss_amp, force_cent, r0_wing
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_amp
             beam_model[i, j] = (
-                gauss_fit.amp.value
-                + 0.5 * beam_model[i, j]
+                2 * gauss_amp
                 + beam_model[2 * i - ci[0], 2 * j - cj[0]]
-            ) / 2.5
+            ) / 3
     beam_model[r <= r0_wing] += off_core
     beam_model[r > r0_wing] = off_wing + amp_wing * (r0_wing**3)/np.power(r[r > r0_wing], 3)
 
@@ -182,7 +180,7 @@ def bessel_beam_from_aman(posmap, aman):
         aman.gaussian.eta0.to(u.radian).value,
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
-        aman.gaussian.amp.value,
+        aman.gaussian.amp.value + aman.gaussian.off.value,
         aman.bessel.force_cent,
         aman.r0_wing,
         aman.off_core,

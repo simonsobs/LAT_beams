@@ -633,11 +633,11 @@ def fit_bessel_model(
     # Deal with numerical errors near the center from having r in the denom
     if force_cent:
         cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
-        beam_model[cent_pix] = gauss_fit.amp.value
+        beam_model[cent_pix] = gauss_fit.amp.value + gauss_fit.off.value
         cent_ring = (
             (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1]))
             * (~cent_pix)
-            * (beam_model >= gauss_fit.amp.value)
+            # * (beam_model >= gauss_fit.amp.value)
         )
         # Radial interp
         ci, cj = np.where(cent_pix)
@@ -645,10 +645,9 @@ def fit_bessel_model(
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_fit.amp.value
             beam_model[i, j] = (
-                gauss_fit.amp.value
-                + 0.5 * beam_model[i, j]
+                2 * (gauss_fit.amp.value + gauss_fit.off.value)
                 + beam_model[2 * i - ci[0], 2 * j - cj[0]]
-            ) / 2.5
+            ) / 3
 
     # Convert to aman
     map_units = gauss_fit.amp.unit
