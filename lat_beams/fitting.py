@@ -46,6 +46,7 @@ from .models import (
     multipole_decomp,
     multipole_expansion,
 )
+from .beam_utils import radial_profile
 
 flog.setLevel(logging.ERROR)
 
@@ -605,7 +606,7 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
 
 
 def fit_bessel_model(
-    imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=False
+    imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=False, fit_wing=False, mask_size=np.inf, data_fwhm=np.inf
 ):
     ell_max = (np.pi * d / lmd).decompose().value
     eta, xi = posmap
@@ -658,6 +659,38 @@ def fit_bessel_model(
     aman.wrap("amps", amps * map_units, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
     aman.wrap("ell_max", ell_max)
     aman.wrap("force_cent", force_cent)
+    aman.wrap("fit_wing", fit_wing)
+    aman.wrap("r0_wing", np.inf * u.radian)
+    aman.wrap("amp_wing", 0 * map_units)
+    aman.wrap("off_wing", 0 * map_units)
+    aman.wrap("off_core", 0 * map_units)
+
+    if not fit_wing:
+        return aman, beam_model
+
+    # Fit for a symmetric r^-3 wing
+    wing_model = beam_model.copy()
+    ivar = ivar.copy()
+    ivar[r > mask_size] = 0
+    def _wing_obj(coeffs):
+        r0, a, off_wing, off_core = coeffs
+        wing_model[r <= r0] = beam_model[r <= r0] + off_core
+        wing_model[r > r0] = off_wing + a * (r0**3)/np.power(r[r > r0], 3)
+
+        return np.nansum(ivar*(imap - wing_model)**2)
+
+    # Initial guess of r0
+    avg_sig = 2.355*(data_fwhm).to(u.radian).value
+    r0 = min(2*avg_sig, .9*mask_size)
+    guess = [r0, 0, 0, 0]
+    bounds = [(r0*.5, mask_size), (0, np.inf), (0, 0), (-np.inf, np.inf)]
+    res = minimize(_wing_obj, guess, bounds=bounds)
+    if not res.success:
+        aman.fit_wing = None
+        return aman, beam_model
+    aman.r0_wing, aman.amp_wing, aman.off_wing, aman.off_core = res.x
+    beam_model[r <= aman.r0_wing] += aman.off_core
+    beam_model[r > aman.r0_wing] = aman.off_wing + aman.amp_wing * (aman.r0_wing**3)/np.power(r[r > aman.r0_wing], 3)
 
     return aman, beam_model
 

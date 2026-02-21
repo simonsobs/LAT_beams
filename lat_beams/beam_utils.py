@@ -8,6 +8,8 @@ from astropy.convolution import Gaussian2DKernel, convolve_fft
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager
 
+from .utils.jobs import set_tag
+
 
 def solid_angle(az, el, beam, cent, r1, norm):
     """Compute the integrated solid angle of a beam map.
@@ -314,7 +316,7 @@ def process_model(
         model_solid_angle_meas,
         model_solid_angle_true,
         data_solid_angle_corr,
-    ) = estimate_solid_angle(solved, model, pixsize, data_fwhm, c, min_sigma)
+    ) = estimate_solid_angle(solved, model, pixsize, data_fwhm.value, c, min_sigma)
     aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
     aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
     aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)

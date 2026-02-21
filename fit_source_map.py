@@ -90,6 +90,7 @@ bessel_beam = cfg["bessel_beam"] = cfg.get("bessel_beam", True)
 n_multipoles = cfg["n_multipoles"] = cfg.get("n_multipoles", 3)
 n_bessel = cfg["n_bessel"] = cfg.get("n_bessel", 10)
 force_bessel_cent = cfg["force_bessel_cent"] = cfg.get("force_bessel_cent", False)
+bessel_wing = cfg["bessel_wing"] = cfg.get("bessel_wing", False)
 sym_gauss = cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 3)
 pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
@@ -257,11 +258,11 @@ for i, j in enumerate(joblist):
         continue
 
     # Slice things
-    # fscale_fac = 90.0 / float(band[1:])
-    # solved, weights = crop_maps([solved, weights], cent, 2*int((fscale_fac * mask_size * 3600) // pixsize))
     solved, weights = crop_maps([solved, weights], cent, int(extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
     cent = estimate_cent(solved, smooth_kern / pixsize, buf_crop)
+    fscale_fac = 90.0 / float(band[1:])
+    band_mask_size = np.deg2rad(fscale_fac * mask_size)
 
     # Make weights and zero things out
     weights[~np.isfinite(weights)] = 0
@@ -300,13 +301,13 @@ for i, j in enumerate(joblist):
     rprof = radial_profile(solved, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     rmsk = r < 3 * 60 * fwhm[band] / 2.355
-    data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True)
-    aman.wrap("data_fwhm", data_fwhm * u.arcsec)
+    data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
+    aman.wrap("data_fwhm", data_fwhm)
     aman.wrap("r", r * u.arcsec)
     aman.wrap("rprof", rprof * u.pW)
 
     # FWHM check
-    if abs(1 - data_fwhm / (60 * fwhm[band])) > fwhm_tol:
+    if abs(1 - data_fwhm.value / (60 * fwhm[band])) > fwhm_tol:
         msg = "Data FWHM out of tolerance"
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -371,8 +372,11 @@ for i, j in enumerate(joblist):
             aperature,
             const.c / (float(band[1:]) * u.GHz),
             force_bessel_cent,
+            bessel_wing,
+            band_mask_size,
+            data_fwhm,
         )
-        gauss_multipole_params = process_model(
+        bessel_beam_params = process_model(
             bessel_beam_params,
             solved,
             model,
@@ -386,6 +390,8 @@ for i, j in enumerate(joblist):
             job,
             L,
         )
+        if bessel_beam_params is None:
+            continue
         aman.wrap("bessel", bessel_beam_params)
         aman.final_model = "bessel"
 

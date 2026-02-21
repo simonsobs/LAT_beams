@@ -110,7 +110,7 @@ def bessel_term(r, ell_max, i):
     return bessel
 
 
-def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
+def bessel_beam(posmap, xi0, eta0, ell_max, amps, gauss_amp, force_cent, r0_wing, off_core, off_wing, amp_wing):
     eta, xi = posmap
     xi = xi - xi0
     eta = eta - eta0
@@ -142,8 +142,10 @@ def bessel_beam(posmap, xi0, eta0, off, ell_max, amps, gauss_amp, force_cent):
                 + 0.5 * beam_model[i, j]
                 + beam_model[2 * i - ci[0], 2 * j - cj[0]]
             ) / 2.5
+    beam_model[r <= r0_wing] += off_core
+    beam_model[r > r0_wing] = off_wing + amp_wing * (r0_wing**3)/np.power(r[r > r0_wing], 3)
 
-    return beam_model + off
+    return beam_model
 
 
 def gaussian2d_from_aman(posmap, aman):
@@ -178,11 +180,14 @@ def bessel_beam_from_aman(posmap, aman):
         posmap,
         aman.gaussian.xi0.to(u.radian).value,
         aman.gaussian.eta0.to(u.radian).value,
-        aman.gaussian.off.value,
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
         aman.gaussian.amp.value,
         aman.bessel.force_cent,
+        aman.r0_wing,
+        aman.off_core,
+        aman.off_wing,
+        aman.amp_wing,
     )
 
 
