@@ -16,6 +16,7 @@ metadata:
   - db: '{manifestdir}/smurf_detsets/v0/smurf_detset_info_local.sqlite'
     name: 'smurf'
     det_info: true
+    on_missing: trim
   - db: '{manifestdir}/det_match/lat_det_match_250516m/assignment_local.sqlite'
     label: assignment
     det_info: true
