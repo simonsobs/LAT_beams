@@ -295,9 +295,19 @@ for i, j in enumerate(joblist):
 
     # Compute the gaussian model
     model = bm.gaussian2d_from_aman(posmap, gauss_params)
+    
+    # Check clipping
+    c = np.unravel_index(np.argmax(model, axis=None), model.shape)
+    min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
+    if min_c_dist < 120 * fwhm[band]:
+        msg = "Source too close to edge of map"
+        L.error(f"\t{msg}")
+        set_tag(job, "message", msg)
+        job.jstate = "failed"
+        to_save = (None, None)
+        continue
 
     # Get FWHM from data
-    c = np.unravel_index(np.argmax(model, axis=None), model.shape)
     rprof = radial_profile(solved, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     rmsk = r < 3 * 60 * fwhm[band] / 2.355
