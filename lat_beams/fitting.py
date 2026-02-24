@@ -16,16 +16,14 @@ from astropy import units as u
 from astropy.convolution import (
     Gaussian1DKernel,
     Gaussian2DKernel,
-    Tophat2DKernel,
     convolve,
     convolve_fft,
-    interpolate_replace_nans,
 )
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 from scipy.signal import detrend
-from scipy.stats import binned_statistic, binned_statistic_2d
 from scipy.special import jv
+from scipy.stats import binned_statistic, binned_statistic_2d
 from so3g.proj import Ranges, quat
 from sotodlib import core
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
@@ -44,12 +42,10 @@ from .models import (
     bessel_term,
     dr4_beam,
     gaussian2d,
-    multipole,
     multipole_decomp,
     multipole_expansion,
     scatter_beam,
 )
-from .beam_utils import radial_profile
 
 flog.setLevel(logging.ERROR)
 
@@ -607,8 +603,20 @@ def fit_multipole_model(imap, ivar, posmap, base_beam, gauss_fit, n_multipoles):
 
     return aman, model
 
+
 def fit_bessel_model(
-    imap, ivar, posmap, gauss_fit, n_bessel, n_multipoles, d, lmd, force_cent=False, fit_wing=False, mask_size=np.inf, data_fwhm=np.inf
+    imap,
+    ivar,
+    posmap,
+    gauss_fit,
+    n_bessel,
+    n_multipoles,
+    d,
+    lmd,
+    force_cent=False,
+    fit_wing=False,
+    mask_size=np.inf,
+    data_fwhm=np.inf,
 ):
     ell_max = (np.pi * d / lmd).decompose().value
     eta, xi = posmap
@@ -673,39 +681,43 @@ def fit_bessel_model(
     wing_model = beam_model.copy()
     ivar = ivar.copy()
     ivar[r > mask_size] = 0
+
     def _wing_obj(coeffs):
         r0, a, off_wing, off_core = coeffs
         wing_model[r <= r0] = beam_model[r <= r0] + off_core
-        wing_model[r > r0] = off_wing + a * (r0**3)/np.power(r[r > r0], 3)
+        wing_model[r > r0] = off_wing + a * (r0**3) / np.power(r[r > r0], 3)
 
-        return np.nansum(ivar*(imap - wing_model)**2)
+        return np.nansum(ivar * (imap - wing_model) ** 2)
 
     # Initial guess of r0
-    avg_sig = 2.355*(data_fwhm).to(u.radian).value
-    r0 = min(2*avg_sig, .9*mask_size)
+    avg_sig = 2.355 * (data_fwhm).to(u.radian).value
+    r0 = min(2 * avg_sig, 0.9 * mask_size)
     guess = [r0, 0, 0, 0]
-    bounds = [(r0*.5, mask_size), (0, np.inf), (0, 0), (-np.inf, np.inf)]
+    bounds = [(r0 * 0.5, mask_size), (0, np.inf), (0, 0), (-np.inf, np.inf)]
     res = minimize(_wing_obj, guess, bounds=bounds)
     if not res.success:
         aman.fit_wing = None
         return aman, beam_model
     aman.r0_wing, aman.amp_wing, aman.off_wing, aman.off_core = res.x
     beam_model[r <= aman.r0_wing] += aman.off_core
-    beam_model[r > aman.r0_wing] = aman.off_wing + aman.amp_wing * (aman.r0_wing**3)/np.power(r[r > aman.r0_wing], 3)
+    beam_model[r > aman.r0_wing] = aman.off_wing + aman.amp_wing * (
+        aman.r0_wing**3
+    ) / np.power(r[r > aman.r0_wing], 3)
 
     return aman, beam_model
+
 
 def _dr4_model(pars, r_use, ell_0, r_0, scatter_pars):
     ell_max, r_c, alpha, off = pars[:4]
     amps = pars[4:]
-    model = dr4_beam(
-        r_use, ell_max * ell_0, r_c * r_0, alpha, off, amps, scatter_pars
-    )
+    model = dr4_beam(r_use, ell_max * ell_0, r_c * r_0, alpha, off, amps, scatter_pars)
     return model
+
 
 def _dr4_objective(pars, prof, r_use, ell_0, r_0, scatter_pars):
     model = _dr4_model(pars, r_use, ell_0, r_0, scatter_pars)
     return np.nansum((prof - model) ** 2) * 1e10
+
 
 def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_modes=30):
     # Assuming unitful profiles here...
@@ -719,10 +731,10 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_modes=3
     par_units = [u.dimensionless_unscaled, r.unit, rprof.unit, rprof.unit]
     par_units_fit = [u.dimensionless_unscaled, u.radian, rprof.unit, rprof.unit]
     guess = [1, 5000, 1, 0]
-    bounds = [(.7, 1.3), (5000, 5000), (0, 0), (0, 0)]
+    bounds = [(0.7, 1.3), (5000, 5000), (0, 0), (0, 0)]
 
     # Fix the number of modes to half the data points within 5 sigma and setup amps
-    n_modes = min(max_modes, int(np.sum(r_rad < 5 * r_0)/2))
+    n_modes = min(max_modes, int(np.sum(r_rad < 5 * r_0) / 2))
     par_names += [f"amp_{i}" for i in range(n_modes)]
     par_units += [rprof.unit] * n_modes
     par_units_fit += [rprof.unit] * n_modes
@@ -738,22 +750,34 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_modes=3
         "eps": np.sqrt(2) * eps.to(u.m).value,
     }
 
-    res = minimize(_dr4_objective, guess, bounds=bounds, args=(prof, r_rad, ell_0, r_0, scatter_pars), options={'maxcor': 10, 'maxfun': 100000})
+    res = minimize(
+        _dr4_objective,
+        guess,
+        bounds=bounds,
+        args=(prof, r_rad, ell_0, r_0, scatter_pars),
+        options={"maxcor": 10, "maxfun": 100000},
+    )
     if res.success is False:
         return None, None, None
     model = _dr4_model(res.x, r_rad, ell_0, r_0, scatter_pars)
     frac_res = abs(rprof - model) / model
     bad_fit = (frac_res >= 1) * (r_rad > 5 * r_0)
     guess = res.x
-    guess[1] = min(5, .9*np.max(r_rad)/r_0)
+    guess[1] = min(5, 0.9 * np.max(r_rad) / r_0)
     if np.sum(bad_fit) > 0:
         r_c = r_rad[int(np.percentile(np.where(bad_fit)[0], 5))]
         guess[1] = r_c / r_0
     bounds[0] = (0.1, 10.0)
-    bounds[1] = (guess[1]*.7, np.max(r_rad)/r_0)
+    bounds[1] = (guess[1] * 0.7, np.max(r_rad) / r_0)
     bounds[2] = (0, np.inf)
     bounds[3] = (-np.inf, np.inf)
-    res = minimize(_dr4_objective, guess, bounds=bounds, args=(prof, r_rad, ell_0, r_0, scatter_pars), options={'maxcor': 10, 'maxfun': 100000})
+    res = minimize(
+        _dr4_objective,
+        guess,
+        bounds=bounds,
+        args=(prof, r_rad, ell_0, r_0, scatter_pars),
+        options={"maxcor": 10, "maxfun": 100000},
+    )
 
     model = _dr4_model(res.x, r_calc_rad, ell_0, r_0, scatter_pars)
     model_oto = _dr4_model(res.x, r_rad, ell_0, r_0, scatter_pars)
@@ -770,6 +794,7 @@ def fit_dr4_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_modes=3
 
     return mprofile, params, mprofile_oto
 
+
 def fit_bessel_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_modes=100):
     # TODO: Move model to models.py
     # Assuming unitful profiles here...
@@ -778,12 +803,12 @@ def fit_bessel_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_mode
     prof = rprof.value
     ell_0 = (2 * np.pi * d / lmd).decompose().value
     r_0 = fwhm.to(u.radian).value / 2.355
-    par_names = [] #["ell_max", "r_c", "alpha", "off"]
-    par_units = [] #[u.dimensionless_unscaled, r.unit, rprof.unit, rprof.unit]
-    par_units_fit = [] #[u.dimensionless_unscaled, u.radian, rprof.unit, rprof.unit]
+    par_names = []  # ["ell_max", "r_c", "alpha", "off"]
+    par_units = []  # [u.dimensionless_unscaled, r.unit, rprof.unit, rprof.unit]
+    par_units_fit = []  # [u.dimensionless_unscaled, u.radian, rprof.unit, rprof.unit]
 
     # Fix the number of modes to half the data points within 5 sigma and setup amps
-    n_modes = max_modes # min(max_modes, int(np.sum(r_rad < 5 * r_0)))
+    n_modes = max_modes  # min(max_modes, int(np.sum(r_rad < 5 * r_0)))
     par_names += [f"amp_{i}" for i in range(n_modes)]
     par_units += [rprof.unit] * n_modes
     par_units_fit += [rprof.unit] * n_modes
@@ -795,17 +820,17 @@ def fit_bessel_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_mode
     model_oto = np.zeros_like(r_use)
     model = np.zeros_like(r_calc_use)
     for i in range(n_modes):
-        term = (jv(i, r_use)/r_use)**2
-        amp = np.nansum(term * (rprof[r_msk] - model_oto))/np.nansum(term**2)
+        term = (jv(i, r_use) / r_use) ** 2
+        amp = np.nansum(term * (rprof[r_msk] - model_oto)) / np.nansum(term**2)
         if not np.isfinite(amp):
             continue
-        new_chisq = np.nansum((rprof[r_msk] - model_oto - amp*term)**2)
+        new_chisq = np.nansum((rprof[r_msk] - model_oto - amp * term) ** 2)
         if new_chisq > chisq:
             continue
         amps[i] = amp
         model_oto += amp * term
         with np.errstate(divide="ignore", invalid="ignore"):
-            model += amp * (jv(i, r_calc_use)/r_calc_use)**2
+            model += amp * (jv(i, r_calc_use) / r_calc_use) ** 2
         chisq = new_chisq
     model_oto = np.insert(model_oto, 0, 1)
     model[r_calc_use == 0] = 1
@@ -822,29 +847,30 @@ def fit_bessel_profile(r, rprof, fwhm, d, lmd, sang, corr, eps, r_calc, max_mode
 
     # Fit for a symmetric r^-3 wing
     wing_model_oto = model_oto.copy()
+
     def _wing(coeffs, wmodel, beam_model, r_use):
         r0_msk = r_use == 0
         rc, alpha, off_wing, off_core = coeffs
         wmodel[(r_use <= rc) * ~r0_msk] = beam_model[(r_use <= rc) * ~r0_msk] + off_core
-        wmodel[r_use > rc] = off_wing + alpha * (rc**3)/np.power(r_use[r_use > rc], 3)
+        wmodel[r_use > rc] = off_wing + alpha * (rc**3) / np.power(r_use[r_use > rc], 3)
         wmodel[r_use > rc] += scatter_beam(r_use[r_use > rc], **scatter_pars)
         return wmodel
 
     def _wing_obj(coeffs):
         wing_model = _wing(coeffs, wing_model_oto, model_oto, r_rad)
 
-        return np.nansum((rprof - wing_model)**2)
+        return np.nansum((rprof - wing_model) ** 2)
 
     # Initial guess of rc
     mask_size = np.max(r_rad)
-    rc = min(7*r_0, .9*mask_size)
+    rc = min(7 * r_0, 0.9 * mask_size)
     guess = [rc, 0, 0, 0]
-    bounds = [(rc*.5, mask_size), (0, np.inf), (0, 0), (0, 0)]
+    bounds = [(rc * 0.5, mask_size), (0, np.inf), (0, 0), (0, 0)]
     res = minimize(_wing_obj, guess, bounds=bounds)
     if res.success:
         r_c, alpha, off_wing, off_core = res.x
     else:
-        r_c, alpha, off_wing, off_core = np.inf, 0, 0, 0 
+        r_c, alpha, off_wing, off_core = np.inf, 0, 0, 0
 
     model_oto = _wing((r_c, alpha, off_wing, off_core), model_oto, model_oto, r_rad)
     model = _wing((r_c, alpha, off_wing, off_core), model, model, r_calc_rad)

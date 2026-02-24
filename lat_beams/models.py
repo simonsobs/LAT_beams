@@ -1,8 +1,6 @@
-from functools import lru_cache
-
 import astropy.units as u
 import numpy as np
-from scipy.special import jv, spherical_jn, factorial
+from scipy.special import factorial, jv, spherical_jn
 
 
 def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
@@ -110,7 +108,19 @@ def bessel_term(r, ell_max, i):
     return bessel
 
 
-def bessel_beam(posmap, xi0, eta0, ell_max, amps, gauss_amp, force_cent, r0_wing, off_core, off_wing, amp_wing):
+def bessel_beam(
+    posmap,
+    xi0,
+    eta0,
+    ell_max,
+    amps,
+    gauss_amp,
+    force_cent,
+    r0_wing,
+    off_core,
+    off_wing,
+    amp_wing,
+):
     eta, xi = posmap
     xi = xi - xi0
     eta = eta - eta0
@@ -127,21 +137,19 @@ def bessel_beam(posmap, xi0, eta0, ell_max, amps, gauss_amp, force_cent, r0_wing
     if force_cent:
         cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
         beam_model[cent_pix] = gauss_amp
-        cent_ring = (
-            (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1]))
-            * (~cent_pix)
-        )
+        cent_ring = (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix)
         # Radial interp
         ci, cj = np.where(cent_pix)
         for i, j in zip(*np.where(cent_ring)):
             if i > beam_model.shape[0] or j > beam_model.shape[1]:
                 beam_model[i, j] = gauss_amp
             beam_model[i, j] = (
-                2 * gauss_amp
-                + beam_model[2 * i - ci[0], 2 * j - cj[0]]
+                2 * gauss_amp + beam_model[2 * i - ci[0], 2 * j - cj[0]]
             ) / 3
     beam_model[r <= r0_wing] += off_core
-    beam_model[r > r0_wing] = off_wing + amp_wing * (r0_wing**3)/np.power(r[r > r0_wing], 3)
+    beam_model[r > r0_wing] = off_wing + amp_wing * (r0_wing**3) / np.power(
+        r[r > r0_wing], 3
+    )
 
     return beam_model
 
@@ -257,6 +265,7 @@ def scatter_beam(r, n_terms, lmd, sang, corr, eps):
     profile *= prefac
     return profile
 
+
 def add_profile_wing(profile, r, r_c, alpha, off, scatter_pars):
     msk = r > r_c
     if np.sum(msk) > 0:
@@ -264,6 +273,7 @@ def add_profile_wing(profile, r, r_c, alpha, off, scatter_pars):
         # Scattering beam
         if scatter_pars is not None:
             profile[msk] += scatter_beam(r[msk], **scatter_pars)
+
 
 def dr4_beam(r, ell_max, r_c, alpha, off, amps, n_scatter, scatter_pars=None):
     """

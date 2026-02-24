@@ -4,7 +4,6 @@ import time
 from functools import partial
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from astropy import constants as const
@@ -295,7 +294,7 @@ for i, j in enumerate(joblist):
 
     # Compute the gaussian model
     model = bm.gaussian2d_from_aman(posmap, gauss_params)
-    
+
     # Check clipping
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
@@ -351,7 +350,12 @@ for i, j in enumerate(joblist):
     if gauss_multipole:
         base_beam = (model - gauss_params.off.value) / gauss_params.amp.value
         gauss_multipole_params, model = fit_multipole_model(
-            solved - gauss_params.off.value, weights, posmap, base_beam, gauss_params, n_multipoles
+            solved - gauss_params.off.value,
+            weights,
+            posmap,
+            base_beam,
+            gauss_params,
+            n_multipoles,
         )
         gauss_multipole_params = process_model(
             gauss_multipole_params,

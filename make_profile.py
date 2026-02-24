@@ -114,7 +114,7 @@ msk = snr > 20
 msk *= solid_angle > 0
 all_fits = all_fits[msk]
 
-r_calc = np.arange(0, 2*extent.value, r_step.value) * u.arcsec
+r_calc = np.arange(0, 2 * extent.value, r_step.value) * u.arcsec
 
 # Plot by splits
 for split in split_by:
@@ -139,7 +139,7 @@ for split in split_by:
         msk = data_fwhm < 3 * fwhm_exp
         msk *= data_fwhm < np.percentile(data_fwhm[msk], 95)
         msk *= solid_angle < 2 * sang_exp
-        msk *= solid_angle > .5 * sang_exp
+        msk *= solid_angle > 0.5 * sang_exp
         sfits = sfits[msk]
 
         for epoch in epochs:
@@ -182,7 +182,7 @@ for split in split_by:
                 np.median(solid_angle),
                 corr_primary,
                 eps_primary,
-                r_calc
+                r_calc,
             )
             if mprofile is None or mpars is None:
                 raise ValueError("Fit failed!")
@@ -229,7 +229,7 @@ for split in split_by:
                 profile[:, 1],
                 label=str(epoch) + "Data",
                 marker="x",
-                alpha=.5,
+                alpha=0.5,
             )
             plt.plot(
                 mprofile[:, 0],
@@ -238,7 +238,7 @@ for split in split_by:
                 marker="+",
                 linestyle="--",
                 color=plt.gca().lines[-1].get_color(),
-                alpha=.5,
+                alpha=0.5,
             )
         plt.ylim((1e-5, 1))
         plt.legend()
@@ -260,7 +260,7 @@ for split in split_by:
                 profile[:, 1],
                 label=str(epoch),
                 marker="x",
-                alpha=.5,
+                alpha=0.5,
             )
         plt.ylim((1e-5, 1))
         plt.legend()
@@ -282,7 +282,7 @@ for split in split_by:
                 np.abs(profile[:, 1] - mprofile[:, 1]) / mprofile[:, 1],
                 label=str(epoch),
                 marker="x",
-                alpha=.5,
+                alpha=0.5,
             )
         plt.ylim((1e-5, 1))
         plt.legend()
@@ -304,7 +304,7 @@ for split in split_by:
                 window[:, 1],
                 label=str(epoch),
                 marker="x",
-                alpha=.5,
+                alpha=0.5,
             )
         plt.legend()
         plt.title(f"{spl} Window Function")
@@ -319,7 +319,7 @@ for split in split_by:
                 window[:, 1],
                 label=str(epoch),
                 marker="x",
-                alpha=.5,
+                alpha=0.5,
             )
         plt.legend()
         plt.title(f"{spl} Model Window Function")

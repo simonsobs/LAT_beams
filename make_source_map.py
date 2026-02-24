@@ -5,9 +5,10 @@ import sys
 import time
 from functools import partial
 
-import mpi4py.rc
 import numpy as np
 import yaml
+from mpi4py import MPI
+from mpi4py.util.sync import Semaphore
 from pixell import enmap, utils
 from so3g.proj import RangesMatrix
 from sotodlib import mapmaking, tod_ops
@@ -26,9 +27,6 @@ from lat_beams.utils import (
     setup_jobs,
 )
 
-from mpi4py import MPI
-from mpi4py.util.sync import Semaphore
-
 tod_ops.filters.logger.setLevel(logging.ERROR)
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
@@ -46,7 +44,9 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L, forced_ws):
+def get_jobit(
+    jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L, forced_ws
+):
     with log_lvl(L, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
@@ -84,10 +84,9 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_ty
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
                 continue
-            obs = ctx.obsdb.get(obs['obs_id'], tags=True)
+            obs = ctx.obsdb.get(obs["obs_id"], tags=True)
             wafers = np.unique(
-                [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]]
-                + forced_ws
+                [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]] + forced_ws
             )
             wsufmsband = np.unique(
                 np.column_stack(
@@ -421,7 +420,7 @@ for i, j in enumerate(joblist):
 
     # Things sometimes deadlock without this
     # Ideally we get rid of it
-    comm.barrier() 
+    comm.barrier()
     if job is None:
         continue
 
