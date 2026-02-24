@@ -31,7 +31,7 @@ nominal_fwhm = cfg.get("nominal_fwhm", nominal_fwhm)
 split_by = cfg.get(
     "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
 )
-extent = cfg["extent"] = cfg.get("extent", 500)
+extent = cfg["extent"] = cfg.get("extent", 600)
 mask_size = cfg.get("mask_size", 0.1)
 mask_size *= u.degree
 res = cfg["res"] = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
@@ -82,6 +82,13 @@ if len(alljobstr) == 0:
 
 # Load fits
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
+snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
+solid_angle = bu.get_fit_vec(all_fits, "data_solid_angle_corr")
+msk = snr > 100
+msk *= solid_angle > 0
+all_fits = all_fits[msk]
+mjobs = mjobs[msk]
+fjobs = fjobs[msk]
 
 # Make template map
 pix_extent = 2 * int(extent // pixsize)
@@ -125,6 +132,8 @@ for split in split_by:
         smjobs = smjobs[msk]
         sfjobs = sfjobs[msk]
         for epoch in epochs:
+            plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
+            os.makedirs(plot_dir_epc, exist_ok=True)
             print(f"\t{spl} {epoch}")
             times = sfits["time"]
             tmsk = (times >= epoch[0]) * (times < epoch[1])
@@ -182,7 +191,7 @@ for split in split_by:
 
                 # Crop, recenter, and normalize
                 cent = np.array(
-                    (fit["aman"].eta0.to(u.rad).value, fit["aman"].xi0.to(u.rad).value)
+                    (fit["aman"].gauss.eta0.to(u.rad).value, fit["aman"].gauss.xi0.to(u.rad).value)
                 )
                 solved = reproject.thumbnails(
                     solved,
@@ -191,8 +200,8 @@ for split in split_by:
                     owcs=twcs,
                 )
                 solved = (
-                    solved - np.array([fit["aman"].off.value, 0, 0]).reshape((3, 1, 1))
-                ) / fit["aman"].amp.value
+                    solved - np.array([fit["aman"].gauss.off.value, 0, 0]).reshape((3, 1, 1))
+                ) / fit["aman"].gauss.amp.value
                 weights = (
                     reproject.thumbnails_ivar(
                         weights,
@@ -200,7 +209,7 @@ for split in split_by:
                         oshape=(pix_extent, pix_extent),
                         owcs=twcs,
                     )
-                    * fit["aman"].amp.value**2
+                    * fit["aman"].gauss.amp.value**2
                 )
                 resid = (
                     reproject.thumbnails(
@@ -209,7 +218,7 @@ for split in split_by:
                         oshape=(pix_extent, pix_extent),
                         owcs=twcs,
                     )
-                    / fit["aman"].amp.value
+                    / fit["aman"].gauss.amp.value
                 )
                 resid_weights = (
                     reproject.thumbnails_ivar(
@@ -218,7 +227,7 @@ for split in split_by:
                         oshape=(pix_extent, pix_extent),
                         owcs=twcs,
                     )
-                    * fit["aman"].amp.value**2
+                    * fit["aman"].gauss.amp.value**2
                 )
 
                 # If the new center seems very far from the origin then lets skip
@@ -231,6 +240,10 @@ for split in split_by:
                     continue
 
                 # Add
+                np.nan_to_num(solved, copy=False, nan=0, posinf=0, neginf=0)
+                np.nan_to_num(weights, copy=False, nan=0, posinf=0, neginf=0)
+                np.nan_to_num(resid, copy=False, nan=0, posinf=0, neginf=0)
+                np.nan_to_num(resid_weights, copy=False, nan=0, posinf=0, neginf=0)
                 mcoadd.insert(solved * weights, op=op)
                 wcoadd.insert(weights, op=op)
                 rmcoadd.insert(resid * resid_weights, op=op)
@@ -246,9 +259,7 @@ for split in split_by:
             # Save and plot
             for omap, name in [
                 (mcoadd, "stack"),
-                (wcoadd, "stack_weights"),
                 (rmcoadd, "resid_stack"),
-                (rwcoadd, "resid_stack_weights"),
             ]:
                 path = os.path.join(
                     data_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_{name}.fits"
@@ -277,7 +288,7 @@ for split in split_by:
                         pixsize,
                         extent,
                         (0, 0),
-                        plot_dir_spl,
+                        plot_dir_epc,
                         f"{spl} {epoch[0]} {epoch[1]}",
                         log_thresh=log_thresh,
                         append=name + append,
