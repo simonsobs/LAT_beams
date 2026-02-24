@@ -91,6 +91,7 @@ mjobs = mjobs[msk]
 fjobs = fjobs[msk]
 
 # Make template map
+ext_rad = np.deg2rad(extent / 3600)
 pix_extent = 2 * int(extent // pixsize)
 # rowmajor = True here to match sotodlib
 twcs = enmap.wcsutils.build(
@@ -142,6 +143,8 @@ for split in split_by:
                 continue
             mcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             wcoadd = enmap.zeros(tmap.shape, tmap.wcs)
+            mlcoadd = enmap.zeros(tmap.shape, tmap.wcs)
+            mwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rmcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             for fit, mjob, fjob in zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]):
@@ -167,9 +170,27 @@ for split in split_by:
                 except FileNotFoundError:
                     print(f"Maps missing for job: {mjob}")
                     continue
+                if "ml_map" in mjob.tags and mjob.tags["ml_map"] != "":
+                    try:
+                        mlmap = enmap.read_map(
+                            os.path.join(data_dir, mjob.tags["ml_map"])
+                        )
+                        mlweights = enmap.read_map(
+                            os.path.join(data_dir, mjob.tags["ml_div"])
+                        )[np.diag_indices(len(mlmap))]
+                    except FileNotFoundError:
+                        print(f"ML Maps missing for job: {mjob}")
+                        continue
+                else:
+                    print(f"No ML maps for jobs: {mjob}")
+                    mlmap = enmap.zeros(solved.shape, solved.wcs)
+                    mlweights = enmap.zeros(weights.shape, weights.wcs)
+
                 # Make everything look like TQU
                 solved = view_TQU(solved)
                 weights = view_TQU(weights)
+                mlmap = view_TQU(mlmap)
+                mlweights - view_TQU(mlweights)
                 resid = view_TQU(resid)
                 resid_weights = view_TQU(resid_weights)
                 if not np.all(
@@ -177,10 +198,14 @@ for split in split_by:
                         [
                             len(solved),
                             len(weights),
+                            len(mlmap),
+                            len(mlweights),
                             len(resid),
                             len(resid_weights),
                             len(solved.shape),
                             len(weights.shape),
+                            len(mlmap.shape),
+                            len(mlweights.shape),
                             len(resid.shape),
                             len(resid_weights.shape),
                         ]
@@ -191,20 +216,46 @@ for split in split_by:
 
                 # Crop, recenter, and normalize
                 cent = np.array(
-                    (fit["aman"].gauss.eta0.to(u.rad).value, fit["aman"].gauss.xi0.to(u.rad).value)
+                    (
+                        fit["aman"].gauss.eta0.to(u.rad).value,
+                        fit["aman"].gauss.xi0.to(u.rad).value,
+                    )
                 )
                 solved = reproject.thumbnails(
                     solved,
+                    r=ext_rad,
                     coords=cent,
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
                 solved = (
-                    solved - np.array([fit["aman"].gauss.off.value, 0, 0]).reshape((3, 1, 1))
+                    solved
+                    - np.array([fit["aman"].gauss.off.value, 0, 0]).reshape((3, 1, 1))
                 ) / fit["aman"].gauss.amp.value
                 weights = (
                     reproject.thumbnails_ivar(
                         weights,
+                        r=ext_rad,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    * fit["aman"].gauss.amp.value**2
+                )
+                mlmap = (
+                    reproject.thumbnails(
+                        mlmap,
+                        r=ext_rad,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    / fit["aman"].gauss.amp.value
+                )
+                mlweights = (
+                    reproject.thumbnails_ivar(
+                        mlweights,
+                        r=ext_rad,
                         coords=cent,
                         oshape=(pix_extent, pix_extent),
                         owcs=twcs,
@@ -214,6 +265,7 @@ for split in split_by:
                 resid = (
                     reproject.thumbnails(
                         resid,
+                        r=ext_rad,
                         coords=cent,
                         oshape=(pix_extent, pix_extent),
                         owcs=twcs,
@@ -223,6 +275,7 @@ for split in split_by:
                 resid_weights = (
                     reproject.thumbnails_ivar(
                         resid_weights,
+                        r=ext_rad,
                         coords=cent,
                         oshape=(pix_extent, pix_extent),
                         owcs=twcs,
@@ -242,23 +295,30 @@ for split in split_by:
                 # Add
                 np.nan_to_num(solved, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(weights, copy=False, nan=0, posinf=0, neginf=0)
+                np.nan_to_num(mlmap, copy=False, nan=0, posinf=0, neginf=0)
+                np.nan_to_num(mlweights, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(resid, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(resid_weights, copy=False, nan=0, posinf=0, neginf=0)
                 mcoadd.insert(solved * weights, op=op)
                 wcoadd.insert(weights, op=op)
+                mlcoadd.insert(mlmap * mlweights, op=op)
+                mwcoadd.insert(mlweights, op=op)
                 rmcoadd.insert(resid * resid_weights, op=op)
                 rwcoadd.insert(resid_weights, op=op)
 
             # Divide weights
             with np.errstate(divide="ignore", invalid="ignore"):
                 mcoadd /= wcoadd
+                mlcoadd /= mwcoadd
                 rmcoadd /= rwcoadd
             np.nan_to_num(mcoadd, copy=False, nan=0, posinf=0, neginf=0)
+            np.nan_to_num(mlcoadd, copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num(rmcoadd, copy=False, nan=0, posinf=0, neginf=0)
 
             # Save and plot
             for omap, name in [
                 (mcoadd, "stack"),
+                (mlcoadd, "ml_stack"),
                 (rmcoadd, "resid_stack"),
             ]:
                 path = os.path.join(
