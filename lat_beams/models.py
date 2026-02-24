@@ -2,7 +2,7 @@ from functools import lru_cache
 
 import astropy.units as u
 import numpy as np
-from scipy.special import spherical_jn
+from scipy.special import jv, spherical_jn, factorial
 
 
 def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
@@ -248,20 +248,26 @@ def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
 
 
 def scatter_beam(r, n_terms, lmd, sang, corr, eps):
-    var = (4 * np.pi * eps / lmv) ** 2
-    prefac = (sang / (4 * pi)) * ((2 * np.pi * corr / lmd) ** 2) * np.exp(-1 * var)
+    var = (4 * np.pi * eps / lmd) ** 2
+    prefac = (sang / (4 * np.pi)) * ((2 * np.pi * corr / lmd) ** 2) * np.exp(-1 * var)
     x = -1 * (corr * np.pi * np.sin(r) / lmd) ** 2
     profile = np.zeros_like(r)
     for n in range(1, n_terms + 1):
-        profile += (var**n / (n * np.fac(n))) * np.exp(x / n)
+        profile += (var**n / (n * factorial(n))) * np.exp(x / n)
     profile *= prefac
     return profile
 
+def add_profile_wing(profile, r, r_c, alpha, off, scatter_pars):
+    msk = r > r_c
+    if np.sum(msk) > 0:
+        profile[msk] = off + alpha * (r[msk][0] ** 3) / np.power(r[msk], 3)
+        # Scattering beam
+        if scatter_pars is not None:
+            profile[msk] += scatter_beam(r[msk], **scatter_pars)
 
 def dr4_beam(r, ell_max, r_c, alpha, off, amps, n_scatter, scatter_pars=None):
     """
     1D beam profile as modeled in Lungu et al. (https://arxiv.org/pdf/2112.12226).
-    Does not include scattering term yet.
     """
     profile = np.zeros_like(r)
     profile[r == 0] = 1.0
@@ -273,11 +279,6 @@ def dr4_beam(r, ell_max, r_c, alpha, off, amps, n_scatter, scatter_pars=None):
         profile[msk] += amp * jv(2 * n + 1, r_ell) / r_ell
 
     # Wing
-    msk = r > r_c
-    if np.sum(msk) > 0:
-        profile[msk] = off + alpha * (r[msk][0] ** 3) / np.power(r[msk], 3)
-        # Scattering beam
-        if scatter_pars is not None:
-            profile[msk] += scatter_beams(r[msk], **scatter_pars)
+    profile = add_profile_wing(profile, r, r_c, alpha, off, scatter_pars)
 
     return profile
