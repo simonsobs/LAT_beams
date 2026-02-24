@@ -399,7 +399,6 @@ if args.profile:
 source_list = set(source_list)
 job = None
 L.flush()
-joblist = joblist[:3]
 semaphore = Semaphore(comm=comm)
 for i, j in enumerate(joblist):
     semaphore.acquire()
