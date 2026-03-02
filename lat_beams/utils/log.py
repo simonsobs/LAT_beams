@@ -1,7 +1,9 @@
 import logging
 from contextlib import contextmanager
 from logging.handlers import MemoryHandler
+from pshmem.locking import MPILock
 
+import sys
 from sotodlib.mapmaking import ColoredFormatter, init
 
 try:
@@ -15,11 +17,64 @@ except:
     comm = None
 
 
+class MPIMemHandler(MemoryHandler):
+    def createLock(self):
+        """
+        Acquire a thread lock for serializing access to the underlying I/O.
+        """
+        if comm:
+            self.lock = MPILock(comm)
+
+    def acquire(self):
+        """
+        Acquire the I/O thread lock.
+        """
+        if self.lock:
+            self.lock.lock()
+
+    def release(self):
+        """
+        Release the I/O thread lock.
+        """
+        if self.lock:
+            self.lock.unlock()
+
+    def handle(self, record):
+        """
+        Conditionally emit the specified logging record.
+
+        Emission depends on filters which may have been added to the handler.
+        Wrap the actual emission of the record with acquisition/release of
+        the I/O thread lock.
+
+        Returns an instance of the log record that was emitted
+        if it passed all filters, otherwise a false value is returned.
+        """
+        rv = self.filter(record)
+        if isinstance(rv, logging.LogRecord):
+            record = rv
+        if rv:
+            self.emit(record)
+        return rv
+
+    def emit(self, record):
+        """
+        Emit a record.
+
+        Append the record. If shouldFlush() tells us to, call flush() to process
+        the buffer.
+        """
+        self.buffer.append(record)
+
 def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL):
     # Uses a crappy version of https://stackoverflow.com/a/35804945
     def lognormal(self, message, *args, **kwargs):
         if self.isEnabledFor(25):
             self._log(25, message, args, **kwargs)
+
+    def logddebug(self, message, *args, **kwargs):
+        if self.isEnabledFor(5):
+            self._log(5, message, args, **kwargs)
 
     def flush_log(self):
         for handler in self.handlers:
@@ -30,14 +85,16 @@ def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL):
     if comm is not None:
         rank = comm.Get_rank()
     logging.addLevelName(25, "NORMAL")
+    logging.addLevelName(5, "DDEBUG")
     setattr(logging.getLoggerClass(), "normal", lognormal)
+    setattr(logging.getLoggerClass(), "ddebug", logddebug)
     setattr(logging.getLoggerClass(), "flush", flush_log)
     L = init(level, rank=rank)
     for handler in L.handlers:
         if isinstance(handler.formatter, ColoredFormatter):
             handler.formatter.colors["NORMAL"] = "\033[1;34m"
     L.handlers = [
-        MemoryHandler(1000, flushLevel=flushLevel, target=h, flushOnClose=True)
+        MPIMemHandler(1000, flushLevel=flushLevel, target=h, flushOnClose=True)
         for h in L.handlers
     ]
 

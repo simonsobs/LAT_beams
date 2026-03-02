@@ -8,8 +8,8 @@ from functools import partial
 import numpy as np
 import yaml
 from mpi4py import MPI
-from mpi4py.util.sync import Semaphore
 from pixell import enmap, utils
+from pshmem.locking import MPILock
 from so3g.proj import RangesMatrix
 from sotodlib import mapmaking, tod_ops
 from sotodlib.coords import planets as cp
@@ -399,30 +399,23 @@ if args.profile:
 # Mapping loop
 source_list = set(source_list)
 job = None
+mpilock =  MPILock(comm)
 L.flush()
-semaphore = Semaphore(comm=comm)
 for i, j in enumerate(joblist):
-    semaphore.acquire()
+    # To avoid multiproc issues where the database is locked we lock and unlock serially
     L.flush()
-    t0 = time.time()
+    mpilock.lock()
     if job is not None:
-        # jdb.unlock(job)
         with jdb.session_scope() as session:
             session.merge(job)
             session.commit()
-    t1 = time.time()
     job = None
     if j is not None:
-        # job = jdb.lock(j.id)
         with jdb.session_scope() as session:
             job = session.get(Job, j.id)
             session.expunge(job)
-    t2 = time.time()
-    semaphore.release()
+    mpilock.unlock()
 
-    # Things sometimes deadlock without this
-    # Ideally we get rid of it
-    comm.barrier()
     if job is None:
         continue
 
@@ -736,7 +729,7 @@ for i, j in enumerate(joblist):
         for step in mapmaker.solve(maxiter=passinfo.maxiter, x0=x0):
             t2 = time.time()
             dump = step.i % 10 == 0
-            L.debug(
+            (L.debug if dump else L.ddebug)(
                 "\tCG step %4d %15.7e %8.3f %s"
                 % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
             )
@@ -801,6 +794,8 @@ if args.profile:
     profiler.write_html(f"profile_{myrank}.html")
 
 L.flush()
+comm.barrier()
+mpilock.close()
 
 # Splits stuff to implement later
 # TODO: Bin in annuli

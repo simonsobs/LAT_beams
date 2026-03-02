@@ -30,6 +30,7 @@ from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
 from typing_extensions import cast
+from pshmem.locking import MPILock
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
@@ -354,6 +355,7 @@ def main():
 
     # Run from the masters
     job = None
+    mpilock =  MPILock(master_comm)
     with MPICommExecutor(local_comm, 0) as executor:
         if executor is not None:
             for i, j in enumerate(joblist):
@@ -388,17 +390,19 @@ def main():
 
                 master_comm.barrier()
                 # To avoid multiproc issues where the database is locked we lock and unlock serially
-                # with jdb.locked(j) as job:
                 to_save = (None, None, None)
-                for r in range(nproc):
-                    if r == myrank:
-                        L.flush()
-                        if job is not None:
-                            jdb.unlock(job)
-                        job = None
-                        if j is not None:
-                            job = jdb.lock(j.id)
-                    master_comm.barrier()
+                L.flush()
+                mpilock.lock()
+                if job is not None:
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
+                job = None
+                if j is not None:
+                    with jdb.session_scope() as session:
+                        job = session.get(Job, j.id)
+                        session.expunge(job)
+                mpilock.unlock()
                 if job is None:
                     continue
 

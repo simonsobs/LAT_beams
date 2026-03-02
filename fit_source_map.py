@@ -11,6 +11,7 @@ from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
+from pshmem.locking import MPILock
 
 import lat_beams.models as bm
 from lat_beams.beam_utils import (
@@ -164,6 +165,7 @@ map_jobdict = {
     for job in map_jobs
 }
 job = None
+mpilock =  MPILock(comm)
 for i, j in enumerate(joblist):
     comm.barrier()
     sys.stdout.flush()
@@ -175,17 +177,21 @@ for i, j in enumerate(joblist):
             aman.save(outfile, path, overwrite=True)
         outfile.flush()
     comm.barrier()
+
     # To avoid multiproc issues where the database is locked we lock and unlock serially
-    # with jdb.locked(j) as job:
-    for r in range(nproc):
-        if r == myrank:
-            L.flush()
-            if job is not None:
-                jdb.unlock(job)
-            job = None
-            if j is not None:
-                job = jdb.lock(j.id)
-        comm.barrier()
+    L.flush()
+    mpilock.lock()
+    if job is not None:
+        with jdb.session_scope() as session:
+            session.merge(job)
+            session.commit()
+    job = None
+    if j is not None:
+        with jdb.session_scope() as session:
+            job = session.get(Job, j.id)
+            session.expunge(job)
+    mpilock.unlock()
+
     if job is None:
         to_save = (None, None)
         continue
