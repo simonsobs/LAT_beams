@@ -31,6 +31,7 @@ from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
 from typing_extensions import cast
 from pshmem.locking import MPILock
+from sotodlib.site_pipeline.jobdb import Job
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
@@ -64,14 +65,15 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source, L):
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, L):
     with log_lvl(L, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
+            src_str = "==1 or ".join(source_list) + "==1"
             obslist = ctx.obsdb.query(
-                f"type=='obs' and subtype=='cal' and {source} and start_time > {start_time} and stop_time < {stop_time}",
-                tags=[f"{source}=1"],
+                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and ({src_str})",
+                tags=source_list,
             )
 
         obslist = np.array_split(obslist, nproc)[myrank]
@@ -186,7 +188,7 @@ def main():
     lp_fc = cfg["lp_fc"] = cfg.get("lp_fc", 30)
     n_med = cfg["n_med"] = cfg.get("n_med", 5)
     n_std = cfg["n_std"] = cfg.get("n_std", 10)
-    source = cfg["source"] = cfg.get("source", "mars")
+    source_list = cfg["source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
     min_samps = cfg["min_samps"] = cfg.get("min_samps", 1000)
     min_samps /= ds
     block_size = cfg["block_size"] = cfg.get("block_size", 5000)
@@ -218,7 +220,7 @@ def main():
     # Setup folders
     root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
     project_dir = cfg.get("project_dir", os.path.join("pointing", tel))
-    plot_dir = os.path.join(root_dir, "plots", project_dir, "source_fits", source)
+    plot_dir = os.path.join(root_dir, "plots", project_dir, "source_fits")
     data_dir = os.path.join(root_dir, "data", project_dir, "source_fits")
     if myrank == 0:
         os.makedirs(plot_dir, exist_ok=True)
@@ -283,9 +285,6 @@ def main():
         cfg.get("nominal", f"~/data/pointing/{tel}/nominal/focal_plane.h5")
     )
     nominal = h5py.File(nominal_path)
-    source_list = [
-        source,
-    ]
     # JobDB stuff
     start_time = cfg["start_time"]
     if args.lookback is not None:
@@ -302,7 +301,7 @@ def main():
             ctx=ctx,
             start_time=start_time,
             stop_time=stop_time,
-            source=source,
+            source_list=source_list,
             L=L,
         ),
         get_jobstr,
@@ -431,7 +430,7 @@ def main():
                 # Check source
                 src_names = list(source_list & set(obs["tags"]))
                 if len(src_names) > 1:
-                    L.warning("\tObservation tagged for multiple sources!")
+                    L.warning("\tObservation tagged for multiple sources! Only fitting the first")
                 elif len(src_names) == 0:
                     msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
                     L.error(f"\t{msg}")
@@ -439,6 +438,7 @@ def main():
                     job.jstate = "failed"
                     L.debug(f"\t\tTags were: {obs['tags']}")
                     continue
+                source = src_names[0]
                 set_tag(job, "source", source)
 
                 # TODO: Make sure to make this tagging work for sat format too
@@ -524,10 +524,10 @@ def main():
 
                 # Setup plot dirs
                 tod_plot_dir = os.path.join(
-                    plot_dir, "tods", str(obs["timestamp"])[:5], obs["obs_id"]
+                    plot_dir, source, "tods", str(obs["timestamp"])[:5], obs["obs_id"]
                 )
                 fit_plot_dir = os.path.join(
-                    plot_dir, "fits", str(obs["timestamp"])[:5], obs["obs_id"]
+                    plot_dir, source,"fits", str(obs["timestamp"])[:5], obs["obs_id"]
                 )
                 os.makedirs(tod_plot_dir, exist_ok=True)
                 os.makedirs(fit_plot_dir, exist_ok=True)

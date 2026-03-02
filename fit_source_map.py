@@ -11,6 +11,7 @@ from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from sotodlib.core import AxisManager, Context
+from sotodlib.site_pipeline.jobdb import Job
 from pshmem.locking import MPILock
 
 import lat_beams.models as bm

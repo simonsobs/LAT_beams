@@ -1,4 +1,8 @@
-source: "neptune"
+fit_source_list:
+  - "mars"
+  - "saturn"
+  - "uranus"
+  - "neptune"
 min_samps: 20000
 context: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
 preprocess: "preproc/preproc_fit_point.yaml"
@@ -8,8 +12,9 @@ preprocess: "preproc/preproc_fit_point.yaml"
 # start_time: 1745150000
 # stop_time: 1746187200 # Corotator moved
 # start_time: 1748476800 # Autoschedular
-start_time: 1756699200
-stop_time: 2748476800
+# start_time: 1756699200
+start_time: 1767243600 
+stop_time: 20000000000
 
 fwhm: # arcmin LAT; change per platform
   f090: 2
