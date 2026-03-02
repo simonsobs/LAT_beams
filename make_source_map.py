@@ -376,13 +376,15 @@ search_mask = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
 mask_fac = search_mask["xyr"][-1] / mask_size
 
 # Setup passes
-dsstr = "1"
-maxiter = str(cgiters)
-interpol = "bilinear"
-for i in range(1, mlpass):
-    interpol = "nearest," + interpol
-    maxiter = f"{max(1, max(cgiters//2, cgiters//(i + 1)))}," + maxiter
-passes = mapmaking.setup_passes(downsample=dsstr, maxiter=maxiter, interpol=interpol)
+passes = []
+if mlpass > 0:
+    dsstr = "1"
+    maxiter = str(cgiters)
+    interpol = "bilinear"
+    for i in range(1, mlpass):
+        interpol = "nearest," + interpol
+        maxiter = f"{max(1, max(cgiters//2, cgiters//(i + 1)))}," + maxiter
+    passes = mapmaking.setup_passes(downsample=dsstr, maxiter=maxiter, interpol=interpol)
 
 # Local comm for ML map
 l_comm = comm.Split(myrank, myrank)
@@ -644,6 +646,13 @@ for i, j in enumerate(joblist):
         )
     except Exception as e:
         L.warning(f"Plotting failed with error: {e}")
+
+
+    # In case we don't want to make ML maps
+    if mlpass < 1:
+        set_tag(job, "message", "Success")
+        job.jstate = "done"
+        continue
 
     # Now make the ML map
     P = out["P"]
