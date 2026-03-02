@@ -80,6 +80,8 @@ def get_jobit(
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
         for obs in obslist:
+            if obs['tube_slot'] in ['i2', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6']:
+                continue
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
@@ -101,7 +103,7 @@ def get_jobit(
             for ws, ufm, band in wsufmsband:
                 if band[0] != "f":
                     continue
-                if ws not in wafers:
+                if ws not in wafers and "all" not in obs["tags"]:
                     continue
                 obsit += [(obs, ws, ufm, band)]
     return obsit

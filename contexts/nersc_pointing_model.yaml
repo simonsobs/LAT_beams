@@ -24,7 +24,7 @@ metadata:
     label: wafer_info
     det_info: true
     on_missing: fail
-  - db: '{manifestdir}/det_cal/lat_det_cal_250515m/det_cal_local.sqlite'
+  - db: '{manifestdir}/det_cal/lat_det_cal_260216m/det_cal_local.sqlite'
     label: det_cal
     unpack: det_cal
     # on_missing: fail  ## work-around for variable mask
