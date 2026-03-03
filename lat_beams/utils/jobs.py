@@ -57,28 +57,28 @@ def setup_jobs(
     job_memory,
     job_memory_buffer,
     replot,
-    L,
+    logger,
 ):
     myrank = comm.Get_rank()
     nproc = comm.Get_size()
     # Get the jobs, make them if we need to
     now = time.time()
-    L.info("Setting up jobdb")
-    L.flush()
+    logger.info("Setting up jobdb")
+    logger.flush()
     jdb = make_jobdb(comm, data_dir)
     joblist = []
     jobs_to_make = []
-    L.info("Getting jobdict")
-    L.flush()
+    logger.info("Getting jobdict")
+    logger.flush()
     jobdict = None
     if myrank == 0:
         jobdict = get_jobdict(jdb)
     jobdict = comm.bcast(jobdict)
-    L.info("Getting potential jobs")
-    L.flush()
+    logger.info("Getting potential jobs")
+    logger.flush()
     it = get_jobit(jdb)
-    L.info("Processing possible jobs")
-    L.flush()
+    logger.info("Processing possible jobs")
+    logger.flush()
     for info in it:
         sys.stdout.flush()
         jobstr = get_jobstr(info)
@@ -119,23 +119,23 @@ def setup_jobs(
     # Doing this serially so that we don't lock up the db
     tot_missing = 0
     tot_missing = comm.reduce(len(jobs_to_make), root=0)
-    L.info(f"Adding {tot_missing} new jobs")
-    L.flush()
+    logger.info("Adding %s new jobs", tot_missing)
+    logger.flush()
     t0 = time.time()
     for i in range(nproc):
         if myrank == i:
-            L.debug(f"\tRank {i} writing")
+            logger.debug("\\tRank %s writing", i)
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
         comm.barrier()
     t1 = time.time()
-    L.flush()
-    L.info(f"Took {t1-t0} seconds to add")
+    logger.flush()
+    logger.info("Took %s seconds to add", t1 - t0)
 
     # Get the final job list
     all_jobs = comm.allgather(joblist)
     all_jobs = [job for jobs in all_jobs for job in jobs]
-    L.info(f"{len(all_jobs)} jobs to run!")
-    L.flush()
+    logger.info("%s jobs to run!", len(all_jobs))
+    logger.flush()
 
     return jdb, all_jobs

@@ -79,7 +79,7 @@ def get_tags(mjob):
 
 
 # Setup logger
-L = init_log()
+logger = init_log()
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -123,7 +123,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory,
     args.job_memory_buffer,
     False,
-    L,
+    logger,
 )
 
 # Even things out
@@ -155,7 +155,7 @@ for i, j in enumerate(joblist):
     comm.barrier()
 
     # To avoid multiproc issues where the database is locked we lock and unlock serially
-    L.flush()
+    logger.flush()
     mpilock.lock()
     if job is not None:
         with jdb.session_scope() as session:
@@ -177,13 +177,13 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
-    L.normal(f"Fitting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+    logger.normal("Fitting %s %s %s(%s/%s)", obs_id, ufm, band, i + 1, n_maps[myrank])
 
     # Get map job
     job_str = f"{obs_id}-{ws}-{ufm}-{band}"
     if job_str not in map_jobdict:
         msg = "No map job"
-        L.debug(f"\t{msg}")
+        logger.debug("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -201,7 +201,7 @@ for i, j in enumerate(joblist):
         weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
     except FileNotFoundError:
         msg = "Missing map files"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -211,7 +211,7 @@ for i, j in enumerate(joblist):
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
         msg = "Weights all 0"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -232,7 +232,7 @@ for i, j in enumerate(joblist):
 
     if snr < cfg.min_snr:
         msg = "Data SNR too low"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -268,7 +268,7 @@ for i, j in enumerate(joblist):
     )
     if gauss_params is None or model is None:
         msg = "Fit failed"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -282,7 +282,7 @@ for i, j in enumerate(joblist):
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
     if min_c_dist < 120 * cfg.nomimal_fwhm[band]:
         msg = "Source too close to edge of map"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -300,7 +300,7 @@ for i, j in enumerate(joblist):
     # FWHM check
     if abs(1 - data_fwhm.value / (60 * cfg.nomimal_fwhm[band])) > cfg.fwhm_tol:
         msg = "Data FWHM out of tolerance"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -319,7 +319,7 @@ for i, j in enumerate(joblist):
         data_fwhm,
         cfg.min_sigma,
         job,
-        L,
+        logger,
     )
     if gauss_params is None:
         to_save = (None, None)
@@ -351,7 +351,7 @@ for i, j in enumerate(joblist):
             data_fwhm,
             cfg.min_sigma,
             job,
-            L,
+            logger,
         )
         aman.wrap("gauss_multipole", gauss_multipole_params)
         aman.final_model = "gauss_multipole"
@@ -384,7 +384,7 @@ for i, j in enumerate(joblist):
             data_fwhm,
             cfg.min_sigma,
             job,
-            L,
+            logger,
         )
         if bessel_beam_params is None:
             continue
@@ -462,5 +462,5 @@ comm.barrier()
 if outfile is not None:
     outfile.close()
 sys.stdout.flush()
-L.info("Done with all fits")
-L.flush()
+logger.info("Done with all fits")
+logger.flush()

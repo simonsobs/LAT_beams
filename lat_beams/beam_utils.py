@@ -295,12 +295,12 @@ def process_model(
     data_fwhm,
     min_sigma,
     job,
-    L,
+    logger,
 ):
     # Check snr
     if np.nanmax(model) / noise < min_snr:
         msg = "Model SNR too low"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         if job is not None:
             set_tag(job, "message", msg)
             job.jstate = "failed"

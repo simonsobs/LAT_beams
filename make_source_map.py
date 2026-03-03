@@ -46,9 +46,17 @@ def get_jobdict(jdb):
 
 
 def get_jobit(
-    jdb, obs_ids, ctx, start_time, stop_time, source_list, pointing_type, L, forced_ws
+    jdb,
+    obs_ids,
+    ctx,
+    start_time,
+    stop_time,
+    source_list,
+    pointing_type,
+    logger,
+    forced_ws,
 ):
-    with log_lvl(L, 25):
+    with log_lvl(logger, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
@@ -65,18 +73,18 @@ def get_jobit(
             ]
             if len(dbs) > 1:
                 if myrank == 0:
-                    L.warning(
+                    logger.warning(
                         "Multiple pointing metadata entries found, using the first one"
                     )
             elif len(dbs) == 0:
                 if myrank == 0:
-                    L.error("No pointing metadata entries found")
+                    logger.error("No pointing metadata entries found")
                 sys.exit()
-            L.info(f"Using ManifestDb at {dbs[0]}")
+            logger.info("Using ManifestDb at %s", dbs[0])
             db = metadata.ManifestDb(dbs[0])
             obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
             obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
-            L.info(f"Only {len(obslist)} observations with pointing metadata")
+            logger.info("Only %s observations with pointing metadata", len(obslist))
 
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
@@ -141,7 +149,7 @@ def get_tags(info):
     return tags
 
 
-def make_cuts(aman, source_flags, n_modes, job, L):
+def make_cuts(aman, source_flags, n_modes, job, logger):
     sig_filt = cp.filter_for_sources(
         tod=aman,
         signal=aman.signal.copy(),
@@ -164,10 +172,10 @@ def make_cuts(aman, source_flags, n_modes, job, L):
     to_cut = peak_snr < cfg.min_snr  # + ~np.isfinite(peak_snr)
     to_cut[~sdets] = False
     cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
-    L.debug(f"\tCutting {np.sum(to_cut)} detectors from map")
+    logger.debug("\\tCutting %s detectors from map", np.sum(to_cut))
     if np.sum(~to_cut) < cfg.min_dets:
         msg = f"Not enough detectors after source flag cuts!"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
@@ -186,22 +194,22 @@ def make_map(
     min_det_secs,
     job,
     map_str,
-    L,
+    logger,
 ):
     # Get time on source
     det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
         np.diff(aman.timestamps)
     )
-    L.debug(f"\t{det_secs} detector seconds on source in {map_str} mask")
+    logger.debug("\\t%s detector seconds on source in %s mask", det_secs, map_str)
     if det_secs < min_det_secs:
         msg = f"\tNot enough time on source in {map_str} mask."
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None, None
 
     # Initial map
-    with log_lvl(L, logging.WARNING):
+    with log_lvl(logger, logging.WARNING):
         out = cp.make_map(
             aman.copy(),
             thread_algo="domdir",
@@ -222,14 +230,14 @@ def make_map(
     peak = out["solved"][0][cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
-    L.debug(f"\t{map_str.title()} map SNR approximately {snr}")
+    logger.debug("\\t%s map SNR approximately %s", map_str.title(), snr)
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         if cfg.del_map and filename is not None:
-            L.debug("\tDeleting map files")
+            logger.debug("\tDeleting map files")
             glob_path = os.path.splitext(filename)[0] + "*.*"
             flist = glob.glob(glob_path)
             for fname in flist:
@@ -242,9 +250,9 @@ def make_map(
 
 
 # Setup logger
-L = init_log()
-metadata.loader.logger = L
-cp.logger = L
+logger = init_log()
+metadata.loader.logger = logger
+cp.logger = logger
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -253,7 +261,7 @@ cfg, cfg_str = setup_cfg(
 )
 
 if args.plot_only:
-    L.info("Running in plot_only mode!")
+    logger.info("Running in plot_only mode!")
 
 if preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
@@ -265,7 +273,7 @@ with open(preprocess_cfg, "r") as f:
 if cfg.pointing_type not in ["pointing_model", "per_obs", "raw"]:
     raise ValueError(f"Invalid pointing_type {cfg.pointing_type}")
 if cfg.pointing_type == "raw" and cfg.comps != "T":
-    L.info(f"Running with raw pointing, changing comps from {cfg.comps} to T")
+    logger.info("Running with raw pointing, changing comps from %s to T", cfg.comps)
     cfg.comps = "T"
 
 # Setup folders
@@ -307,7 +315,7 @@ jdb, all_jobs = setup_jobs(
         stop_time=cfg.stop_time,
         source_list=cfg.source_list,
         pointing_type=cfg.pointing_type,
-        L=L,
+        logger=logger,
         forced_ws=cfg.forced_ws,
     ),
     get_jobstr,
@@ -318,7 +326,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory,
     args.job_memory_buffer,
     args.plot_only,
-    L,
+    logger,
 )
 
 # Even things out
@@ -354,7 +362,7 @@ if args.profile:
     from pyinstrument import Profiler
 
     profiler = Profiler()
-    L.info("Running in profiler mode! Only one job will be run per process")
+    logger.info("Running in profiler mode! Only one job will be run per process")
     joblist = [joblist[0]]
     profiler.start()
 
@@ -362,10 +370,10 @@ if args.profile:
 source_list = set(source_list)
 job = None
 mpilock = MPILock(comm)
-L.flush()
+logger.flush()
 for i, j in enumerate(joblist):
     # To avoid multiproc issues where the database is locked we lock and unlock serially
-    L.flush()
+    logger.flush()
     mpilock.lock()
     if job is not None:
         with jdb.session_scope() as session:
@@ -390,12 +398,14 @@ for i, j in enumerate(joblist):
     obs = ctx.obsdb.get(obs_id, tags=True)
 
     if args.plot_only:
-        L.normal(f"Replotting {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+        logger.normal(
+            "Replotting %s %s %s(%s/%s)", obs_id, ufm, band, i + 1, n_maps[myrank]
+        )
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
         except FileNotFoundError:
             msg = "Missing map files in plot_only mode"
-            L.error(f"\t{msg}")
+            logger.error("\\t%s", msg)
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
@@ -419,7 +429,7 @@ for i, j in enumerate(joblist):
         )
         continue
 
-    L.normal(f"Mapping {obs_id} {ufm} {band}({i+1}/{n_maps[myrank]})")
+    logger.normal("Mapping %s %s %s(%s/%s)", obs_id, ufm, band, i + 1, n_maps[myrank])
 
     # Save metadata and config info
     set_tag(job, "config", cfg_str)
@@ -428,11 +438,11 @@ for i, j in enumerate(joblist):
     set_tag(job, "comps", cfg.comps)
 
     # Get metadata
-    with log_lvl(L, logging.ERROR):
+    with log_lvl(logger, logging.ERROR):
         meta = ctx.get_meta(obs_id)
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         continue
@@ -440,22 +450,22 @@ for i, j in enumerate(joblist):
 
     src_names = list(source_list & set(obs["tags"]))
     if len(src_names) > 1:
-        L.warning("\tObservation tagged for multiple sources!")
+        logger.warning("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
         msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-        L.error(f"\t{msg}")
+        logger.error("\\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
-        L.debug(f"\t\tTags were: {obs['tags']}")
+        logger.debug("\\t\\tTags were: %s", obs["tags"])
         continue
     src_name = "_".join(src_names)
-    L.debug(f"\tMapping {src_name}")
+    logger.debug("\\tMapping %s", src_name)
 
     if "hits" in meta.focal_plane:
         meta.restrict("dets", meta.focal_plane.hits >= cfg.min_hits)
         if meta.dets.count < cfg.min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
-            L.error(f"\t{msg}")
+            logger.error("\\t%s", msg)
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
@@ -481,7 +491,7 @@ for i, j in enumerate(joblist):
         {"wafer_slot": ws, "wafer.bandpass": band},
         job,
         cfg.min_dets,
-        L,
+        logger,
         fp_flag=True,
         save=(nproc == 1),
     )
@@ -497,7 +507,7 @@ for i, j in enumerate(joblist):
         )
 
     # Get initial source_flags
-    with log_lvl(L, logging.WARNING):
+    with log_lvl(logger, logging.WARNING):
         source_flags = cp.compute_source_flags(
             tod=aman,
             P=None,
@@ -509,7 +519,7 @@ for i, j in enumerate(joblist):
         )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = make_cuts(aman, source_flags, 2 * cfg.n_modes, job, L)
+    cuts = make_cuts(aman, source_flags, 2 * cfg.n_modes, job, logger)
     if cuts is None:
         continue
 
@@ -526,7 +536,7 @@ for i, j in enumerate(joblist):
         cfg.min_det_secs * mask_fac * (fscale_fac**2),
         job,
         "initial",
-        L,
+        logger,
     )
     if out is None or cent is None:
         continue
@@ -543,7 +553,7 @@ for i, j in enumerate(joblist):
             cfg.mask_size * fscale_fac,
         ),
     }
-    with log_lvl(L, logging.WARNING):
+    with log_lvl(logger, logging.WARNING):
         source_flags = cp.compute_source_flags(
             tod=aman,
             P=None,
@@ -567,7 +577,7 @@ for i, j in enumerate(joblist):
         cfg.min_det_secs * (fscale_fac**2),
         job,
         "final",
-        L,
+        logger,
     )
     if out is None or cent is None:
         continue
@@ -605,7 +615,7 @@ for i, j in enumerate(joblist):
             lognorm=1.0 / out["solved"][0][cent],
         )
     except Exception as e:
-        L.warning(f"Plotting failed with error: {e}")
+        logger.warning("Plotting failed with error: %s", e)
 
     # In case we don't want to make ML maps
     if cfg.mlpass < 1:
@@ -627,7 +637,7 @@ for i, j in enumerate(joblist):
     eval_prev = None
     mapmaker_prev = None
     for ipass, passinfo in enumerate(passes):
-        L.debug(
+        logger.debug(
             "Starting pass %d/%d maxit %d down %d interp %s"
             % (
                 ipass + 1,
@@ -689,7 +699,7 @@ for i, j in enumerate(joblist):
             enmap.map_mul(signal_map.idiv, signal_map.rhs),
             unit="pW",
         )
-        L.debug("\tWrote rhs, div, bin")
+        logger.debug("\tWrote rhs, div, bin")
 
         # Set up initial condition
         x0 = None if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
@@ -699,7 +709,7 @@ for i, j in enumerate(joblist):
         for step in mapmaker.solve(maxiter=passinfo.maxiter, x0=x0):
             t2 = time.time()
             dump = step.i % 10 == 0
-            (L.debug if dump else L.ddebug)(
+            (logger.debug if dump else logger.ddebug)(
                 "\tCG step %4d %15.7e %8.3f %s"
                 % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
             )
@@ -709,7 +719,7 @@ for i, j in enumerate(joblist):
                         mlmap_path = signal.write(pass_prefix, "map%04d" % step.i, val)
             t1 = time.time()
 
-        L.debug("Done with ML map")
+        logger.debug("Done with ML map")
         for signal, val in zip(signals, step.x):
             if signal.output:
                 outmap = val
@@ -720,7 +730,7 @@ for i, j in enumerate(joblist):
 
     if mlmap_path == "" or outmap is None:
         msg = "Failed to make ML map"
-        L.error(msg)
+        logger.error(msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         continue
@@ -754,7 +764,7 @@ for i, j in enumerate(joblist):
             lognorm=1.0 / outmap[0][cent],
         )
     except Exception as e:
-        L.warning(f"Plotting failed with error: {e}")
+        logger.warning("Plotting failed with error: %s", e)
 
     set_tag(job, "message", "Success")
     job.jstate = "done"
@@ -763,7 +773,7 @@ if args.profile:
     profiler.stop()
     profiler.write_html(f"profile_{myrank}.html")
 
-L.flush()
+logger.flush()
 comm.barrier()
 mpilock.close()
 

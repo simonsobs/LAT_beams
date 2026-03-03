@@ -90,16 +90,16 @@ def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL):
     setattr(logging.getLoggerClass(), "normal", lognormal)
     setattr(logging.getLoggerClass(), "ddebug", logddebug)
     setattr(logging.getLoggerClass(), "flush", flush_log)
-    L = init(level, rank=rank)
-    for handler in L.handlers:
+    logger = init(level, rank=rank)
+    for handler in logger.handlers:
         if isinstance(handler.formatter, ColoredFormatter):
             handler.formatter.colors["NORMAL"] = "\033[1;34m"
-    L.handlers = [
+    logger.handlers = [
         MPIMemHandler(1000, flushLevel=flushLevel, target=h, flushOnClose=True)
-        for h in L.handlers
+        for h in logger.handlers
     ]
 
-    return L
+    return logger
 
 
 @contextmanager
