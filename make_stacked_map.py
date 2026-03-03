@@ -8,7 +8,7 @@ from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
 from lat_beams.plotting import plot_map_complete
-from lat_beams.utils import get_args_cfg, make_jobdb
+from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 
 
 def view_TQU(imap):
@@ -21,45 +21,24 @@ def view_TQU(imap):
 
 nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
-args, cfg = get_args_cfg()
-
-# Get some global setting
-epochs = cfg.get("epochs", [(0, 2e10)])
-pointing_type = cfg.get("pointing_type", "pointing_model")
-append = cfg["append"] = cfg.get("append", "")
-nominal_fwhm = cfg.get("nominal_fwhm", nominal_fwhm)
-split_by = cfg.get(
-    "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
-)
-extent = cfg["extent"] = cfg.get("extent", 600)
-mask_size = cfg.get("mask_size", 0.1)
-mask_size *= u.degree
-res = cfg["res"] = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
-miscenter_thresh = cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
-pixsize = 3600 * np.rad2deg(res)
-log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
-ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
+# Get settings
+args, cfg_dict = get_args_cfg()
+cfg, cfg_str = setup_cfg(args, cfg_dict)
+ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
+pixsize = 3600 * np.rad2deg(cfg.res)
 op = np.ndarray.__iadd__
 
 # Setup folders
-root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
-project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(
-    root_dir,
-    "plots",
-    project_dir,
-    f"{pointing_type}{(append!="")*'_'}{append}",
-    "stacks",
+plot_dir, data_dir = setup_paths(
+    cfg.root_dir,
+    "beams",
+    cfg.tel,
+    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
 )
-data_dir = os.path.join(
-    root_dir,
-    "data",
-    project_dir,
-    f"{pointing_type}{(append!="")*'_'}{append}",
-)
-os.makedirs(data_dir, exist_ok=True)
+plot_dir = os.path.join(plot_dir, "stacks")
+os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, "beam_pars.h5")
 jdb = make_jobdb(None, data_dir)
 
@@ -91,12 +70,12 @@ mjobs = mjobs[msk]
 fjobs = fjobs[msk]
 
 # Make template map
-ext_rad = np.deg2rad(extent / 3600)
-pix_extent = 2 * int(extent // pixsize)
+ext_rad = np.deg2rad(cfg.extent / 3600)
+pix_extent = 2 * int(cfg.extent // pixsize)
 # rowmajor = True here to match sotodlib
 twcs = enmap.wcsutils.build(
     [0, 0],
-    res=np.rad2deg(res),
+    res=np.rad2deg(cfg.res),
     shape=(pix_extent, pix_extent),
     system="tan",
     rowmajor=True,
@@ -109,7 +88,7 @@ if args.plot_only:
     print("Running in plot only mode!")
 
 # Loop through splits
-for split in split_by:
+for split in cfg.split_by:
     print(f"Splitting by {split}")
     split_vec = bu.get_split_vec(all_fits, split, ctx)
     for spl in np.unique(split_vec):
@@ -132,7 +111,7 @@ for split in split_by:
         sfits = sfits[msk]
         smjobs = smjobs[msk]
         sfjobs = sfjobs[msk]
-        for epoch in epochs:
+        for epoch in cfg.epochs:
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
             print(f"\t{spl} {epoch}")
@@ -190,7 +169,7 @@ for split in split_by:
                 solved = view_TQU(solved)
                 weights = view_TQU(weights)
                 mlmap = view_TQU(mlmap)
-                mlweights - view_TQU(mlweights)
+                mlweights = view_TQU(mlweights)
                 resid = view_TQU(resid)
                 resid_weights = view_TQU(resid_weights)
                 if not np.all(
@@ -286,9 +265,9 @@ for split in split_by:
                 # If the new center seems very far from the origin then lets skip
                 cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
                 dist = np.linalg.norm(cent_est - solved.wcs.wcs.crpix)
-                if dist > miscenter_thresh:
+                if dist > cfg.miscenter_thresh:
                     print(
-                        f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems miscentered! Skipping!"
+                        f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems cfg.miscentered! Skipping!"
                     )
                     continue
 
@@ -340,17 +319,17 @@ for split in split_by:
                 posmap = np.rad2deg(posmap) * 3600
                 for append, smap in [
                     ("", omap),
-                    ("_smooth3pix", enmap.smooth_gauss(omap, 3 * res)),
+                    ("_smooth3pix", enmap.smooth_gauss(omap, 3 * cfg.res)),
                 ]:
                     plot_map_complete(
                         smap,
                         posmap,
                         pixsize,
-                        extent,
+                        cfg.extent,
                         (0, 0),
                         plot_dir_epc,
                         f"{spl} {epoch[0]} {epoch[1]}",
-                        log_thresh=log_thresh,
+                        log_thresh=cfg.log_thresh,
                         append=name + append,
                         qrur=True,
                     )

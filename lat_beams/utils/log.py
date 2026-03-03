@@ -1,9 +1,9 @@
 import logging
+import sys
 from contextlib import contextmanager
 from logging.handlers import MemoryHandler
-from pshmem.locking import MPILock
 
-import sys
+from pshmem.locking import MPILock
 from sotodlib.mapmaking import ColoredFormatter, init
 
 try:
@@ -65,6 +65,7 @@ class MPIMemHandler(MemoryHandler):
         the buffer.
         """
         self.buffer.append(record)
+
 
 def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL):
     # Uses a crappy version of https://stackoverflow.com/a/35804945

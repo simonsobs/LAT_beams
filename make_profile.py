@@ -9,7 +9,7 @@ from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
 from lat_beams import fitting as bf
-from lat_beams.utils import get_args_cfg, make_jobdb
+from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 
 
 def avg_prof(aman_list, prof="rprof", r="r"):
@@ -38,50 +38,27 @@ def avg_prof(aman_list, prof="rprof", r="r"):
     return np.column_stack((all_rs, avg_prof, err_prof, n_vals))  # , msk
 
 
-nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
-
-args, cfg = get_args_cfg()
-
-# Get some global setting
-epochs = cfg.get("epochs", [(0, 2e10)])
-pointing_type = cfg.get("pointing_type", "pointing_model")
-nominal_fwhm = cfg.get("nominal_fwhm", nominal_fwhm)
-split_by = cfg.get(
-    "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
-)
-append = cfg["append"] = cfg.get("append", "")
-lmax = cfg["lmax"] = cfg.get("lmax", 20000)
-extent = cfg["extent"] = cfg.get("extent", 600)
-extent *= u.arcsec
-r_step = cfg["r_step"] = cfg.get("r_step", 1)
-r_step *= u.arcsec
-corr_primary = cfg["corr_primary"] = cfg.get("corr_primary", 280)
-corr_primary *= u.mm
-eps_primary = cfg["eps_primary"] = cfg.get("eps_primary", 17)
-eps_primary *= u.um
-mask_size = cfg.get("mask_size", 0.1)
-mask_size *= u.degree
-ctx = Context(cfg.get("context", "/so/metadata/lat/contexts/smurf_detcal.yaml"))
+# Get settings
+args, cfg_dict = get_args_cfg()
+cfg, cfg_str = setup_cfg(args, cfg_dict, {"mask_size", "map_mask_size"})
+ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
+cfg.extent *= u.arcsec
+cfg.r_step *= u.arcsec
+cfg.corr_primary *= u.mm
+cfg.eps_primary *= u.um
+cfg.mask_size *= u.degree
 
 # Setup folders
-root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
-project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(
-    root_dir,
-    "plots",
-    project_dir,
-    f"{pointing_type}{(append!="")*'_'}{append}",
-    "profiles",
+plot_dir, data_dir = setup_paths(
+    cfg.root_dir,
+    "beams",
+    cfg.tel,
+    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
 )
-data_dir = os.path.join(
-    root_dir,
-    "data",
-    project_dir,
-    f"{pointing_type}{(append!="")*'_'}{append}",
-)
-os.makedirs(data_dir, exist_ok=True)
+plot_dir = os.path.join(plot_dir, "profiles")
+os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, "beam_pars.h5")
 jdb = make_jobdb(None, data_dir)
 
@@ -104,7 +81,7 @@ if len(alljobstr) == 0:
 
 # Load fits
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
-limit_bands = list(nominal_fwhm.keys())
+limit_bands = list(cfg.nominal_fwhm.keys())
 all_fits = all_fits[np.isin(all_fits["band"], limit_bands)]
 
 snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
@@ -114,10 +91,10 @@ msk = snr > 20
 msk *= solid_angle > 0
 all_fits = all_fits[msk]
 
-r_calc = np.arange(0, 2 * extent.value, r_step.value) * u.arcsec
+r_calc = np.arange(0, 2 * cfg.extent.value, cfg.r_step.value) * u.arcsec
 
 # Plot by splits
-for split in split_by:
+for split in cfg.split_by:
     print(f"Splitting by {split}")
     split_vec = bu.get_split_vec(all_fits, split, ctx)
     for spl in np.unique(split_vec):
@@ -132,7 +109,9 @@ for split in split_by:
         os.makedirs(plot_dir_spl, exist_ok=True)
 
         sfits = all_fits[split_vec == spl]
-        fwhm_exp = np.array([nominal_fwhm[band] for band in sfits["band"]]) * u.arcmin
+        fwhm_exp = (
+            np.array([cfg.nominal_fwhm[band] for band in sfits["band"]]) * u.arcmin
+        )
         sang_exp = (2 * np.pi * (fwhm_exp.to(u.radian) / 2.355) ** 2).to(u.sr)
         data_fwhm = bu.get_fit_vec(sfits, "data_fwhm")
         solid_angle = bu.get_fit_vec(sfits, "data_solid_angle_corr")
@@ -142,7 +121,7 @@ for split in split_by:
         msk *= solid_angle > 0.5 * sang_exp
         sfits = sfits[msk]
 
-        for epoch in epochs:
+        for epoch in cfg.epochs:
             print(f"\tEpoch {epoch}")
             times = sfits["time"]
             tmsk = (times >= epoch[0]) * (times < epoch[1])
@@ -180,8 +159,8 @@ for split in split_by:
                 6 * u.m,
                 const.c / band,
                 np.median(solid_angle),
-                corr_primary,
-                eps_primary,
+                cfg.corr_primary,
+                cfg.eps_primary,
                 r_calc,
             )
             if mprofile is None or mpars is None:
@@ -200,14 +179,14 @@ for split in split_by:
             )
 
             # Compute and save b_ell
-            bl = beam2bl(profile[:, 1], np.deg2rad(profile[:, 0] / 3600), lmax)
-            ells = np.arange(lmax + 1)
+            bl = beam2bl(profile[:, 1], np.deg2rad(profile[:, 0] / 3600), cfg.lmax)
+            ells = np.arange(cfg.lmax + 1)
             window = np.column_stack((ells, bl))
             np.savetxt(
                 os.path.join(data_dir_spl, f"window_{spl}_{epoch[0]}_{epoch[1]}.txt"),
                 window,
             )
-            mbl = beam2bl(mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), lmax)
+            mbl = beam2bl(mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), cfg.lmax)
             mwindow = np.column_stack((ells, mbl))
             np.savetxt(
                 os.path.join(
@@ -223,7 +202,7 @@ for split in split_by:
             windows += [window]
             mwindows += [mwindow]
 
-        for epoch, profile, mprofile in zip(epochs, profiles, motos):
+        for epoch, profile, mprofile in zip(cfg.epochs, profiles, motos):
             plt.plot(
                 profile[:, 0],
                 profile[:, 1],
@@ -254,7 +233,7 @@ for split in split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"profile_{spl}_log.png"))
         plt.close()
 
-        for epoch, profile in zip(epochs, mprofiles):
+        for epoch, profile in zip(cfg.epochs, mprofiles):
             plt.plot(
                 profile[:, 0],
                 profile[:, 1],
@@ -276,7 +255,7 @@ for split in split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"model_profile_{spl}_log.png"))
         plt.close()
 
-        for epoch, profile, mprofile in zip(epochs, profiles, motos):
+        for epoch, profile, mprofile in zip(cfg.epochs, profiles, motos):
             plt.plot(
                 profile[:, 0],
                 np.abs(profile[:, 1] - mprofile[:, 1]) / mprofile[:, 1],
@@ -298,7 +277,7 @@ for split in split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"resid_profile_{spl}_log.png"))
         plt.close()
 
-        for epoch, window in zip(epochs, windows):
+        for epoch, window in zip(cfg.epochs, windows):
             plt.loglog(
                 window[:, 0],
                 window[:, 1],
@@ -313,7 +292,7 @@ for split in split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"window_{spl}.png"))
         plt.close()
 
-        for epoch, window in zip(epochs, mwindows):
+        for epoch, window in zip(cfg.epochs, mwindows):
             plt.loglog(
                 window[:, 0],
                 window[:, 1],

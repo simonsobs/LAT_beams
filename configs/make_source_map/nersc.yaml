@@ -6,17 +6,16 @@ fit_source_list:
   - "mars"
   - "saturn"
 pointing_type: "pointing_model" 
-preprocess: "preproc/preproc.yaml"
-# pointing_type: "per_obs" 
+preprocess_cfg: "preproc/preproc.yaml"
 min_det_secs: 300
 min_dets: 50
 min_hits: 1
 min_snr: 1
-context: 'contexts/nersc_pointing_model.yaml'
+ctx_path: 'contexts/nersc_pointing_model.yaml'
 start_time: 1739941200
 stop_time: 20000000000
 n_med: 3
-mask_size: .1
+map_mask_size: .1
 search_mask:
   shape: "circle"
   xyr:

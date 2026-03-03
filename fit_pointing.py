@@ -24,14 +24,14 @@ import h5py
 import mpi4py.rc
 import numpy as np
 import yaml
+from pshmem.locking import MPILock
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
-from typing_extensions import cast
-from pshmem.locking import MPILock
 from sotodlib.site_pipeline.jobdb import Job
+from typing_extensions import cast
 
 from lat_beams.fitting import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
@@ -41,7 +41,9 @@ from lat_beams.utils import (
     load_aman,
     log_lvl,
     set_tag,
+    setup_cfg,
     setup_jobs,
+    setup_paths,
 )
 
 mpi4py.rc.threads = False
@@ -65,14 +67,14 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, L):
+def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, L):
     with log_lvl(L, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
             src_str = "==1 or ".join(source_list) + "==1"
             obslist = ctx.obsdb.query(
-                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and ({src_str})",
+                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and duration < {max_dur * 3600} and ({src_str})",
                 tags=source_list,
             )
 
@@ -121,7 +123,7 @@ def get_tags(info):
     return tags
 
 
-def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
+def src_flag_cut(source_name, aman, nominal, ufm, res, mask, L):
     # See how much of the source we saw...
     # Mask is made massive. This ONLY helps if you have prior knowledge of where source is.
     aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
@@ -162,66 +164,43 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask):
 
 
 def main():
-    args, cfg = get_args_cfg()
     # Setup logger
     L = init_log()
     metadata.loader.logger = L
     cp.logger = L
+
+    # Get settings
+    args, cfg_dict = get_args_cfg()
+    cfg, cfg_str = setup_cfg(
+        args,
+        cfg_dict,
+        {"fit_source_list": "source_list", "fwhm_tol_pointing": "fwhm_tol"},
+        True,
+    )
 
     if args.plot_only:
         L.info(
             "Running in 'plot_only' mode. TOD plots will be made but pointing will not be fit"
         )
 
+    profiler = None
     if args.profile:
         from pyinstrument import Profiler
 
         profiler = Profiler()
         L.info("Running in profiler mode! Only a few dets will be kept")
 
-    # Get some global settings
-    forced_ws = args.forced_ws
-    if cfg.get("try_all", False):
-        forced_ws = ["ws0", "ws1", "ws2"]
-    ds = cfg["ds"] = cfg.get("ds", 5)
-    hp_fc = cfg["hp_fc"] = cfg.get("hp_fc", 4)
-    lp_fc = cfg["lp_fc"] = cfg.get("lp_fc", 30)
-    n_med = cfg["n_med"] = cfg.get("n_med", 5)
-    n_std = cfg["n_std"] = cfg.get("n_std", 10)
-    source_list = cfg["source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
-    min_samps = cfg["min_samps"] = cfg.get("min_samps", 1000)
-    min_samps /= ds
-    block_size = cfg["block_size"] = cfg.get("block_size", 5000)
-    block_size = block_size // ds
-    min_dets = cfg["min_dets"] = cfg.get("min_dets", 30)
-    trim_samps = cfg["trim_samps"] = cfg.get("time_samps", 200)
-    trim_samps = trim_samps // ds
-    min_hits = cfg["min_hits"] = cfg.get("min_hits", 1)
-    fwhm_tol = cfg["fwhm_tol"] = cfg.get("fwhm_tol", 0.2)
-    fit_pars = cfg["fit_pars"] = cfg.get("fit_pars", {})
-    src_msk = cfg["src_msk"] = cfg.get("src_msk", True)
-    fwhm = cfg["fwhm"] = cfg.get("fwhm", None)
-    pad = cfg["pad"] = cfg.get("pad", True)
-    max_chisq = cfg["max_chisq"] = cfg.get("max_chisq", 2.5)
-    ufm_rad = cfg["ufm_rad"] = cfg.get("ufm_rad", 0.01)
-    preprocess_cfg = cfg["preprocess_cfg"] = cfg.get("preprocess", None)
-    tel = cfg.get("telescope", "lat")
-    cfg_str = yaml.dump(cfg)
-
-    if preprocess_cfg is None:
+    if cfg.preprocess_cfg is None:
         raise ValueError("Must specify a valid preprocess config!")
-    with open(preprocess_cfg, "r") as f:
+    with open(cfg.preprocess_cfg, "r") as f:
         preprocess_cfg = yaml.safe_load(f)
         preprocess_str = yaml.dump(preprocess_cfg)
 
-    if fwhm is None:
+    if cfg.nominal_fwhm is None:
         raise ValueError("FWHM not found in config file.")
 
     # Setup folders
-    root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
-    project_dir = cfg.get("project_dir", os.path.join("pointing", tel))
-    plot_dir = os.path.join(root_dir, "plots", project_dir, "source_fits")
-    data_dir = os.path.join(root_dir, "data", project_dir, "source_fits")
+    plot_dir, data_dir = setup_paths(cfg.root_dir, "pointing", cfg.tel, "source_fits")
     if myrank == 0:
         os.makedirs(plot_dir, exist_ok=True)
         os.makedirs(data_dir, exist_ok=True)
@@ -237,13 +216,9 @@ def main():
     os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 
     # Get context
-    ctx_path = cfg["context"] = cfg.get(
-        "context",
-        f"/global/cfs/cdirs/sobs/metadata/{tel}/contexts/smurf_detcal_local.yaml",
-    )
-    with open(ctx_path, "r") as f:
+    with open(cfg.ctx_path, "r") as f:
         ctx_str = yaml.dump(yaml.safe_load(f))
-    ctx = Context(ctx_path)
+    ctx = Context(cfg.ctx_path)
     if ctx.obsdb is None:
         raise ValueError("No obsdb in context!")
 
@@ -281,15 +256,8 @@ def main():
     ]
 
     # Load nominal pointing [i.e. template pointing from the zemax model
-    nominal_path = cfg["nominal"] = os.path.expanduser(
-        cfg.get("nominal", f"~/data/pointing/{tel}/nominal/focal_plane.h5")
-    )
-    nominal = h5py.File(nominal_path)
+    nominal = h5py.File(cfg.nominal_path)
     # JobDB stuff
-    start_time = cfg["start_time"]
-    if args.lookback is not None:
-        start_time = time.time() - 3600 * args.lookback
-    stop_time = cfg["stop_time"]
     jdb, all_jobs = setup_jobs(
         comm,
         data_dir,
@@ -299,14 +267,15 @@ def main():
             get_jobit,
             obs_ids=args.obs_ids,
             ctx=ctx,
-            start_time=start_time,
-            stop_time=stop_time,
-            source_list=source_list,
+            start_time=cfg.start_time,
+            stop_time=cfg.stop_time,
+            source_list=cfg.source_list,
+            max_dur=cfg.max_dur,
             L=L,
         ),
         get_jobstr,
         get_tags,
-        source_list,
+        cfg.source_list,
         args.overwrite,
         args.retry_failed,
         args.job_memory,
@@ -343,18 +312,16 @@ def main():
         joblist = []
 
     # Get settings for source mask
-    res = cfg["res"] = cfg.get("res", (2 / 300.0) * np.pi / 180.0)
-    mask = cfg["mask"] = cfg.get("mask", {"shape": "circle", "xyr": (0, 0, 0.75)})
-    if args.profile and ismaster:
+    if args.profile and ismaster and profiler is not None:
         profiler.start()
         L.info("Restricting joblist to just 1 entry per process for profiling!")
         joblist = [joblist[0]]
     to_save = (None, None, None)
-    source_list = set(source_list)
+    source_list = set(cfg.source_list)
 
     # Run from the masters
     job = None
-    mpilock =  MPILock(master_comm)
+    mpilock = MPILock(master_comm)
     with MPICommExecutor(local_comm, 0) as executor:
         if executor is not None:
             for i, j in enumerate(joblist):
@@ -410,6 +377,7 @@ def main():
                 ufm = job.tags["stream_id"]
                 ws = job.tags["wafer_slot"]
                 L.normal(f"Fitting {obs_id} {ufm} ({i+1}/{len(joblist)})")
+                sys.stdout.flush()
 
                 # Save metadata and config info
                 set_tag(job, "config", cfg_str)
@@ -430,7 +398,9 @@ def main():
                 # Check source
                 src_names = list(source_list & set(obs["tags"]))
                 if len(src_names) > 1:
-                    L.warning("\tObservation tagged for multiple sources! Only fitting the first")
+                    L.warning(
+                        "\tObservation tagged for multiple sources! Only fitting the first"
+                    )
                 elif len(src_names) == 0:
                     msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
                     L.error(f"\t{msg}")
@@ -444,7 +414,7 @@ def main():
                 # TODO: Make sure to make this tagging work for sat format too
                 wafers = np.unique(
                     [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]]
-                    + forced_ws
+                    + cfg.forced_ws
                 )
 
                 # Generally want to force because you dont know if youre actually scanning the wafer slot you think you are
@@ -465,7 +435,7 @@ def main():
                     preprocess_cfg,
                     {"wafer_slot": ws},
                     job,
-                    min_dets,
+                    cfg.min_dets,
                     L,
                     fp_flag=False,
                     save=(nproc == 1),
@@ -475,7 +445,7 @@ def main():
 
                 # Downsample
                 aman.signal = aman.signal.astype(np.float32)
-                aman = downsample_obs(aman, ds)
+                aman = downsample_obs(aman, cfg.ds)
 
                 # Source flags
                 source_name = source
@@ -484,10 +454,10 @@ def main():
                 if source == "rcw38":
                     source_name = "J134.78-47.509"
 
-                if src_msk:
+                if cfg.src_msk:
                     L.debug("\tRunning source flags")
                     start, stop = src_flag_cut(
-                        source_name, aman, nominal, ufm, res, mask
+                        source_name, aman, nominal, ufm, cfg.res, cfg.pointing_mask, L
                     )
                     msg = ""
                     if start < 0 or stop < 0:
@@ -500,7 +470,7 @@ def main():
                             )
                             start = 0
                             stop = int(cast(int, aman.samps.count))
-                    if stop - start < min_samps:
+                    if stop - start < cfg.min_samps:
                         if not args.plot_only:
                             msg = "Too few samples flagged in source flags!"
                             to_skip = True
@@ -527,7 +497,7 @@ def main():
                     plot_dir, source, "tods", str(obs["timestamp"])[:5], obs["obs_id"]
                 )
                 fit_plot_dir = os.path.join(
-                    plot_dir, source,"fits", str(obs["timestamp"])[:5], obs["obs_id"]
+                    plot_dir, source, "fits", str(obs["timestamp"])[:5], obs["obs_id"]
                 )
                 os.makedirs(tod_plot_dir, exist_ok=True)
                 os.makedirs(fit_plot_dir, exist_ok=True)
@@ -551,15 +521,15 @@ def main():
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
-                    filt = tod_ops.filters.high_pass_butter4(hp_fc * 2)
+                    filt = tod_ops.filters.high_pass_butter4(cfg.hp_fc * 2)
                     sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
                     # Trim edges in case of FFT ringing
                     aman = aman.restrict(
                         "samps",
-                        slice(trim_samps + aman.samps.offset, -1 * trim_samps),
+                        slice(cfg.trim_samps + aman.samps.offset, -1 * cfg.trim_samps),
                     )
-                    sig_filt = sig_filt[:, trim_samps : (-1 * trim_samps)]
+                    sig_filt = sig_filt[:, cfg.trim_samps : (-1 * cfg.trim_samps)]
 
                     # Kill dets with really high noise
                     std = np.std(sig_filt, axis=-1)
@@ -567,10 +537,10 @@ def main():
                     # These numbers are true for LAT; unclear for SAT.
                     # TODO: Make histograms of std and how much is getting cut as a part of diagnostic outputs [from talking to Matthew]. Otherwise this is a good way to cut outliers.
                     # Since boxy instead of gaussians, so quantiles are cool. Pseudo sigma is e.g. ~33%-50% [median based thing so that outliers are not included]. Then can do e.g. a 4sigma cut or whatever (but shouldnt have a high percentage of outliers).
-                    thresh = n_med * np.median(std[std > 0])
+                    thresh = cfg.n_med * np.median(std[std > 0])
                     aman.restrict("dets", std < thresh)
                     sig_filt = sig_filt[std < thresh]
-                    if aman.dets.count < min_dets:
+                    if aman.dets.count < cfg.min_dets:
                         _msg = f"{band_name} Noise too high."
                         L.error(_msg)
                         msg += _msg
@@ -579,78 +549,66 @@ def main():
                     # Get median std of all dets after cuts
                     std_all = np.median(std[(std < thresh) * (std > 0)])
 
-                    # TODO: Unclear if this works well for SAT.
+                    # Lets try to find the source blind
                     # Check for places where signal is high compared to noise (ie how many times the std)
                     # Might not work for SAT if SNR is too low. CHECK THIS.
+                    if cfg.blind_search:
+                        flagged = sig_filt > cfg.n_std * std_all
+                        samp_idx = np.where(np.any(flagged, 0))[0]
 
-                    # Lets try to find the source blind
-                    flagged = sig_filt > n_std * std_all
-                    samp_idx = np.where(np.any(flagged, 0))[0]
+                        # TODO: Keep the block with the highest sum?
+                        # Lets kill spurs by only keeping chunks that are mostly continous
+                        # Spur definition: Glitch leftovers effectively (ie. samples with high signal randomly that are not sources).
+                        # GLitch + fast jumps finder is NOT run on planet data for lat because sources look like glitches!
+                        if len(samp_idx) > 2 * cfg.block_size:
+                            diff_idx = np.diff(samp_idx, prepend=1)
+                            m = np.r_[False, diff_idx < cfg.block_size, False]
+                            idx = np.flatnonzero(m[:-1] != m[1:])
+                            max_idx = (idx[1::2] - idx[::2]).argmax()
+                            samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
+                            L.debug(
+                                f"\t\tFound {len(samp_idx)} continously flagged samples"
+                            )
 
-                    # Commented stuff here is trying to be clever but giving up and doing the simpler method
-                    # ptp = np.array(
-                    #     np.atleast_2d(np.ptp(sig_filt, axis=0)), dtype=np.float32, order="C"
-                    # )
-                    # buf = np.zeros_like(ptp, order="C")
-                    # block_moment(ptp, buf, block_size, 1, 0, 0)
-                    # buf = buf[0]
-                    # samp_idx = np.where(buf > n_std * std_all)[0]
-
-                    # TODO: This needs some better logic
-                    # TODO: Keep the block with the highest sum?
-                    # Lets kill spurs by only keeping chunks that are mostly continous
-                    # Spur definition: Glitch leftovers effectively (ie. samples with high signal randomly that are not sources).
-                    # GLitch + fast jumps finder is NOT run on planet data for lat because sources look like glitches!
-                    # TODO: ASK matthew about this confusion between glitch and jump vs planet for e.g. lat (and sat for fast jump)
-                    if len(samp_idx) > 2 * block_size:
-                        diff_idx = np.diff(samp_idx, prepend=1)
-                        m = np.r_[False, diff_idx < block_size, False]
-                        idx = np.flatnonzero(m[:-1] != m[1:])
-                        max_idx = (idx[1::2] - idx[::2]).argmax()
-                        samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
-                        L.debug(
-                            f"\t\tFound {len(samp_idx)} continously flagged samples"
+                        # Not enough samples flagged => won't bother fitting
+                        if len(samp_idx) < min(cfg.block_size, cfg.min_samps / 2):
+                            if args.plot_only:
+                                L.warning(
+                                    "\t\tLooks like you didn't see the source at all! But running in plot_only mode so will continue"
+                                )
+                            else:
+                                _msg = f"{band_name} Failed to find source blind."
+                                L.error(_msg)
+                                msg += msg
+                                continue
+                        start = int(
+                            max(0, np.percentile(samp_idx, 10) - (cfg.block_size * 5))
                         )
-
-                    # Not enough samples flagged => won't bother fitting
-                    if len(samp_idx) < min(block_size, min_samps / 2):
-                        if args.plot_only:
+                        stop = int(
+                            min(
+                                cast(int, aman.samps.count),
+                                np.percentile(samp_idx, 90) + (cfg.block_size * 5),
+                            )
+                        )
+                        if stop - start < cfg.min_samps:
+                            if not args.plot_only:
+                                _msg = f"{band_name} Too few samples found in blind flagging."
+                                L.error(_msg)
+                                msg += _msg
+                                continue
                             L.warning(
-                                "\t\tLooks like you didn't see the source at all! But running in plot_only mode so will continue"
+                                f"\t\tOnly {stop-start} flagged samples! But running in plot_only mode so will continue"
                             )
-                        else:
-                            _msg = f"{band_name} Failed to find source blind."
-                            L.error(_msg)
-                            msg += msg
-                            continue
-                    start = int(max(0, np.percentile(samp_idx, 10) - (block_size * 5)))
-                    stop = int(
-                        min(
-                            cast(int, aman.samps.count),
-                            np.percentile(samp_idx, 90) + (block_size * 5),
+                        L.debug(f"\t\t{stop - start} samps flagged blind")
+                        # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
+                        aman = aman.restrict(
+                            "samps",
+                            slice(
+                                start + cast(int, aman.samps.offset),
+                                stop + cast(int, aman.samps.offset),
+                            ),
                         )
-                    )
-                    if stop - start < min_samps:
-                        if not args.plot_only:
-                            _msg = (
-                                f"{band_name} Too few samples found in blind flagging."
-                            )
-                            L.error(_msg)
-                            msg += _msg
-                            continue
-                        L.warning(
-                            f"\t\tOnly {stop-start} flagged samples! But running in plot_only mode so will continue"
-                        )
-                    L.debug(f"\t\t{stop - start} samps flagged blind")
-                    # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
-                    aman = aman.restrict(
-                        "samps",
-                        slice(
-                            start + cast(int, aman.samps.offset),
-                            stop + cast(int, aman.samps.offset),
-                        ),
-                    )
-                    sig_filt = sig_filt[:, start:stop]
+                        sig_filt = sig_filt[:, start:stop]
 
                     # Make a p2p cut
                     # TODO: This cut might be different for SAT and LAT.
@@ -658,14 +616,14 @@ def main():
                     ptp = np.ptp(sig_filt, axis=-1)
                     std = np.std(sig_filt, axis=-1)
                     thresh = 0.1 * np.percentile(ptp, 90)
-                    msk = (ptp > thresh) * (ptp > n_std * std) * (std > 0)
+                    msk = (ptp > thresh) * (ptp > cfg.n_std * std) * (std > 0)
                     aman = aman.restrict("dets", msk)
                     sig_filt = sig_filt[msk]
-                    if aman.dets.count < min_dets:
+                    if aman.dets.count < cfg.min_dets:
                         _msg = (
                             f"{band_name} Too few detectors after final sanity check."
                         )
-                        L.error(f"\t{msg}")
+                        L.error(f"\t{_msg}")
                         msg += _msg
                         continue
 
@@ -698,20 +656,20 @@ def main():
                         executor.submit(
                             fit_tod_pointing,
                             aman.restrict("dets", det_splits[d], in_place=False),
-                            (hp_fc, lp_fc),
-                            fwhm=np.deg2rad(fwhm[band_name] / 60.0),
+                            (cfg.hp_fc, cfg.lp_fc),
+                            fwhm=np.deg2rad(cfg.nominal_fwhm[band_name] / 60.0),
                             source=source_name,
-                            **fit_pars,
+                            **cfg.fit_pars,
                         )
                         for d in range(1, P)
                         if len(det_splits[d]) > 0
                     ]
                     fp0 = fit_tod_pointing(
                         aman.restrict("dets", det_splits[0], in_place=False),
-                        (hp_fc, lp_fc),
-                        fwhm=np.deg2rad(fwhm[band_name] / 60.0),
+                        (cfg.hp_fc, cfg.lp_fc),
+                        fwhm=np.deg2rad(cfg.nominal_fwhm[band_name] / 60.0),
                         source=source_name,
-                        **fit_pars,
+                        **cfg.fit_pars,
                     )
                     wait(fp_futures)
                     fps = [fp0] + [fp_future.result() for fp_future in fp_futures]
@@ -722,9 +680,11 @@ def main():
                         focal_plane.restrict(
                             "dets",
                             np.abs(
-                                1 - focal_plane.fwhm / np.deg2rad(fwhm[band_name] / 60)
+                                1
+                                - focal_plane.fwhm
+                                / np.deg2rad(cfg.nominal_fwhm[band_name] / 60)
                             )
-                            < fwhm_tol,
+                            < cfg.fwhm_tol,
                         )
 
                         # Convert to results set
@@ -780,7 +740,11 @@ def main():
                 # Source should be positive in pW
                 msk = np.array(focal_plane.amp) > 0
                 # Kill fits that are statistically bad
-                msk *= np.array(focal_plane.reduced_chisq < max_chisq)
+                print(np.sum(msk))
+                sys.stdout.flush()
+                msk *= np.array(focal_plane.reduced_chisq < cfg.max_chisq)
+                print(np.sum(msk))
+                sys.stdout.flush()
                 med_xi = np.median(np.array(focal_plane.xi[msk]))
                 med_eta = np.median(np.array(focal_plane.eta[msk]))
                 msk *= (
@@ -788,17 +752,25 @@ def main():
                         (np.array(focal_plane.xi) - med_xi) ** 2
                         + np.abs(np.array(focal_plane.eta) - med_eta) ** 2
                     )
-                    < ufm_rad
+                    < cfg.ufm_rad
                 )
-                msk *= np.array(focal_plane.amp) < n_med * np.median(
+                print(np.sum(msk))
+                sys.stdout.flush()
+                msk *= np.array(focal_plane.amp) < cfg.n_med * np.median(
                     np.array(focal_plane.amp[msk])
                 )
+                print(np.sum(msk))
+                sys.stdout.flush()
                 msk *= (
                     np.array(focal_plane.amp)
-                    > np.median(np.array(focal_plane.amp[msk])) / n_med**2
+                    > np.median(np.array(focal_plane.amp[msk])) / cfg.n_med**2
                 )
+                print(np.sum(msk))
+                sys.stdout.flush()
                 # How many times it saw the source (ie. hits).
-                msk *= np.array(focal_plane.hits) >= min_hits
+                msk *= np.array(focal_plane.hits) >= cfg.min_hits
+                print(np.sum(msk))
+                sys.stdout.flush()
 
                 # Instead of cutting the rset we set R2 to 0
                 # This is because det match does not like missing dets
@@ -807,7 +779,7 @@ def main():
                 rset = metadata.ResultSet.from_friend(rset)
                 focal_plane.restrict("dets", msk)  # Only used for plotting
 
-                if len(rset) == 0 or np.sum(msk) < min_dets:
+                if len(rset) == 0 or np.sum(msk) < cfg.min_dets:
                     to_save = (None, None, None)
                     if msg != "":
                         msg += " "
@@ -823,14 +795,14 @@ def main():
 
                 # Ready to save
                 L.normal(f"\tSaving {len(rset)} fits ({np.sum(msk)} good).")
-                if pad:
+                if cfg.pad:
                     with log_lvl(L, logging.ERROR):
                         all_dets = ctx.get_det_info(
                             obs["obs_id"], dets={"stream_id": ufm}
                         )["readout_id"]
                     pad_dets = all_dets[~np.isin(all_dets, rset["dets:readout_id"])]
                     if outdt[0][1] is None:
-                        outdt[0][1] = pad_dets.dtype
+                        outdt[0] = (outdt[0][0], pad_dets.dtype)
                     pad_res = np.zeros(len(pad_dets), dtype=outdt)
                     pad_res["dets:readout_id"] = pad_dets
                     for field, dtype in outdt:
@@ -852,7 +824,7 @@ def main():
         h5_file.close()
     nominal.close()
 
-    if args.profile and ismaster:
+    if args.profile and ismaster and profiler is None:
         profiler.stop()
         profiler.write_html(f"profile_{myrank}.html")
     L.flush()

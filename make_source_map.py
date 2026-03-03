@@ -24,7 +24,9 @@ from lat_beams.utils import (
     load_aman,
     log_lvl,
     set_tag,
+    setup_cfg,
     setup_jobs,
+    setup_paths,
 )
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
@@ -33,7 +35,6 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
-comps = "TQU"
 
 
 def get_jobdict(jdb):
@@ -80,7 +81,7 @@ def get_jobit(
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
         for obs in obslist:
-            if obs['tube_slot'] in ['i2', 'o1', 'o2', 'o3', 'o4', 'o5', 'o6']:
+            if obs["tube_slot"] in ["i2", "o1", "o2", "o3", "o4", "o5", "o6"]:
                 continue
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
@@ -160,11 +161,11 @@ def make_cuts(aman, source_flags, n_modes, job, L):
             peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
                 np.diff(sig_filt[sdets], axis=-1)
             )
-    to_cut = peak_snr < min_snr  # + ~np.isfinite(peak_snr)
+    to_cut = peak_snr < cfg.min_snr  # + ~np.isfinite(peak_snr)
     to_cut[~sdets] = False
     cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
     L.debug(f"\tCutting {np.sum(to_cut)} detectors from map")
-    if np.sum(~to_cut) < min_dets:
+    if np.sum(~to_cut) < cfg.min_dets:
         msg = f"Not enough detectors after source flag cuts!"
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
@@ -215,19 +216,19 @@ def make_map(
         )
 
     # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], smooth_kern / pixsize, buf)
+    cent = estimate_cent(out["solved"][0], cfg.smooth_kern / pixsize, cfg.buf)
 
     # Estimate SNR
     peak = out["solved"][0][cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
     L.debug(f"\t{map_str.title()} map SNR approximately {snr}")
-    if snr < min_snr * np.sqrt(ndets) / 2:
+    if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
         L.error(f"\t{msg}")
         set_tag(job, "message", msg)
         job.jstate = "failed"
-        if del_map and filename is not None:
+        if cfg.del_map and filename is not None:
             L.debug("\tDeleting map files")
             glob_path = os.path.splitext(filename)[0] + "*.*"
             flist = glob.glob(glob_path)
@@ -240,41 +241,19 @@ def make_map(
     return out, cent
 
 
-args, cfg = get_args_cfg()
-
 # Setup logger
 L = init_log()
 metadata.loader.logger = L
 cp.logger = L
 
+# Get settings
+args, cfg_dict = get_args_cfg()
+cfg, cfg_str = setup_cfg(
+    args, cfg_dict, {"map_source_list": "source_list", "mask_size": "map_mask_size"}
+)
+
 if args.plot_only:
     L.info("Running in plot_only mode!")
-
-# Get some global settings
-source_list = cfg["source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
-min_dets = cfg["min_dets"] = cfg.get("min_dets", 50)
-min_hits = cfg["min_hits"] = cfg.get("min_hits", 1)
-min_det_secs = cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
-min_snr = cfg["min_snr"] = cfg.get("min_snr", 5)
-n_modes = cfg["n_modes"] = cfg.get("n_modes", 10)
-del_map = cfg["del_map"] = cfg.get("del_map", True)
-extent = cfg["extent"] = cfg.get("extent", 600)
-buf = cfg["buf"] = cfg.get("buffer", 30)
-log_thresh = cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
-smooth_kern = cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
-pointing_type = cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
-append = cfg["append"] = cfg.get("append", "")
-preprocess_cfg = cfg.get("preprocess", None)
-# ds = cfg["ds"] = cfg.get("ds", 5)
-cgiters = cfg["cgiters"] = cfg.get("cgiters", 30)
-mlpass = cfg["cgpass"] = cfg.get("cgpass", 3)
-relcal_range = cfg["relcal_range"] = cfg.get("relcal_range", [0.3, 2])
-forced_ws = args.forced_ws
-if forced_ws is None:
-    forced_ws = []
-if cfg.get("try_all", False):
-    forced_ws = ["ws0", "ws1", "ws2"]
-cfg_str = yaml.dump(cfg)
 
 if preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
@@ -283,29 +262,19 @@ with open(preprocess_cfg, "r") as f:
     preprocess_str = yaml.dump(preprocess_cfg)
 
 # Check pointing_type
-if pointing_type not in ["pointing_model", "per_obs", "raw"]:
-    raise ValueError(f"Invalid pointing_type {pointing_type}")
-if pointing_type == "raw" and comps != "T":
-    L.info(f"Running with raw pointing, changing comps from {comps} to T")
-    comps = "T"
+if cfg.pointing_type not in ["pointing_model", "per_obs", "raw"]:
+    raise ValueError(f"Invalid pointing_type {cfg.pointing_type}")
+if cfg.pointing_type == "raw" and cfg.comps != "T":
+    L.info(f"Running with raw pointing, changing comps from {cfg.comps} to T")
+    cfg.comps = "T"
 
 # Setup folders
-root_dir = os.path.expanduser(cfg.get("root_dir", "~"))
-project_dir = cfg.get("project_dir", "beams/lat")
-plot_dir = os.path.join(
-    root_dir,
-    "plots",
-    project_dir,
-    f"{pointing_type}{(append!="")*'_'}{append}",
+plot_dir, data_dir = setup_paths(
+    cfg.root_dir,
+    "beams",
+    cfg.tel,
+    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
 )
-data_dir = os.path.join(
-    root_dir,
-    "data",
-    project_dir,
-    f"{pointing_type}{(append!="")*'_'}{append}",
-)
-os.makedirs(plot_dir, exist_ok=True)
-os.makedirs(data_dir, exist_ok=True)
 
 # Modify preproc with our paths
 preprocess_cfg["archive"]["index"] = os.path.join(
@@ -318,21 +287,13 @@ os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 
 # Get context
-ctx_path = cfg["context"] = cfg.get(
-    "context",
-    f"/global/cfs/cdirs/sobs/metadata/lat/contexts/use_this_local.yaml",
-)
-with open(ctx_path, "r") as f:
+with open(cfg.ctx_path, "r") as f:
     ctx_str = yaml.dump(yaml.safe_load(f))
-ctx = Context(ctx_path)
+ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
 
 # Setup jobs
-start_time = cfg["start_time"]
-if args.lookback is not None:
-    start_time = time.time() - 3600 * args.lookback
-stop_time = cfg["stop_time"]
 jdb, all_jobs = setup_jobs(
     comm,
     data_dir,
@@ -342,16 +303,16 @@ jdb, all_jobs = setup_jobs(
         get_jobit,
         obs_ids=args.obs_ids,
         ctx=ctx,
-        start_time=start_time,
-        stop_time=stop_time,
-        source_list=source_list,
-        pointing_type=pointing_type,
+        start_time=cfg.start_time,
+        stop_time=cfg.stop_time,
+        source_list=cfg.source_list,
+        pointing_type=cfg.pointing_type,
         L=L,
-        forced_ws=forced_ws,
+        forced_ws=cfg.forced_ws,
     ),
     get_jobstr,
     get_tags,
-    source_list,
+    cfg.source_list,
     args.overwrite,
     args.retry_failed,
     args.job_memory,
@@ -369,22 +330,21 @@ if n_maps[0] != max_maps:
 joblist += [None] * (1 + max_maps - len(joblist))
 
 # Get settings for source mask
-res = cfg.get("res", (10.0 / 3600.0) * np.pi / 180.0)
-pixsize = 3600 * np.rad2deg(res)
-mask_size = cfg.get("mask_size", 0.1)
-search_mask = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
-mask_fac = search_mask["xyr"][-1] / mask_size
+pixsize = 3600 * np.rad2deg(cfg.res)
+mask_fac = cfg.search_mask["xyr"][-1] / cfg.mask_size
 
 # Setup passes
 passes = []
-if mlpass > 0:
+if cfg.mlpass > 0:
     dsstr = "1"
-    maxiter = str(cgiters)
+    maxiter = str(cfg.cgiters)
     interpol = "bilinear"
-    for i in range(1, mlpass):
+    for i in range(1, cfg.mlpass):
         interpol = "nearest," + interpol
-        maxiter = f"{max(1, max(cgiters//2, cgiters//(i + 1)))}," + maxiter
-    passes = mapmaking.setup_passes(downsample=dsstr, maxiter=maxiter, interpol=interpol)
+        maxiter = f"{max(1, max(cfg.cgiters//2, cfg.cgiters//(i + 1)))}," + maxiter
+    passes = mapmaking.setup_passes(
+        downsample=dsstr, maxiter=maxiter, interpol=interpol
+    )
 
 # Local comm for ML map
 l_comm = comm.Split(myrank, myrank)
@@ -401,7 +361,7 @@ if args.profile:
 # Mapping loop
 source_list = set(source_list)
 job = None
-mpilock =  MPILock(comm)
+mpilock = MPILock(comm)
 L.flush()
 for i, j in enumerate(joblist):
     # To avoid multiproc issues where the database is locked we lock and unlock serially
@@ -443,18 +403,18 @@ for i, j in enumerate(joblist):
         obs_plot_dir = os.path.join(
             plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
         )
-        cent = estimate_cent(solved[0], smooth_kern / pixsize, buf)
+        cent = estimate_cent(solved[0], cfg.smooth_kern / pixsize, cfg.buf)
         posmap = solved.posmap()
         posmap = np.rad2deg(posmap) * 3600
         plot_map_complete(
             solved,
             posmap,
             solved.wcs.wcs.cdelt[1] * (60 * 60),
-            extent,
+            cfg.extent,
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
-            log_thresh=log_thresh,
+            log_thresh=cfg.log_thresh,
             lognorm=1.0 / solved[0][cent],
         )
         continue
@@ -465,7 +425,7 @@ for i, j in enumerate(joblist):
     set_tag(job, "config", cfg_str)
     set_tag(job, "context", ctx_str)
     set_tag(job, "preprocess", preprocess_str)
-    set_tag(job, "comps", comps)
+    set_tag(job, "comps", cfg.comps)
 
     # Get metadata
     with log_lvl(L, logging.ERROR):
@@ -492,8 +452,8 @@ for i, j in enumerate(joblist):
     L.debug(f"\tMapping {src_name}")
 
     if "hits" in meta.focal_plane:
-        meta.restrict("dets", meta.focal_plane.hits >= min_hits)
-        if meta.dets.count < min_dets:
+        meta.restrict("dets", meta.focal_plane.hits >= cfg.min_hits)
+        if meta.dets.count < cfg.min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
             L.error(f"\t{msg}")
             set_tag(job, "message", msg)
@@ -520,7 +480,7 @@ for i, j in enumerate(joblist):
         preprocess_cfg,
         {"wafer_slot": ws, "wafer.bandpass": band},
         job,
-        min_dets,
+        cfg.min_dets,
         L,
         fp_flag=True,
         save=(nproc == 1),
@@ -532,8 +492,8 @@ for i, j in enumerate(joblist):
     if "relcal" in aman._fields:
         aman.restrict(
             "dets",
-            (aman.relcal.relcal >= relcal_range[0])
-            * (aman.relcal.relcal <= relcal_range[1]),
+            (aman.relcal.relcal >= cfg.relcal_range[0])
+            * (aman.relcal.relcal <= cfg.relcal_range[1]),
         )
 
     # Get initial source_flags
@@ -541,15 +501,15 @@ for i, j in enumerate(joblist):
         source_flags = cp.compute_source_flags(
             tod=aman,
             P=None,
-            mask=search_mask,
+            mask=cfg.search_mask,
             center_on=src_to_map,
-            res=res,
+            res=cfg.res,
             max_pix=4e8,
             wrap=None,
         )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = make_cuts(aman, source_flags, 2 * n_modes, job, L)
+    cuts = make_cuts(aman, source_flags, 2 * cfg.n_modes, job, L)
     if cuts is None:
         continue
 
@@ -557,13 +517,13 @@ for i, j in enumerate(joblist):
     out, cent = make_map(
         aman,
         src_to_map,
-        res,
+        cfg.res,
         cuts,
         source_flags,
         "T",
-        n_modes,
+        cfg.n_modes,
         None,
-        min_det_secs * mask_fac * (fscale_fac**2),
+        cfg.min_det_secs * mask_fac * (fscale_fac**2),
         job,
         "initial",
         L,
@@ -580,7 +540,7 @@ for i, j in enumerate(joblist):
         "xyr": (
             (ra_min - pixsize * cent[1]) / 3600,
             (dec_min + pixsize * cent[0]) / 3600,
-            mask_size * fscale_fac,
+            cfg.mask_size * fscale_fac,
         ),
     }
     with log_lvl(L, logging.WARNING):
@@ -589,7 +549,7 @@ for i, j in enumerate(joblist):
             P=None,
             mask=mask,
             center_on=src_to_map,
-            res=res,
+            res=cfg.res,
             max_pix=4e8,
             wrap=None,
         )
@@ -598,13 +558,13 @@ for i, j in enumerate(joblist):
     out, cent = make_map(
         aman,
         src_to_map,
-        res,
+        cfg.res,
         cuts,
         source_flags,
-        comps,
-        n_modes,
+        cfg.comps,
+        cfg.n_modes,
         os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
-        min_det_secs * (fscale_fac**2),
+        cfg.min_det_secs * (fscale_fac**2),
         job,
         "final",
         L,
@@ -637,19 +597,18 @@ for i, j in enumerate(joblist):
             out["solved"],
             posmap,
             out["solved"].wcs.wcs.cdelt[1] * (60 * 60),
-            extent,
+            cfg.extent,
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
-            log_thresh=log_thresh,
+            log_thresh=cfg.log_thresh,
             lognorm=1.0 / out["solved"][0][cent],
         )
     except Exception as e:
         L.warning(f"Plotting failed with error: {e}")
 
-
     # In case we don't want to make ML maps
-    if mlpass < 1:
+    if cfg.mlpass < 1:
         set_tag(job, "message", "Success")
         job.jstate = "done"
         continue
@@ -665,6 +624,8 @@ for i, j in enumerate(joblist):
     div_path = ""
     bin_path = ""
     outmap = None
+    eval_prev = None
+    mapmaker_prev = None
     for ipass, passinfo in enumerate(passes):
         L.debug(
             "Starting pass %d/%d maxit %d down %d interp %s"
@@ -685,7 +646,7 @@ for i, j in enumerate(joblist):
             out["solved"].shape,
             out["solved"].wcs,
             l_comm,
-            comps=comps,
+            comps=cfg.comps,
             dtype=np.float64,
             tiled=False,
             interpol=passinfo.interpol,
@@ -702,7 +663,7 @@ for i, j in enumerate(joblist):
         aman.signal = aman.signal.astype(np.float32)
 
         # Estimate noise
-        if ipass == 0:
+        if ipass == 0 or eval_prev is None or mapmaker_prev is None:
             signal_estimate = P.from_map(out["solved"])
         else:
             signal_estimate = eval_prev.evaluate(mapmaker_prev.data[len(mapmaker.data)])
@@ -785,11 +746,11 @@ for i, j in enumerate(joblist):
             outmap,
             posmap,
             outmap.wcs.wcs.cdelt[1] * (60 * 60),
-            extent,
+            cfg.extent,
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band} MLmap",
-            log_thresh=log_thresh,
+            log_thresh=cfg.log_thresh,
             lognorm=1.0 / outmap[0][cent],
         )
     except Exception as e:
