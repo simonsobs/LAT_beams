@@ -1,21 +1,19 @@
-import glob
 import logging
 import os
 import sys
-import time
 from functools import partial
 
 import numpy as np
 import yaml
 from mpi4py import MPI
-from pixell import enmap, utils
+from pixell import enmap
 from pshmem.locking import MPILock
-from so3g.proj import RangesMatrix
-from sotodlib import mapmaking, tod_ops
+from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
 from sotodlib.site_pipeline.jobdb import Job
 
+import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
@@ -149,106 +147,6 @@ def get_tags(info):
     return tags
 
 
-def make_cuts(aman, source_flags, n_modes, job, logger):
-    sig_filt = cp.filter_for_sources(
-        tod=aman,
-        signal=aman.signal.copy(),
-        source_flags=source_flags,
-        n_modes=n_modes,
-    )
-    smsk = source_flags.mask()
-    sig_filt_src = sig_filt.copy()
-    sig_filt_src[~smsk] = np.nan
-    sig_filt[smsk] = np.nan
-    all_src = np.all(smsk, axis=-1)
-    no_src = ~np.any(smsk, axis=-1)
-    sdets = ~(all_src + no_src)
-    peak_snr = np.zeros(len(sig_filt))
-    if np.sum(sdets) > 0:
-        with np.errstate(divide="ignore"):
-            peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
-                np.diff(sig_filt[sdets], axis=-1)
-            )
-    to_cut = peak_snr < cfg.min_snr  # + ~np.isfinite(peak_snr)
-    to_cut[~sdets] = False
-    cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
-    logger.debug("\tCutting %s detectors from map", np.sum(to_cut))
-    if np.sum(~to_cut) < cfg.min_dets:
-        msg = f"Not enough detectors after source flag cuts!"
-        logger.error("\t%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        return None
-    return cuts
-
-
-def make_map(
-    aman,
-    src_to_map,
-    res,
-    cuts,
-    source_flags,
-    comps,
-    n_modes,
-    filename,
-    min_det_secs,
-    job,
-    map_str,
-    logger,
-):
-    # Get time on source
-    det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
-        np.diff(aman.timestamps)
-    )
-    logger.debug("\t%s detector seconds on source in %s mask", det_secs, map_str)
-    if det_secs < min_det_secs:
-        msg = f"\tNot enough time on source in {map_str} mask."
-        logger.error("\t%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        return None, None
-
-    # Initial map
-    with log_lvl(logger, logging.WARNING):
-        out = cp.make_map(
-            aman.copy(),
-            thread_algo="domdir",
-            center_on=src_to_map,
-            res=res,
-            cuts=cuts,
-            source_flags=source_flags,
-            comps=comps,
-            filename=filename,
-            n_modes=n_modes,
-            info={"obs_id": obs["obs_id"], "ufm": ufm, "band": band},
-        )
-
-    # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], cfg.smooth_kern / pixsize, cfg.buf)
-
-    # Estimate SNR
-    peak = out["solved"][0][cent]
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
-    ndets = np.sum(np.all(~cuts.mask(), axis=-1))
-    logger.debug("\t%s map SNR approximately %s", map_str.title(), snr)
-    if snr < cfg.min_snr * np.sqrt(ndets) / 2:
-        msg = f"{map_str.title()} map SNR too low."
-        logger.error("\t%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
-        if cfg.del_map and filename is not None:
-            logger.debug("\tDeleting map files")
-            glob_path = os.path.splitext(filename)[0] + "*.*"
-            flist = glob.glob(glob_path)
-            for fname in flist:
-                if os.path.isfile(fname):
-                    os.remove(fname)
-            for name in ["binned", "detweights", "solved", "weights"]:
-                set_tag(job, name, "")
-        return None, None
-    return out, cent
-
-
 # Setup logger
 logger = init_log()
 metadata.loader.logger = logger
@@ -342,17 +240,7 @@ pixsize = 3600 * np.rad2deg(cfg.res)
 mask_fac = cfg.search_mask["xyr"][-1] / cfg.mask_size
 
 # Setup passes
-passes = []
-if cfg.mlpass > 0:
-    dsstr = "1"
-    maxiter = str(cfg.cgiters)
-    interpol = "bilinear"
-    for i in range(1, cfg.mlpass):
-        interpol = "nearest," + interpol
-        maxiter = f"{max(1, max(cfg.cgiters//2, cfg.cgiters//(i + 1)))}," + maxiter
-    passes = mapmaking.setup_passes(
-        downsample=dsstr, maxiter=maxiter, interpol=interpol
-    )
+passes = lbm.get_passes(cfg)
 
 # Local comm for ML map
 l_comm = comm.Split(myrank, myrank)
@@ -519,12 +407,13 @@ for i, j in enumerate(joblist):
         )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = make_cuts(aman, source_flags, 2 * cfg.n_modes, job, logger)
+    cuts = lbm.make_cuts(aman, source_flags, 2 * cfg.n_modes, job, logger, cfg)
     if cuts is None:
         continue
 
     # Initial map
-    out, cent = make_map(
+    info = {"obs_id": obs["obs_id"], "ufm": ufm, "band": band}
+    out, cent = lbm.make_map(
         aman,
         src_to_map,
         cfg.res,
@@ -532,11 +421,14 @@ for i, j in enumerate(joblist):
         source_flags,
         "T",
         cfg.n_modes,
+        pixsize,
         None,
         cfg.min_det_secs * mask_fac * (fscale_fac**2),
+        info,
         job,
         "initial",
         logger,
+        cfg,
     )
     if out is None or cent is None:
         continue
@@ -565,7 +457,7 @@ for i, j in enumerate(joblist):
         )
 
     # Make final map
-    out, cent = make_map(
+    out, cent = lbm.make_map(
         aman,
         src_to_map,
         cfg.res,
@@ -573,11 +465,14 @@ for i, j in enumerate(joblist):
         source_flags,
         cfg.comps,
         cfg.n_modes,
+        pixsize,
         os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
         cfg.min_det_secs * (fscale_fac**2),
+        info,
         job,
         "final",
         logger,
+        cfg,
     )
     if out is None or cent is None:
         continue
@@ -624,110 +519,19 @@ for i, j in enumerate(joblist):
         continue
 
     # Now make the ML map
-    P = out["P"]
-    aman_clean = aman
-    utils.deslope(aman_clean.signal, w=5, inplace=True)
-    aman_clean.wrap("weather", np.full(1, "typical"))
-    aman_clean.wrap("site", np.full(1, "so_lat"))
-    mlmap_path = ""
-    rhs_path = ""
-    div_path = ""
-    bin_path = ""
-    outmap = None
-    eval_prev = None
-    mapmaker_prev = None
-    for ipass, passinfo in enumerate(passes):
-        logger.debug(
-            "Starting pass %d/%d maxit %d down %d interp %s"
-            % (
-                ipass + 1,
-                len(passes),
-                passinfo.maxiter,
-                passinfo.downsample,
-                passinfo.interpol,
-            )
-        )
-        pass_prefix = os.path.join(
-            obs_data_dir, f"{obs_id}_{ufm}_{band}_pass{ipass+1}_"
-        )
-        noise_model = mapmaking.NmatDetvecs(verbose=True)
-        signal_cut = mapmaking.SignalCut(l_comm, dtype=np.float32)
-        signal_map = mapmaking.SignalMap(
-            out["solved"].shape,
-            out["solved"].wcs,
-            l_comm,
-            comps=cfg.comps,
-            dtype=np.float64,
-            tiled=False,
-            interpol=passinfo.interpol,
-        )
-        signals = [signal_cut, signal_map]
-        mapmaker = mapmaking.MLMapmaker(
-            signals, noise_model=None, dtype=np.float32, verbose=True
-        )
-
-        if passinfo.downsample != 1:
-            aman = mapmaking.downsample_obs(aman_clean, passinfo.downsample)
-        else:
-            aman = aman_clean.copy()
-        aman.signal = aman.signal.astype(np.float32)
-
-        # Estimate noise
-        if ipass == 0 or eval_prev is None or mapmaker_prev is None:
-            signal_estimate = P.from_map(out["solved"])
-        else:
-            signal_estimate = eval_prev.evaluate(mapmaker_prev.data[len(mapmaker.data)])
-        signal_estimate = mapmaking.resample.resample_fft_simple(
-            signal_estimate, aman.samps.count
-        )
-        mapmaker.add_obs(
-            sub_id, aman, noise_model=None, signal_estimate=signal_estimate, pmap=P
-        )
-        del signal_estimate
-
-        # Write the starting maps
-        mapmaker.prepare()
-        rhs_path = signal_map.write(
-            obs_data_dir + "/", "rhs", signal_map.rhs, unit="pW^-1"
-        )
-        div_path = signal_map.write(
-            obs_data_dir + "/", "div", signal_map.div, unit="pW^-2"
-        )
-        bin_path = signal_map.write(
-            obs_data_dir + "/",
-            "bin",
-            enmap.map_mul(signal_map.idiv, signal_map.rhs),
-            unit="pW",
-        )
-        logger.debug("\tWrote rhs, div, bin")
-
-        # Set up initial condition
-        x0 = None if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
-
-        # Solve
-        t1 = time.time()
-        for step in mapmaker.solve(maxiter=passinfo.maxiter, x0=x0):
-            t2 = time.time()
-            dump = step.i % 10 == 0
-            (logger.debug if dump else logger.ddebug)(
-                "\tCG step %4d %15.7e %8.3f %s"
-                % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
-            )
-            if dump:
-                for signal, val in zip(signals, step.x):
-                    if signal.output:
-                        mlmap_path = signal.write(pass_prefix, "map%04d" % step.i, val)
-            t1 = time.time()
-
-        logger.debug("Done with ML map")
-        for signal, val in zip(signals, step.x):
-            if signal.output:
-                outmap = val
-                mlmap_path = signal.write(pass_prefix, "map", val, unit="pW")
-
-        mapmaker_prev = mapmaker
-        eval_prev = mapmaker.evaluator(step.x_zip)
-
+    outmap, (mlmap_path, rhs_path, div_path, bin_path) = lbm.make_ml_map(
+        out["P"],
+        {sub_id: aman},
+        passes,
+        out["solved"].shape,
+        out["solved"].wcs,
+        f"{obs_id}_{ufm}_{band}_",
+        obs_data_dir,
+        l_comm,
+        logger,
+        cfg,
+        guess=out["solved"],
+    )
     if mlmap_path == "" or outmap is None:
         msg = "Failed to make ML map"
         logger.error(msg)
