@@ -88,7 +88,7 @@ cfg, cfg_str = setup_cfg(
     cfg_dict,
     {
         "fit_source_list": "source_list",
-        "mask_size": "map_mask_size",
+        "map_mask_size": "mask_size",
         "fwhm_tol_map": "fwhm_tol",
     },
 )
@@ -183,7 +183,7 @@ for i, j in enumerate(joblist):
     job_str = f"{obs_id}-{ws}-{ufm}-{band}"
     if job_str not in map_jobdict:
         msg = "No map job"
-        logger.debug("\\t%s", msg)
+        logger.debug("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -201,7 +201,7 @@ for i, j in enumerate(joblist):
         weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
     except FileNotFoundError:
         msg = "Missing map files"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -211,7 +211,7 @@ for i, j in enumerate(joblist):
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
         msg = "Weights all 0"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -232,7 +232,7 @@ for i, j in enumerate(joblist):
 
     if snr < cfg.min_snr:
         msg = "Data SNR too low"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -268,7 +268,7 @@ for i, j in enumerate(joblist):
     )
     if gauss_params is None or model is None:
         msg = "Fit failed"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -282,7 +282,7 @@ for i, j in enumerate(joblist):
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
     if min_c_dist < 120 * cfg.nomimal_fwhm[band]:
         msg = "Source too close to edge of map"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)
@@ -300,7 +300,7 @@ for i, j in enumerate(joblist):
     # FWHM check
     if abs(1 - data_fwhm.value / (60 * cfg.nomimal_fwhm[band])) > cfg.fwhm_tol:
         msg = "Data FWHM out of tolerance"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         to_save = (None, None)

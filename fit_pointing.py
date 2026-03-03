@@ -390,7 +390,7 @@ def main():
                     meta = ctx.get_meta(obs_id)
                 if meta.dets.count == 0:
                     msg = "Looks like we don't have real metadata for this observation!"
-                    logger.error("\\t%s", msg)
+                    logger.error("\t%s", msg)
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
                     continue
@@ -403,10 +403,10 @@ def main():
                     )
                 elif len(src_names) == 0:
                     msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-                    logger.error("\\t%s", msg)
+                    logger.error("\t%s", msg)
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
-                    logger.debug("\\t\\tTags were: %s", obs["tags"])
+                    logger.debug("\t\tTags were: %s", obs["tags"])
                     continue
                 source = src_names[0]
                 set_tag(job, "source", source)
@@ -421,7 +421,7 @@ def main():
                 # Less relevant for SATs but true for LAT. Will need to play around to see when this is truly necessary for SATs.
                 if ws not in wafers:
                     msg = "Wafer not targetting or forced to be fit!"
-                    logger.error("\\t%s", msg)
+                    logger.error("\t%s", msg)
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
                     continue
@@ -472,7 +472,7 @@ def main():
                             to_skip = True
                         else:
                             logger.warning(
-                                "\\t\\tNo samples flagged! But running in plot_only mode so will continue with all samples"
+                                "\t\tNo samples flagged! But running in plot_only mode so will continue with all samples"
                             )
                             start = 0
                             stop = int(cast(int, aman.samps.count))
@@ -482,16 +482,16 @@ def main():
                             to_skip = True
                         else:
                             logger.debug(
-                                "\\t\\tOnly %s flagged samples! But running in plot_only mode so will continue",
+                                "\t\tOnly %s flagged samples! But running in plot_only mode so will continue",
                                 stop - start,
                             )
                     if to_skip:
-                        logger.error("\\t\\t%s", msg)
+                        logger.error("\t\t%s", msg)
                         set_tag(job, "message", msg)
                         job.jstate = "failed"
                         continue
                     logger.debug(
-                        "\\t\\t%s samps flagged in the source range", stop - start
+                        "\t\t%s samps flagged in the source range", stop - start
                     )
                     aman = aman.restrict(
                         "samps",
@@ -526,7 +526,7 @@ def main():
                     if msg != "":
                         msg += " "
                     band_name = band_names[tube_band][band]
-                    logger.normal("\\tFitting %s", band_name)
+                    logger.normal("\tFitting %s", band_name)
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
@@ -576,7 +576,7 @@ def main():
                             max_idx = (idx[1::2] - idx[::2]).argmax()
                             samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
                             logger.debug(
-                                "\\t\\tFound %s continously flagged samples",
+                                "\t\tFound %s continously flagged samples",
                                 len(samp_idx),
                             )
 
@@ -607,10 +607,10 @@ def main():
                                 msg += _msg
                                 continue
                             logger.warning(
-                                "\\t\\tOnly %s flagged samples! But running in plot_only mode so will continue",
+                                "\t\tOnly %s flagged samples! But running in plot_only mode so will continue",
                                 stop - start,
                             )
-                        logger.debug("\\t\\t%s samps flagged blind", stop - start)
+                        logger.debug("\t\t%s samps flagged blind", stop - start)
                         # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
                         aman = aman.restrict(
                             "samps",
@@ -634,12 +634,12 @@ def main():
                         _msg = (
                             f"{band_name} Too few detectors after final sanity check."
                         )
-                        logger.error("\\t%s", _msg)
+                        logger.error("\t%s", _msg)
                         msg += _msg
                         continue
 
                     logger.normal(
-                        "\\t\\tAttempting to fit %s detectors", aman.dets.count
+                        "\t\tAttempting to fit %s detectors", aman.dets.count
                     )
 
                     # Plot the TOD
@@ -687,7 +687,7 @@ def main():
                     wait(fp_futures)
                     fps = [fp0] + [fp_future.result() for fp_future in fp_futures]
                     t1 = time.time()
-                    logger.normal("\\t\\tTook %s seconds to fit", t1 - t0)
+                    logger.normal("\t\tTook %s seconds to fit", t1 - t0)
                     for focal_plane in fps:
                         # Do a quick cut based on FWHM tol
                         focal_plane.restrict(
@@ -722,7 +722,7 @@ def main():
                         )
                         rsets += [metadata.ResultSet.from_friend(sarray)]
                     _msg = f"{band_name} Success!"
-                    logger.normal("\\t%s", _msg)
+                    logger.normal("\t%s", _msg)
                     msg += msg
 
                 # Get ready to save
@@ -807,7 +807,7 @@ def main():
                 plot_focal_plane(focal_plane, fit_plot_dir, ufm)
 
                 # Ready to save
-                logger.normal("\\tSaving %s fits (%s good).", len(rset), np.sum(msk))
+                logger.normal("\tSaving %s fits (%s good).", len(rset), np.sum(msk))
                 if cfg.pad:
                     with log_lvl(logger, logging.ERROR):
                         all_dets = ctx.get_det_info(

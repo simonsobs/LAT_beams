@@ -22,13 +22,13 @@ def load_aman(
             )
     except Exception as e:
         msg = f"Failed to load or preprocess with error {e}"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
     if aman is None:
         msg = f"Preprocess failed with error {err}"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
@@ -43,7 +43,7 @@ def load_aman(
 
     if aman.dets.count < min_dets:
         msg = f"Only {aman.dets.count} dets!"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None

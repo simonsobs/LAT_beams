@@ -124,7 +124,7 @@ def setup_jobs(
     t0 = time.time()
     for i in range(nproc):
         if myrank == i:
-            logger.debug("\\tRank %s writing", i)
+            logger.debug("\tRank %s writing", i)
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
         comm.barrier()

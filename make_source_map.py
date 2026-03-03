@@ -172,10 +172,10 @@ def make_cuts(aman, source_flags, n_modes, job, logger):
     to_cut = peak_snr < cfg.min_snr  # + ~np.isfinite(peak_snr)
     to_cut[~sdets] = False
     cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
-    logger.debug("\\tCutting %s detectors from map", np.sum(to_cut))
+    logger.debug("\tCutting %s detectors from map", np.sum(to_cut))
     if np.sum(~to_cut) < cfg.min_dets:
         msg = f"Not enough detectors after source flag cuts!"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None
@@ -200,10 +200,10 @@ def make_map(
     det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
         np.diff(aman.timestamps)
     )
-    logger.debug("\\t%s detector seconds on source in %s mask", det_secs, map_str)
+    logger.debug("\t%s detector seconds on source in %s mask", det_secs, map_str)
     if det_secs < min_det_secs:
         msg = f"\tNot enough time on source in {map_str} mask."
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         return None, None
@@ -230,10 +230,10 @@ def make_map(
     peak = out["solved"][0][cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
-    logger.debug("\\t%s map SNR approximately %s", map_str.title(), snr)
+    logger.debug("\t%s map SNR approximately %s", map_str.title(), snr)
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         if cfg.del_map and filename is not None:
@@ -257,15 +257,15 @@ cp.logger = logger
 # Get settings
 args, cfg_dict = get_args_cfg()
 cfg, cfg_str = setup_cfg(
-    args, cfg_dict, {"map_source_list": "source_list", "mask_size": "map_mask_size"}
+    args, cfg_dict, {"map_source_list": "source_list", "map_mask_size": "mask_size"}
 )
 
 if args.plot_only:
     logger.info("Running in plot_only mode!")
 
-if preprocess_cfg is None:
+if cfg.preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
-with open(preprocess_cfg, "r") as f:
+with open(cfg.preprocess_cfg, "r") as f:
     preprocess_cfg = yaml.safe_load(f)
     preprocess_str = yaml.dump(preprocess_cfg)
 
@@ -367,7 +367,7 @@ if args.profile:
     profiler.start()
 
 # Mapping loop
-source_list = set(source_list)
+source_list = set(cfg.source_list)
 job = None
 mpilock = MPILock(comm)
 logger.flush()
@@ -405,7 +405,7 @@ for i, j in enumerate(joblist):
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
         except FileNotFoundError:
             msg = "Missing map files in plot_only mode"
-            logger.error("\\t%s", msg)
+            logger.error("\t%s", msg)
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
@@ -442,7 +442,7 @@ for i, j in enumerate(joblist):
         meta = ctx.get_meta(obs_id)
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
         continue
@@ -453,19 +453,19 @@ for i, j in enumerate(joblist):
         logger.warning("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
         msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-        logger.error("\\t%s", msg)
+        logger.error("\t%s", msg)
         set_tag(job, "message", msg)
         job.jstate = "failed"
-        logger.debug("\\t\\tTags were: %s", obs["tags"])
+        logger.debug("\t\tTags were: %s", obs["tags"])
         continue
     src_name = "_".join(src_names)
-    logger.debug("\\tMapping %s", src_name)
+    logger.debug("\tMapping %s", src_name)
 
     if "hits" in meta.focal_plane:
         meta.restrict("dets", meta.focal_plane.hits >= cfg.min_hits)
         if meta.dets.count < cfg.min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
-            logger.error("\\t%s", msg)
+            logger.error("\t%s", msg)
             set_tag(job, "message", msg)
             job.jstate = "failed"
             continue
