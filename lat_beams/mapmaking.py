@@ -61,7 +61,7 @@ def make_map(
     job,
     map_str,
     logger,
-    cfg
+    cfg,
 ):
     # Get time on source
     det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
@@ -139,6 +139,10 @@ def add_obs_to_mapmaker(
         aman = mapmaking.downsample_obs(aman, passinfo.downsample)
         raise ValueError("downsampling not properly implemented currently")
     aman.signal = aman.signal.astype(np.float32)
+    if "weather" not in aman:
+        aman.wrap("weather", np.full(1, "typical"))
+    if "site" not in aman:
+        aman.wrap("site", np.full(1, "so_lat"))
 
     # Estimate noise
     if ipass == 0 and guess is not None:
@@ -146,7 +150,7 @@ def add_obs_to_mapmaker(
     elif eval_prev is not None and mapmaker_prev is not None:
         signal_estimate = eval_prev.evaluate(mapmaker_prev.data[len(mapmaker.data)])
     else:
-        signal_estimate = None
+        signal_estimate = np.zeros_like(aman.signal)
     if signal_estimate is not None:
         signal_estimate = mapmaking.resample.resample_fft_simple(
             signal_estimate, aman.samps.count
@@ -154,10 +158,11 @@ def add_obs_to_mapmaker(
     with log_lvl(logger, logging.WARNING):
         mapmaker.add_obs(sub_id, aman, signal_estimate=signal_estimate, pmap=P)
     del signal_estimate
+    del aman
 
 
 def make_ml_map(
-    P, amans, passes, shape, wcs, prefix, out_dir, comm, logger, cfg, guess=None
+    amans, passes, shape, wcs, prefix, out_dir, comm, logger, cfg, guess=None
 ):
     mlmap_path = ""
     rhs_path = ""
@@ -167,16 +172,17 @@ def make_ml_map(
     eval_prev = None
     mapmaker_prev = None
     for ipass, passinfo in enumerate(passes):
-        logger.debug(
-            "Starting pass %d/%d maxit %d down %d interp %s"
-            % (
-                ipass + 1,
-                len(passes),
-                passinfo.maxiter,
-                passinfo.downsample,
-                passinfo.interpol,
+        if comm.Get_rank() == 0:
+            logger.debug(
+                "Starting pass %d/%d maxit %d down %d interp %s"
+                % (
+                    ipass + 1,
+                    len(passes),
+                    passinfo.maxiter,
+                    passinfo.downsample,
+                    passinfo.interpol,
+                )
             )
-        )
         pass_prefix = os.path.join(out_dir, f"{prefix}pass{ipass+1}_")
         noise_model = mapmaking.NmatDetvecs(verbose=False)
         signal_cut = mapmaking.SignalCut(comm, dtype=np.float32)
@@ -191,12 +197,13 @@ def make_ml_map(
         )
         signals = [signal_cut, signal_map]
         mapmaker = mapmaking.MLMapmaker(
-            signals, noise_model=noise_model, dtype=np.float32, verbose=True
+            signals, noise_model=None, dtype=np.float32, verbose=True
         )
 
-        for sub_id, aman in amans.items():
+        for sub_id, (aman, P) in amans.items():
+            P.interpol = passinfo.interpol
             add_obs_to_mapmaker(
-                aman,
+                aman.copy(),
                 sub_id,
                 mapmaker,
                 ipass,
@@ -218,7 +225,8 @@ def make_ml_map(
             enmap.map_mul(signal_map.idiv, signal_map.rhs),
             unit="pW",
         )
-        logger.debug("\tWrote rhs, div, bin")
+        if comm.Get_rank() == 0:
+            logger.debug("\tWrote rhs, div, bin")
 
         # Set up initial condition
         x0 = None if ipass == 0 else mapmaker.translate(mapmaker_prev, eval_prev.x_zip)
@@ -229,10 +237,11 @@ def make_ml_map(
         for step in mapmaker.solve(maxiter=passinfo.maxiter, x0=x0):
             t2 = time.time()
             dump = step.i % 10 == 0
-            (logger.debug if dump else logger.ddebug)(
-                "\tCG step %4d %15.7e %8.3f %s"
-                % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
-            )
+            if comm.Get_rank() == 0:
+                (logger.debug if dump else logger.debug)(
+                    "\tCG step %4d %15.7e %8.3f %s"
+                    % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
+                )
             if dump:
                 for signal, val in zip(signals, step.x):
                     if signal.output:

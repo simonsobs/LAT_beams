@@ -140,7 +140,8 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     # Mapping
     cfg["n_modes"] = cfg.get("n_modes", 10)
     cfg["del_map"] = cfg.get("del_map", True)
-    cfg["cgiters"] = cfg.get("cgiters", 30)
+    cfg["cgiters_single"] = cfg.get("cgiters_single", 30)
+    cfg["cgiters_full"] = cfg.get("cgiters_full", 400)
     cfg["mlpass"] = cfg.get("mlpass", 3)
     cfg["comps"] = cfg.get("comps", "TQU")
 

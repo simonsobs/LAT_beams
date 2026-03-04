@@ -155,7 +155,13 @@ cp.logger = logger
 # Get settings
 args, cfg_dict = get_args_cfg()
 cfg, cfg_str = setup_cfg(
-    args, cfg_dict, {"map_source_list": "source_list", "map_mask_size": "mask_size"}
+    args,
+    cfg_dict,
+    {
+        "map_source_list": "source_list",
+        "map_mask_size": "mask_size",
+        "cgiters_single": "cgiters",
+    },
 )
 
 if args.plot_only:
@@ -520,8 +526,7 @@ for i, j in enumerate(joblist):
 
     # Now make the ML map
     outmap, (mlmap_path, rhs_path, div_path, bin_path) = lbm.make_ml_map(
-        out["P"],
-        {sub_id: aman},
+        {sub_id: (aman, out["P"])},
         passes,
         out["solved"].shape,
         out["solved"].wcs,

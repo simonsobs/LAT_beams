@@ -30,9 +30,13 @@ epochs:
     - [1749600000, 1756699200]
     - [1756699200, 20000000000]
 append: "atm_relcal"
-cgiters: 30
+cgiters_single: 30
+cgiters_full: 30
+mlpass: 3
 sym_gauss: False 
 n_bessel: 20
 n_multipoles: 8
 force_bessel_cent: False 
 bessel_wing: True
+split_by:
+  - "band"
