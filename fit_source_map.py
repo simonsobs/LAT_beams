@@ -20,7 +20,12 @@ from lat_beams.beam_utils import (
     process_model,
     radial_profile,
 )
-from lat_beams.fitting.map import fit_bessel_model, fit_gauss_beam, fit_multipole_model
+from lat_beams.fitting.map import (
+    fit_bessel_map,
+    fit_gauss_map,
+    fit_multipole_map,
+    make_guess,
+)
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
     get_args_cfg,
@@ -256,14 +261,22 @@ for i, j in enumerate(joblist):
 
     # Fit gaussian model
     cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_crop)
+    guess = make_guess(
+        amp=solved[cent],
+        fwhm_xi=np.deg2rad(cfg.nomimal_fwhm[band] / 60.0),
+        fwhm_eta=np.deg2rad(cfg.nomimal_fwhm[band] / 60.0),
+        xi0=posmap[1][cent[0], cent[1]],
+        eta0=posmap[0][cent[0], cent[1]],
+        phi=0,
+        off=0,
+    )
     gauss_params, model = fit_gauss_beam(
         solved,
         weights,
         posmap,
-        cent,
-        cfg.sym_gauss,
+        guess,
         "pW",
-        np.deg2rad(cfg.nomimal_fwhm[band] / 60.0),
+        cfg.sym_gauss,
         7,
     )
     if gauss_params is None or model is None:
@@ -335,8 +348,9 @@ for i, j in enumerate(joblist):
             solved - gauss_params.off.value,
             weights,
             posmap,
-            base_beam,
             gauss_params,
+            "pW",
+            base_beam,
             cfg.n_multipoles,
         )
         gauss_multipole_params = process_model(
@@ -363,6 +377,7 @@ for i, j in enumerate(joblist):
             weights,
             posmap,
             gauss_params,
+            "pW",
             cfg.n_bessel,
             cfg.n_multipoles,
             cfg.aperature,
