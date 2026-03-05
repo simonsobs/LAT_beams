@@ -8,7 +8,7 @@ from healpy.sphtfunc import beam2bl
 from sotodlib.core import Context
 
 from lat_beams import beam_utils as bu
-from lat_beams import fitting as bf
+from lat_beams.fitting import profile as bf
 from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 
 

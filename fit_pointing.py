@@ -33,7 +33,7 @@ from sotodlib.mapmaking import downsample_obs
 from sotodlib.site_pipeline.jobdb import Job
 from typing_extensions import cast
 
-from lat_beams.fitting import fit_tod_pointing
+from lat_beams.fitting.tod import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
 from lat_beams.utils import (
     get_args_cfg,

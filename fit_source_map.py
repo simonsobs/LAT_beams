@@ -12,7 +12,7 @@ from pshmem.locking import MPILock
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline.jobdb import Job
 
-import lat_beams.models as bm
+import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import (
     crop_maps,
     estimate_cent,
@@ -20,7 +20,7 @@ from lat_beams.beam_utils import (
     process_model,
     radial_profile,
 )
-from lat_beams.fitting import fit_bessel_model, fit_gauss_beam, fit_multipole_model
+from lat_beams.fitting.map import fit_bessel_model, fit_gauss_beam, fit_multipole_model
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
     get_args_cfg,
