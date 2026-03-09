@@ -113,9 +113,10 @@ for epoch in cfg.epochs:
         times = all_fits["time"]
         tmsk = (times >= epoch[0]) * (times < epoch[1])
         fjobs = all_fjobs[tmsk]
+        fjobs = np.array_split(fjobs, nproc)
 
     # Now distribute jobs
-    comm.scatter(np.array_split(fjobs, nproc), root=0)
+    fjobs = comm.scatter(fjobs, root=0)
     nkept = len(fjobs)
     nkept_all = np.array(comm.allgather(nkept))
     if np.sum(nkept_all) == 0:
