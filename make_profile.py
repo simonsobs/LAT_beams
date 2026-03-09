@@ -40,7 +40,7 @@ def avg_prof(aman_list, prof="rprof", r="r"):
 
 # Get settings
 args, cfg_dict = get_args_cfg()
-cfg, cfg_str = setup_cfg(args, cfg_dict, {"map_mask_size", "mask_size"})
+cfg, cfg_str = setup_cfg(args, cfg_dict, {"map_mask_size": "mask_size"})
 ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
