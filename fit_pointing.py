@@ -530,7 +530,7 @@ def main():
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
-                    filt = tod_ops.filters.high_pass_butter4(cfg.hp_fc * 2)
+                    filt = tod_ops.filters.high_pass_butter4(cfg.hp_fc)
                     sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
                     # Trim edges in case of FFT ringing
@@ -641,7 +641,7 @@ def main():
                     logger.normal("\t\tAttempting to fit %s detectors", aman.dets.count)
 
                     # Plot the TOD
-                    plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}")
+                    plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", cfg.min_dets)
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
                         logger.normal(_msg)
