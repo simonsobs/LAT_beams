@@ -164,9 +164,13 @@ for epoch in cfg.epochs:
         )
         aman.focal_plane.xi += cent[0]
         aman.focal_plane.eta -= cent[1]
-        P, X = cp.get_scan_P(
-            aman, job.tags["source"], res=cfg.res, comps=cfg.comps, threads="domdir"
-        )
+        planet = cp.SlowSource.for_named_source(job.tags[source], aman.timestamps[0])
+        ra0, dec0 = planet.pos(aman.timestamps.mean())
+        rot = ~quat.rotation_lonlat(ra0, dec0)
+        P = coords.P.for_tod(aman, comps=cfg.comps, threads="domdir", wcs_kernel=tmap.wcs, rot=rot)
+        # P, X = cp.get_scan_P(
+        #     aman, job.tags["source"], res=cfg.res, comps=cfg.comps, threads="domdir"
+        # )
         P.geom = enmap.Geometry(shape=tmap.shape, wcs=tmap.wcs)
 
         logger.warning("Added %s", sub_id)
