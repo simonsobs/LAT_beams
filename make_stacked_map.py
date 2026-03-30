@@ -23,7 +23,13 @@ nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
 # Get settings
 args, cfg_dict = get_args_cfg()
-cfg, cfg_str = setup_cfg(args, cfg_dict)
+cfg, cfg_str = setup_cfg(
+    args,
+    cfg_dict,
+    {
+        "map_mask_size": "mask_size",
+    },
+)
 ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
@@ -70,8 +76,8 @@ mjobs = mjobs[msk]
 fjobs = fjobs[msk]
 
 # Make template map
-ext_rad = np.deg2rad(cfg.extent / 3600)
-pix_extent = 2 * int(cfg.extent // pixsize)
+ext_rad = np.deg2rad(cfg.mask_size)
+pix_extent = 2 * int(3600 * cfg.mask_size // pixsize)
 # rowmajor = True here to match sotodlib
 twcs = enmap.wcsutils.build(
     [0, 0],
@@ -81,8 +87,6 @@ twcs = enmap.wcsutils.build(
     rowmajor=True,
 )
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
-[[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(tmap.corners(corner=False))
-plt_extent = (ra_min, ra_max, dec_min, dec_max)
 
 if args.plot_only:
     print("Running in plot only mode!")
@@ -209,7 +213,6 @@ for split in cfg.split_by:
                 )
                 solved = (
                     solved
-                    - np.array([fit["aman"].gauss.off.value, 0, 0]).reshape((3, 1, 1))
                 ) / fit["aman"].gauss.amp.value
                 weights = (
                     reproject.thumbnails_ivar(
@@ -267,7 +270,7 @@ for split in cfg.split_by:
                 dist = np.linalg.norm(cent_est - solved.wcs.wcs.crpix)
                 if dist > cfg.miscenter_thresh:
                     print(
-                        f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems cfg.miscentered! Skipping!"
+                        f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems miscentered! Skipping!"
                     )
                     continue
 
@@ -297,7 +300,9 @@ for split in cfg.split_by:
             # Save and plot
             for omap, name in [
                 (mcoadd, "stack"),
+                (wcoadd, "stack_ivar"),
                 (mlcoadd, "ml_stack"),
+                (mwcoadd, "ml_stack_ivar"),
                 (rmcoadd, "resid_stack"),
             ]:
                 path = os.path.join(
@@ -315,6 +320,8 @@ for split in cfg.split_by:
                         "fits",
                         allow_modify=True,
                     )
+                if "ivar" in name:
+                    continue
                 posmap = omap.posmap()
                 posmap = np.rad2deg(posmap) * 3600
                 for append, smap in [
