@@ -145,16 +145,16 @@ def plot_map_complete(
             )
 
 
-def plot_tod(aman, sig_filt, tod_plot_dir, file_label):
+def plot_tod(aman, sig_filt, tod_plot_dir, file_label, max_dets):
     plt.close()
 
-    plt.plot(np.array(aman.signal).T, alpha=0.3)
+    plt.plot(np.array(aman.signal)[:max_dets].T, alpha=0.3)
     plt.xlabel("Samples")
     plt.ylabel("Signal (pW)")
     plt.savefig(os.path.join(tod_plot_dir, f"{file_label}_tod.png"))
     plt.close()
 
-    plt.plot(sig_filt.T, alpha=0.3)
+    plt.plot(sig_filt[:max_dets].T, alpha=0.3)
     plt.xlabel("Samples")
     plt.ylabel("Filtered Signal (pW)")
     plt.savefig(os.path.join(tod_plot_dir, f"{file_label}_tod_filt.png"))
