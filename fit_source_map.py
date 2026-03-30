@@ -246,7 +246,7 @@ for i, j in enumerate(joblist):
     # Slice things
     solved, weights = crop_maps([solved, weights], cent, int(cfg.extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
-    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_crop)
+    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
     fscale_fac = 90.0 / float(band[1:])
     band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
 
@@ -260,17 +260,17 @@ for i, j in enumerate(joblist):
     aman.wrap("noise", noise * u.pW)
 
     # Fit gaussian model
-    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_crop)
+    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
     guess = make_guess(
         amp=solved[cent],
-        fwhm_xi=np.deg2rad(cfg.nomimal_fwhm[band] / 60.0),
-        fwhm_eta=np.deg2rad(cfg.nomimal_fwhm[band] / 60.0),
+        fwhm_xi=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
+        fwhm_eta=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
         xi0=posmap[1][cent[0], cent[1]],
         eta0=posmap[0][cent[0], cent[1]],
         phi=0,
         off=0,
     )
-    gauss_params, model = fit_gauss_beam(
+    gauss_params, model = fit_gauss_map(
         solved,
         weights,
         posmap,
@@ -293,7 +293,7 @@ for i, j in enumerate(joblist):
     # Check clipping
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
-    if min_c_dist < 120 * cfg.nomimal_fwhm[band]:
+    if min_c_dist < 120 * cfg.nominal_fwhm[band]:
         msg = "Source too close to edge of map"
         logger.error("\t%s", msg)
         set_tag(job, "message", msg)
@@ -304,14 +304,14 @@ for i, j in enumerate(joblist):
     # Get FWHM from data
     rprof = radial_profile(solved, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
-    rmsk = r < 3 * 60 * cfg.nomimal_fwhm[band] / 2.355
+    rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
     data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
     aman.wrap("data_fwhm", data_fwhm)
     aman.wrap("r", r * u.arcsec)
     aman.wrap("rprof", rprof * u.pW)
 
     # FWHM check
-    if abs(1 - data_fwhm.value / (60 * cfg.nomimal_fwhm[band])) > cfg.fwhm_tol:
+    if abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol:
         msg = "Data FWHM out of tolerance"
         logger.error("\t%s", msg)
         set_tag(job, "message", msg)
@@ -344,7 +344,7 @@ for i, j in enumerate(joblist):
     # Get gauss multipoles if we want them
     if cfg.gauss_multipole:
         base_beam = (model - gauss_params.off.value) / gauss_params.amp.value
-        gauss_multipole_params, model = fit_multipole_model(
+        gauss_multipole_params, model = fit_multipole_map(
             solved - gauss_params.off.value,
             weights,
             posmap,
@@ -372,7 +372,7 @@ for i, j in enumerate(joblist):
 
     # Get bessel beam if we want
     if cfg.bessel_beam:
-        bessel_beam_params, model = fit_bessel_model(
+        bessel_beam_params, model = fit_bessel_map(
             solved,
             weights,
             posmap,
@@ -382,8 +382,6 @@ for i, j in enumerate(joblist):
             cfg.n_multipoles,
             cfg.aperature,
             const.c / (float(band[1:]) * u.GHz),
-            cfg.force_bessel_cent,
-            cfg.bessel_wing,
             band_mask_size,
             data_fwhm,
         )

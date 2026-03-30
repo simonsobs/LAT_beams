@@ -132,9 +132,11 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
 
     # Geometry
     cfg["extent"] = cfg.get("extent", 600)
+    cfg["extent_highres"] = cfg.get("extent_highres", 3600)
+    cfg["pixsize_highres"] = cfg.get("pixsize_highres", 1)
     cfg["snr_extent"] = cfg.get("snr_extent", 500)
     cfg["buf"] = cfg.get("buf", 30)
-    cfg["buf_cropped"] = cfg.get("buf_cropped", 5)
+    cfg["buf_cropped"] = cfg.get("buf_cropped", 10)
     cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
 
     # Mapping

@@ -1,5 +1,6 @@
 import astropy.units as u
 import numpy as np
+from astropy.nddata import block_reduce, block_replicate 
 from scipy.special import factorial, jv, spherical_jn
 
 
@@ -44,6 +45,7 @@ def multipole(theta, mp, sin):
         order = 2 ** (mp - 1)
     elif mp < 0:
         raise ValueError("Negetive multipole orders not allowed!")
+    order = mp
     return np.cos(theta * order - sin * np.pi / 2)
 
 
@@ -104,7 +106,7 @@ def multipole_expansion(base_beam, amps, theta):
 
 def bessel_term(r, ell_max, i):
     with np.errstate(divide="ignore", invalid="ignore"):
-        bessel = spherical_jn(i, r * ell_max) / (r * ell_max)
+        bessel = jv(i, r * ell_max) / (r * ell_max)
     return bessel
 
 
@@ -114,12 +116,10 @@ def bessel_beam(
     eta0,
     ell_max,
     amps,
-    gauss_amp,
-    force_cent,
+    off,
     r0_wing,
-    off_core,
-    off_wing,
     amp_wing,
+    off_wing,
 ):
     eta, xi = posmap
     xi = xi - xi0
@@ -128,28 +128,16 @@ def bessel_beam(
     theta = np.arctan2(eta, xi)
 
     beam_model = np.zeros_like(xi)
+    r_msk = r <= r0_wing
+    beam_model[r_msk] = off
     for n0 in range(len(amps)):
-        b0 = bessel_term(r, ell_max, n0)
-        for n1 in range(len(amps)):
-            b1 = bessel_term(r, ell_max, n1)
+        b0 = bessel_term(r[r_msk], ell_max, n0)
+        for n1 in range(n0, len(amps)):
+            b1 = bessel_term(r[r_msk], ell_max, n1)
             base_beam = b0 * b1
-            beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
-    if force_cent:
-        cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
-        beam_model[cent_pix] = gauss_amp
-        cent_ring = (r < 2 * np.deg2rad(posmap.wcs.wcs.cdelt[1])) * (~cent_pix)
-        # Radial interp
-        ci, cj = np.where(cent_pix)
-        for i, j in zip(*np.where(cent_ring)):
-            if i > beam_model.shape[0] or j > beam_model.shape[1]:
-                beam_model[i, j] = gauss_amp
-            beam_model[i, j] = (
-                2 * gauss_amp + beam_model[2 * i - ci[0], 2 * j - cj[0]]
-            ) / 3
-    beam_model[r <= r0_wing] += off_core
-    beam_model[r > r0_wing] = off_wing + amp_wing * (r0_wing**3) / np.power(
-        r[r > r0_wing], 3
-    )
+            beam_model[r_msk] += multipole_expansion(base_beam, amps[n0, n1], theta[r_msk])
+    wmsk = block_replicate((block_reduce((beam_model < amp_wing + off_wing).astype(int), 2) > 0), 2, False).astype(bool) + (r > r0_wing)
+    beam_model[wmsk] = off_wing + amp_wing * (r0_wing**3) / np.power( r[wmsk], 3)
 
     return beam_model
 
@@ -184,16 +172,14 @@ def gaussian2d_multipoles_from_aman(posmap, aman):
 def bessel_beam_from_aman(posmap, aman):
     return bessel_beam(
         posmap,
-        aman.gaussian.xi0.to(u.radian).value,
-        aman.gaussian.eta0.to(u.radian).value,
+        aman.gauss.xi0.to(u.radian).value,
+        aman.gauss.eta0.to(u.radian).value,
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
-        aman.gaussian.amp.value + aman.gaussian.off.value,
-        aman.bessel.force_cent,
-        aman.r0_wing,
-        aman.off_core,
-        aman.off_wing,
-        aman.amp_wing,
+        aman.bessel.off.value,
+        aman.bessel.r0_wing.value,
+        aman.bessel.amp_wing.value,
+        aman.bessel.off_wing.value,
     )
 
 
