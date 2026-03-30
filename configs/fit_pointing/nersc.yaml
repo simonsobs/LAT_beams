@@ -17,6 +17,8 @@ nominal_path: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/ID9/fo
 start_time: 1767243600 
 stop_time: 20000000000
 
+ds: 1
+
 nominal_fwhm: # arcmin LAT; change per platform
   f090: 2
   f150: 1.3
@@ -25,8 +27,10 @@ nominal_fwhm: # arcmin LAT; change per platform
     
 try_all: False 
 
-hp_fc: 20
+hp_fc: 1
 lp_fc: 100
+
+min_hits: 0
 
 src_msk: False
 blind_search: False

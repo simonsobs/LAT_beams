@@ -38,3 +38,4 @@ n_bessel: 20
 n_multipoles: 8
 force_bessel_cent: False 
 bessel_wing: True
+extent: 720

@@ -30,6 +30,6 @@ epochs:
 append: "bs_relcal"
 sym_gauss: False 
 n_bessel: 20
-n_multipoles: 8
-force_bessel_cent: False 
+n_multipoles: 10
+force_bessel_cent: False
 bessel_wing: True
