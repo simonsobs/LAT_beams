@@ -313,6 +313,7 @@ def fit_bessel_map(
     lmd: u.Quantity = 90 * u.GHz,
     mask_size: float = np.inf,
     data_fwhm: float = np.inf,
+    fit_wing: bool = True,
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -337,6 +338,8 @@ def fit_bessel_map(
     data_fwhm : float, default: np.inf
         The FWHM of the data profile.
         Used for the initial guess of the wing.
+    fit_wing : bool, default: True
+        If True fit for a $r^{-3}$ wing.
 
     Returns
     -------
@@ -346,6 +349,8 @@ def fit_bessel_map(
         - ell_max: The $\ell$ to scale $r$ by when fitting
         - r0_wing: The radius to start the wing at
         - amp_wing: The amplitude of the wing
+        - off_wing: The offset of the wing, currently fixed to 0
+        - fit_wing: A copy of the input `fit_wing`
 
         Additionally the amplitude of the core beam terms are stored in a
         `(n_bessel, n_multipole, 2)` array. Where the first axis points
@@ -383,6 +388,10 @@ def fit_bessel_map(
     mp_ax = IndexAxis("multipoles", n_multipoles)
     sc_ax = LabelAxis("term", ["cos", "sin"])
     aman.wrap("ell_max", ell_max * u.dimensionless_unscaled)
+    aman.wrap("fit_wing", fit_wing)
+    aman.wrap("r0_wing",  np.inf * u.radian)
+    aman.wrap("amp_wing", -1*np.inf * map_units)
+    aman.wrap("off_wing", 0 * map_units)
 
     # Compute initial model
     cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
@@ -402,18 +411,19 @@ def fit_bessel_map(
 
 
     # Fit for a symmetric r^-3 wing with the intial model
-    ivar = ivar_orig.copy()
-    ivar[r > mask_size] = 0
-    ivar[r <= mask_size] = 1
-    avg_sig = (data_fwhm).to(u.radian).value / 2.355
-    r0 = min(mask_size, np.max(r))
-    w_guess = [min(5 *avg_sig, .7*r0), 0, 0]
-    bounds = [(min(.5*r0, w_guess[0]*.5), min(.85*r0, 2*w_guess[0])), (0, 1), (-np.inf, np.inf)] #(0, 0)]
-    res = minimize(_wing_obj, w_guess, bounds=bounds, args=(beam_model, r, imap, ivar), method="powell")
-    print(res.x)
-    if not res.success:
-        return None, None
-    wmsk = _wing_msk(beam_model, res.x[1] + res.x[2], r, res.x[0])
+    wmsk = np.zeros_like(beam_model, dtype=bool)
+    if fit_wing:
+        ivar = ivar_orig.copy()
+        ivar[r > mask_size] = 0
+        ivar[r <= mask_size] = 1
+        avg_sig = (data_fwhm).to(u.radian).value / 2.355
+        r0 = min(mask_size, np.max(r))
+        w_guess = [min(5 *avg_sig, .7*r0), 0, 0]
+        bounds = [(min(.5*r0, w_guess[0]*.5), min(.85*r0, 2*w_guess[0])), (0, 1), (-np.inf, np.inf)]
+        res = minimize(_wing_obj, w_guess, bounds=bounds, args=(beam_model, r, imap, ivar), method="powell")
+        if not res.success:
+            return None, None
+        wmsk = _wing_msk(beam_model, res.x[1] + res.x[2], r, res.x[0])
 
     # Now use the wing mask to do a lstsq fit in a limited range
     ivar = ivar_orig.copy()
@@ -443,19 +453,18 @@ def fit_bessel_map(
     aman.wrap("off", off * map_units)
 
     # Refit the wing
-    ivar[r > mask_size] = 0
-    ivar[r <= mask_size] = 1
-    bounds[2] = (0, 0)
-    w_guess[:2] = res.x[:2]
-    res = minimize(_wing_obj, w_guess, bounds=bounds, args=(beam_model, r, imap, ivar), method="powell")
-    if not res.success:
-        print(res)
-        return None, None
-    print(res.x)
-    aman.wrap("r0_wing", res.x[0] * u.radian)
-    aman.wrap("amp_wing", res.x[1] * map_units)
-    aman.wrap("off_wing", res.x[2] * map_units)
-    wmsk = _wing_msk(beam_model, aman.amp_wing.value + aman.off_wing.value, r, aman.r0_wing.value)
-    beam_model[wmsk] = aman.amp_wing.value * ( aman.r0_wing.value**3) / np.power(r[wmsk], 3) + aman.off_wing.value
+    if fit_wing:
+        ivar[r > mask_size] = 0
+        ivar[r <= mask_size] = 1
+        bounds[2] = (0, 0)
+        w_guess[:2] = res.x[:2]
+        res = minimize(_wing_obj, w_guess, bounds=bounds, args=(beam_model, r, imap, ivar), method="powell")
+        if not res.success:
+            return None, None
+        aman.r0_wing = res.x[0] * u.radian
+        aman.amp_wing  = res.x[1] * map_units
+        aman.off_wing  = res.x[2] * map_units
+        wmsk = _wing_msk(beam_model, aman.amp_wing.value + aman.off_wing.value, r, aman.r0_wing.value)
+        beam_model[wmsk] = aman.amp_wing.value * ( aman.r0_wing.value**3) / np.power(r[wmsk], 3) + aman.off_wing.value
 
     return aman, beam_model

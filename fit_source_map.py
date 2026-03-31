@@ -384,6 +384,7 @@ for i, j in enumerate(joblist):
             const.c / (float(band[1:]) * u.GHz),
             band_mask_size,
             data_fwhm,
+            cfg.bessel_wing,
         )
         bessel_beam_params = process_model(
             bessel_beam_params,
