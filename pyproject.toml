@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LAT_beams"
+version = "1.0.0"
+authors = [{name="Saianeesh Keshav Haridas"}]
+description = "Tools for producing and modeling LAT beam maps "
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["Simons Observatory", "LAT", "beams", "planet", "fitting"]
+license = {text = "GPLv3"}
+classifiers = [ "Programming Language :: Python" ]
+dependencies = ["numpy", "scipy", "sotodlib"]
+
+[project.optional-dependencies]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-gen-files",
+    "mkdocs-literate-nav",
+    "mkdocs-homepage-copier",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lat_beams"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "$version"
+version_scheme = "semver"
+version_provider = "pep621"
+update_changelog_on_bump = true
