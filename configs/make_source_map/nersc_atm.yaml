@@ -1,0 +1,41 @@
+map_source_list:
+  - "mars"
+  - "saturn"
+  - "neptune"
+  - "uranus"
+  - "taua"
+fit_source_list:
+  - "mars"
+  - "neptune"
+  - "uranus"
+  - "saturn"
+pointing_type: "pointing_model" 
+preprocess_cfg: "preproc/preproc_atm.yaml"
+min_det_secs: 300
+min_dets: 50
+min_hits: 1
+min_snr: 1
+ctx_path: 'contexts/nersc_pointing_model_atm.yaml'
+start_time: 1749600000 
+stop_time: 20000000000
+n_med: 3
+map_mask_size: .2
+search_mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - .5
+epochs:
+    - [1749600000, 1756699200]
+    - [1756699200, 20000000000]
+append: "atm_relcal"
+cgiters_single: 30
+cgiters_full: 400
+mlpass: 3
+sym_gauss: False 
+n_bessel: 20
+n_multipoles: 8
+force_bessel_cent: False 
+bessel_wing: False 
+extent: 720

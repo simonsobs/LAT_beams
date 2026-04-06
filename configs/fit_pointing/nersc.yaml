@@ -1,0 +1,42 @@
+fit_source_list:
+  - "mars"
+  - "saturn"
+  - "uranus"
+  - "neptune"
+min_samps: 20000
+ctx_path: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
+preprocess_cfg: "preproc/preproc_fit_point.yaml"
+nominal_path: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/ID9/focal_plane.h5'
+
+# start_time: 1739923200 # First light 
+# start_time: 1744848000 # Everything aligned
+# start_time: 1745150000
+# stop_time: 1746187200 # Corotator moved
+# start_time: 1748476800 # Autoschedular
+# start_time: 1756699200
+start_time: 1767243600 
+stop_time: 20000000000
+
+ds: 1
+
+nominal_fwhm: # arcmin LAT; change per platform
+  f090: 2
+  f150: 1.3
+  f220: 0.95
+  f280: 0.83
+    
+try_all: False 
+
+hp_fc: 1
+lp_fc: 100
+
+min_hits: 0
+
+src_msk: False
+blind_search: False
+pointing_mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - 1.5 

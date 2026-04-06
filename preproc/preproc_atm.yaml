@@ -1,0 +1,136 @@
+# when running in cli please specify the following
+# --tags 'mars' 'neptune' 'uranus' 'taua' 'saturn' 'mercury'
+# --planet-obs
+
+context_file: '/global/homes/s/skh/code/LATR_Validation/pipelines/lat_beams/contexts/nersc_pointing_model_atm.yaml'
+plot_dir: '/so/site-pipeline/lat/preprocess/'
+
+subobs:
+  use: ['wafer_slot', 'wafer.bandpass']
+  label: wafer_slot
+
+archive:
+  # index: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/process_archive.sqlite'
+  index: 'preproc/process_archive.sqlite'
+  policy:
+    type: 'simple'
+    # filename: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/preprocess_archive.h5'
+    filename: 'preproc/preprocess_archive.h5'
+
+process_pipe:
+    - name: "pointing_model"
+      process: True
+
+    - name: "correct_iir_params"
+      process: True
+
+    - name: "smurfgaps_flags"
+      calc:
+        buffer: 200
+        name: "smurfgaps"
+        merge: True
+      save: True
+
+    - name: "det_bias_flags"
+      calc:
+        rfrac_range: [0.2, 0.8]
+      save: True
+      select: True
+
+    - name: "detcal_nan_cuts"
+      select:
+        fields: ["tau_eff", "phase_to_pW"]
+
+    - name: "detrend"
+      process:
+        method: "median"
+
+    - name: "trends"
+      calc:
+        max_trend: 5
+        t_piece: 30
+      save: True
+      select:
+        kind: "any"
+
+    - name: "jumps"
+      calc:
+        function: "twopi_jumps"
+        jump_configs:
+          win_size: 30
+          nsigma: 3
+      save:
+        jumps_name: "jumps_2pi"
+      select:
+        max_n_jumps: 10
+
+    - name: "fix_jumps"
+      process:
+        jumps_aman: "jumps_2pi"
+
+    - name: "glitchfill"
+      flags: "jumps_2pi.jump_flag"
+      process:
+        nbuf: 30
+        use_pca: False
+        modes: 1
+
+    - name : "combine_flags"
+      process:
+        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps']
+        total_flags_label: 'glitch_flags'
+        method: 'union'
+
+    - name: "detrend"
+      process:
+        method: "linear"
+
+    - name: "calibrate"
+      skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
+      process:
+        kind: "array"
+        cal_array: "det_cal.phase_to_pW"
+
+    - name: "calibrate"
+      skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
+      process:
+        kind: "array"
+        cal_array: "relcal.relcal"
+
+    - name: "psd"
+      wrap: "psdT"
+      process:
+        freq_spacing: .05
+        average: "median"
+        noverlap: 0
+        full_output: True
+
+    - name: "noise"
+      fit: False
+      subscan: False
+      psd: "psdT"
+      calc:
+        low_f: 20
+        high_f: 30
+        merge_name: 'noise_statsT'
+      save:
+        wrap_name: "noiseT"
+
+    - name: "fourier_filter"
+      process:
+        filters:
+          - name: "iir_filter"
+            filter_params:
+              invert: True
+          - name: "timeconst_filter"
+            filter_params:
+              timeconst: "det_cal.tau_eff"
+              invert: True
+
+    - name: "apodize"
+      process:
+        apodize_samps: 2000
+
+    - name: "fft_trim"
+      process:
+        axis: "samps"

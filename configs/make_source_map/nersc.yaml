@@ -1,0 +1,35 @@
+map_source_list:
+  - "mars"
+  - "saturn"
+  - "taua"
+fit_source_list:
+  - "mars"
+  - "saturn"
+pointing_type: "pointing_model" 
+preprocess_cfg: "preproc/preproc.yaml"
+min_det_secs: 300
+min_dets: 50
+min_hits: 1
+min_snr: 1
+ctx_path: 'contexts/nersc_pointing_model.yaml'
+start_time: 1739941200
+stop_time: 20000000000
+n_med: 3
+map_mask_size: .1
+search_mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - .5
+epochs:
+    - [1744848000, 1745150000]
+    - [1745150000, 1749355200]
+    - [1749600000, 1755576000]
+    - [1756699200, 20000000000]
+append: "bs_relcal"
+sym_gauss: False 
+n_bessel: 20
+n_multipoles: 10
+force_bessel_cent: False
+bessel_wing: True
