@@ -172,7 +172,7 @@ for split in cfg.split_by:
                 posmap_highres.shape,
             )
             mprof = radial_profile(model_highres, cent[::-1])
-            mprof[0] = 1.
+            mprof[0] = 1.0
             mr = np.linspace(0, len(mprof), len(mprof)) * pixsize
             interp = PchipInterpolator(mr, mprof)
             mr_highres = np.arange(0, cfg.extent_highres, cfg.pixsize_highres)
@@ -180,7 +180,9 @@ for split in cfg.split_by:
             prof_dir = os.path.join(data_dir, "stack_profiles", split, spl_rel)
             os.makedirs(prof_dir, exist_ok=True)
             np.savetxt(
-                os.path.join(prof_dir, f"model_profile_{spl_rel}_{epoch[0]}_{epoch[1]}.txt"),
+                os.path.join(
+                    prof_dir, f"model_profile_{spl_rel}_{epoch[0]}_{epoch[1]}.txt"
+                ),
                 mprofile,
             )
             np.savetxt(

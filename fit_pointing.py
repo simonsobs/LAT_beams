@@ -641,7 +641,9 @@ def main():
                     logger.normal("\t\tAttempting to fit %s detectors", aman.dets.count)
 
                     # Plot the TOD
-                    plot_tod(aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", cfg.min_dets)
+                    plot_tod(
+                        aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", cfg.min_dets
+                    )
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
                         logger.normal(_msg)

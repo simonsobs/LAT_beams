@@ -211,9 +211,7 @@ for split in cfg.split_by:
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
-                solved = (
-                    solved
-                ) / fit["aman"].gauss.amp.value
+                solved = (solved) / fit["aman"].gauss.amp.value
                 weights = (
                     reproject.thumbnails_ivar(
                         weights,
