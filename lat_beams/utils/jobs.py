@@ -96,7 +96,11 @@ def setup_jobs(
             ignore_lock = True
         if job.lock and not ignore_lock:
             continue
-        if job.tags["source"] not in source_list and job.tags["source"] != "":
+        if (
+            "source" in job.tags
+            and job.tags["source"] not in source_list
+            and job.tags["source"] != ""
+        ):
             continue
         if (
             job.visit_time is not None
