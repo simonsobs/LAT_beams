@@ -1,6 +1,6 @@
 import astropy.units as u
 import numpy as np
-from astropy.nddata import block_reduce, block_replicate 
+from astropy.nddata import block_reduce, block_replicate
 from scipy.special import factorial, jv, spherical_jn
 
 
@@ -135,9 +135,16 @@ def bessel_beam(
         for n1 in range(n0, len(amps)):
             b1 = bessel_term(r[r_msk], ell_max, n1)
             base_beam = b0 * b1
-            beam_model[r_msk] += multipole_expansion(base_beam, amps[n0, n1], theta[r_msk])
-    wmsk = block_replicate((block_reduce((beam_model < amp_wing + off_wing).astype(int), 2) > 0), 2, False).astype(bool) + (r > r0_wing)
-    beam_model[wmsk] = off_wing + amp_wing * (r0_wing**3) / np.power( r[wmsk], 3)
+            beam_model[r_msk] += multipole_expansion(
+                base_beam, amps[n0, n1], theta[r_msk]
+            )
+    wmsk = r > r0_wing
+    blk_msk = block_replicate(
+        (block_reduce((beam_model < amp_wing + off_wing).astype(int), 2) > 0), 2, False
+    ).astype(bool)
+    sl = tuple(slice(0, s) for s in blk_msk.shape)
+    wmsk[sl] += blk_msk
+    beam_model[wmsk] = off_wing + amp_wing * (r0_wing**3) / np.power(r[wmsk], 3)
 
     return beam_model
 
