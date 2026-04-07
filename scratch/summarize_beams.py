@@ -40,7 +40,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("cfg", help="Path to the config file")
 args = parser.parse_args()
 
-with open(args.cfg, "r") as f:
+with open(args.cfg) as f:
     cfg = yaml.safe_load(f)
 
 # Get some global setting

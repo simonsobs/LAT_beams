@@ -6,10 +6,10 @@ import numpy as np
 from astropy import constants as const
 from astropy import units as u
 from pixell import enmap
+from scipy.interpolate import PchipInterpolator
 from sotodlib.core import AxisManager
 
 import lat_beams.fitting.models as bm
-from scipy.interpolate import PchipInterpolator
 from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile
 from lat_beams.fitting.map import fit_bessel_map, fit_gauss_map, make_guess
 from lat_beams.plotting import plot_map_complete

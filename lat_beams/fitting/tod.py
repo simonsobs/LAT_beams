@@ -411,7 +411,7 @@ def fit_tod_pointing(
         radius = np.sqrt(delta_xi**2 + delta_eta**2)
 
         # We null out the mask where we turnaround so they count as seperate hits
-        hits = Ranges.from_mask((radius <= snr_rad)) * turnarounds
+        hits = Ranges.from_mask(radius <= snr_rad) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings

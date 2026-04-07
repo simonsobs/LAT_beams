@@ -89,7 +89,7 @@ cfg, cfg_str = setup_cfg(args, cfg_dict, {"cgiters_full": "cgiters"})
 pixsize = 3600 * np.rad2deg(cfg.res)
 
 # Get context
-with open(cfg.ctx_path, "r") as f:
+with open(cfg.ctx_path) as f:
     ctx_str = yaml.dump(yaml.safe_load(f))
 ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
@@ -111,7 +111,7 @@ jdb = make_jobdb(None, data_dir_root)
 # Get preproc config
 if cfg.preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
-with open(cfg.preprocess_cfg, "r") as f:
+with open(cfg.preprocess_cfg) as f:
     preprocess_cfg = yaml.safe_load(f)
 preprocess_cfg["archive"]["index"] = os.path.join(
     data_dir_root, preprocess_cfg["archive"]["index"]
