@@ -2,7 +2,7 @@
 # --tags 'mars' 'neptune' 'uranus' 'taua' 'saturn' 'mercury'
 # --planet-obs
 
-context_file: '/global/homes/s/skh/code/LATR_Validation/pipelines/lat_beams/contexts/nersc_pointing_model_atm.yaml'
+context_file: '/global/homes/s/skh/code/LAT_beams/contexts/nersc_pointing_model_atm.yaml'
 plot_dir: '/so/site-pipeline/lat/preprocess/'
 
 subobs:
