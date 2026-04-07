@@ -1,0 +1,163 @@
+## 2.0.0 (2026-04-07)
+
+### Feat
+
+- jobdb for ml mapper
+- make bessel wing optional
+- refactor map fitting code and update to new bessel beam
+- allow for max dets in tod plot
+- make epochs outer loop and add more info to plot title
+- add script for ML beam map
+- move mapmaking funcs into library
+- dont buffer log without MPI
+- move to global config system and make some small configuration changes
+- add option to not make ML map
+- switch to Ted's mutex and make logger aware of the mutex
+- stack ML maps and fix thumbnail radius
+- update for new fit formate and qol improvements
+- get maps from jobdb, bugfixes in scattering beam, improvements to dr4 beam fitting, added 1D jv^2 bessel beam
+- better forced center
+- wing for bessel beam and some bugfixes
+- performance improvements
+- add profiler mode when making maps, specify thread algo, dont modify aman in place when mapmakin
+- do chisq cut only once both sin and cos terms are computed
+- relcal cuts
+- mask in gauss fit, handle center instability in bessel beam, use seperate buffer once map is cropped
+- local preproc dir
+- bessel beam fitting
+- add ML mapping option
+- add Qr and Ur
+- add more planets for pointing fits
+- cleaner multipole expansion
+- context manager for log levels
+- cleaner map plotting
+- better multipole fitting and cleaner workflow
+- move argparse to common func
+- full refactor of stacking code
+- move more tools into beam utils
+- switch to logger
+- streamline job setup and pep8
+- refactor to reduce shared mapping code
+- move aman loading into library
+- dr4 profile fitting
+- scale det secs properly and add job memory feature
+- add more flexible profile splits mechanism
+- add ability to fit a subset of soures and do a cleaner fwhm estimation
+- print useful diagnostics
+- cleaner gaussian fits and relative paths
+- scale min det time with mask size and put relative paths in database
+- cleaner output paths
+- new profile and window function script
+- streamlined gaussian fitting plus bugfixes
+- jobdb optimization and folder append
+- add hierachal MPI
+- remove multistep fitting and take filter pars in from config
+- switch to sotodlib downsample and remove unused file
+- add profiler mode
+- move plotting into its own file
+- refactor pointing fits to per obs parallelism and implement preprocess and jobdb
+- serialize config and metadata info
+- more flexible guassian fit
+- jobdb for fits
+- streamline plotting for fits
+- add jobdb
+- recenter mask on source with initial map
+- use preproc for beam mapping
+- add source map stacker
+- refactor of beam summary code
+- refactor beam fitting pipeline
+- add R2 output
+- pad output for det match compatibility, fix fwhm cut, and add chisq cut
+- switch fwhm cut to be relative to the nominal
+- add mpi, actually center on source, minor plotting improvements
+- add option to do QU
+- do snr cuts
+- allow mapping multiple sources in one config
+- take in pointing mode and use updated pointing model
+- app option to not use source mask
+- switch to matthews solid angle estimator
+- add pointing model database output
+- much more physically motivated pointing model and add offset fitting script
+- 7 parameter model
+- pointing model
+- better plotting, folder structure, and error handling
+- split paths based on time
+- rcw38
+- include reduced chisq
+- remove option for lm fitter
+- add azel crossings to output, improved hits estimation, and include distance from prior
+- split tod and fp plotting directories
+- include hits
+- improvements to flagging and blind searches
+- context with tod pointing fits
+- add a more generic pointing fit code
+- add scripts for lat sso sims
+- start adding some quick tools for first light
+
+### Fix
+
+- fix paths in preproc
+- only check source list if we have a source tag
+- use mpilock only when we have multiple procs
+- pad block mask
+- save ivar, dont offset maps, set size based on mask
+- allow for no logger
+- only plot some dets and dont double filter cutoff
+- use source centered coords for ML map
+- split joblist before scatter
+- map config pars correctly
+- resolve errors from refactor
+- switch to lazy strings when logging
+- use source list for pointing fits and add missing import
+- cleanup and interp
+- PEP8
+- remove debugging code
+- check for clipping
+- dont forcibly remove offset
+- pep8
+- dont try to set x0 for now and remove unwanted prints
+- set map colorbar based only on plotted region
+- typo in loading config, add force centering as a config option, improved weighting when filling in center ring
+- dont try to save preproc with multiple mpi procs running
+- updated preproc fucntion
+- better pointing error handling
+- pointing bugfixes
+- bugfixes latest refactor
+- normalize weights properly
+- better plotting of beams
+- miscentering fixes
+- stacking bugfixes
+- normaization fixed
+- rank 0 needs to open h5 file
+- remove unused fake job class
+- pointing fitter logging fixes
+- handle nans in radial profile
+- more orderly logging
+- remove unused imports
+- many small typo fixes
+- normalzie logplots to temperature map but keep non log plots in real units
+- don't overwrite model profile with data profile
+- pep8
+- several bugfixes from pointing refactor
+- remove unused params and update config with defaults before serialization
+- some cleanup
+- pass correct units
+- lots of bigfixes from refactor
+- streamline plotting and clean up output
+- consider turnarounds to be a seperate hit
+- proprely fft trim single detectors and remove limit from testing
+- pep8
+- cleaner filter and better error handling
+- more error handling
+- better handling off losing all dets with mpi and cleaner blind search
+- convert to pW and wait after sqlite error
+- bettwe lower end cuts
+- offsetaxis slice
+- robust to db file swaps
+- offsetaxis when ds
+- samps offsets
+- do final thresh on detector noise not average noise
+- handle fft ringing
+- outplut smoothed map to the correct directory
+- fixes to query, better handling of no fit case, handle no flagged dets, some printing of which obs we are on
+- adjust plotting path
