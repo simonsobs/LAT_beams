@@ -71,7 +71,7 @@ def estimate_solid_angle(imap, model, res, data_fwhm, c, min_sigma):
 
 def radial_profile(data, center):
     msk = np.isfinite(data.ravel())
-    y, x = np.indices((data.shape))
+    y, x = np.indices(data.shape)
     r = np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2)
     r = r.astype(int)
 

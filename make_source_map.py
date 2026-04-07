@@ -169,7 +169,7 @@ if args.plot_only:
 
 if cfg.preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
-with open(cfg.preprocess_cfg, "r") as f:
+with open(cfg.preprocess_cfg) as f:
     preprocess_cfg = yaml.safe_load(f)
     preprocess_str = yaml.dump(preprocess_cfg)
 
@@ -199,7 +199,7 @@ os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 
 # Get context
-with open(cfg.ctx_path, "r") as f:
+with open(cfg.ctx_path) as f:
     ctx_str = yaml.dump(yaml.safe_load(f))
 ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:

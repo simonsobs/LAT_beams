@@ -26,7 +26,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-with open(args.cfg, "r") as f:
+with open(args.cfg) as f:
     cfg = yaml.safe_load(f)
 
 # Get some global settings

@@ -12,20 +12,20 @@ from typing import Optional, Protocol
 
 import numpy as np
 from astropy import units as u
+from astropy.nddata import block_reduce, block_replicate
 from pixell.enmap import ndmap
-from scipy.optimize import minimize
 from scipy.linalg import lstsq
+from scipy.optimize import minimize
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
-from astropy.nddata import block_reduce, block_replicate
 
 from .models import (
+    bessel_beam,
     bessel_term,
     gaussian2d,
+    multipole,
     multipole_decomp,
     multipole_expansion,
-    multipole,
-    bessel_beam,
 )
 
 flog.setLevel(logging.ERROR)
@@ -39,7 +39,7 @@ class FitMap(Protocol):
         posmap: ndmap,
         guess: AxisManager,
         map_units: str = "pW",
-        **kwargs
+        **kwargs,
     ) -> tuple[Optional[AxisManager], Optional[ndmap]]:
         """
         Function to fit a beam model to a map.
