@@ -4,23 +4,31 @@ Utility functions for working with beam maps.
 TODO: Make everything radians
 """
 
-from logging import Logger
 import datetime as dt
 import os
+from logging import Logger
+from typing import Optional
+
 import astropy.units as u
 import h5py
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve_fft
+from jaxtyping import Float, Shaped
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
-from jaxtyping import Float, Shaped
 from sotodlib.site_pipeline import jobdb
-from typing import Optional
 
 from .utils.jobs import set_tag
 
 
-def solid_angle(az: Float[np.ndarray, "nx"], el: Float[np.ndarray, "ny"], beam: Float[np.ndarray, "nx ny"], cent: tuple[int, int], r1: float, norm: float) -> float:
+def solid_angle(
+    az: Float[np.ndarray, "nx"],
+    el: Float[np.ndarray, "ny"],
+    beam: Float[np.ndarray, "nx ny"],
+    cent: tuple[int, int],
+    r1: float,
+    norm: float,
+) -> float:
     """
     Compute the integrated solid angle of a beam map.
     This uses aperture photometry to handle bias from the background of the map.
@@ -66,7 +74,14 @@ def solid_angle(az: Float[np.ndarray, "nx"], el: Float[np.ndarray, "ny"], beam: 
     return integral_inner - integral_outer
 
 
-def estimate_solid_angle(imap : Float[np.ndarray, "nx ny"], model : Float[np.ndarray, "nx ny"], res : float, data_fwhm : float, cent : tuple[int, int], min_sigma: float) -> tuple[float, float, float, float]:
+def estimate_solid_angle(
+    imap: Float[np.ndarray, "nx ny"],
+    model: Float[np.ndarray, "nx ny"],
+    res: float,
+    data_fwhm: float,
+    cent: tuple[int, int],
+    min_sigma: float,
+) -> tuple[float, float, float, float]:
     r"""
     Estimate the solid angle of a map given a fit model.
     Here we correct for the bias in our solid angle integration by computing:
@@ -134,7 +149,9 @@ def estimate_solid_angle(imap : Float[np.ndarray, "nx ny"], model : Float[np.nda
     )
 
 
-def radial_profile(data : Float[np.ndarray, "nx ny"], center : tuple[int, int]) -> Float[np.ndarray, "nr"]:
+def radial_profile(
+    data: Float[np.ndarray, "nx ny"], center: tuple[int, int]
+) -> Float[np.ndarray, "nr"]:
     """
     Compute the radial profile of a beam.
 
@@ -161,7 +178,9 @@ def radial_profile(data : Float[np.ndarray, "nx ny"], center : tuple[int, int]) 
     return radialprofile
 
 
-def get_fwhm_radial_bins(r : Float[np.ndarray, "nr"], y : Float[np.ndarray, "nr"], interpolate : bool =False) -> float:
+def get_fwhm_radial_bins(
+    r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False
+) -> float:
     """
     Estimate FWHM from a radial profile.
 
@@ -194,10 +213,12 @@ def get_fwhm_radial_bins(r : Float[np.ndarray, "nr"], y : Float[np.ndarray, "nr"
     return fwhm
 
 
-def crop_maps(maps : list[Float[np.ndarray, "nx ny"]], cent : tuple[int, int], extent : int) -> list[Float[np.ndarray, "2extent 2extent"]]:
+def crop_maps(
+    maps: list[Float[np.ndarray, "nx ny"]], cent: tuple[int, int], extent: int
+) -> list[Float[np.ndarray, "2extent 2extent"]]:
     """
     Crop a list of maps to be smaller.
-    Note that all input maps will be cropped relative to the same pixel. 
+    Note that all input maps will be cropped relative to the same pixel.
 
     Parameters
     ----------
@@ -227,7 +248,9 @@ def crop_maps(maps : list[Float[np.ndarray, "nx ny"]], cent : tuple[int, int], e
     return maps
 
 
-def estimate_cent(imap : Float[np.ndarray, "nx ny"], sigma : float =5, buf : int =30) -> tuple[int, int]:
+def estimate_cent(
+    imap: Float[np.ndarray, "nx ny"], sigma: float = 5, buf: int = 30
+) -> tuple[int, int]:
     """
     Estimate the location of the central pixel of a beam map.
     To do this we first smooth the map with a gaussian of size `sigma`,
@@ -264,18 +287,18 @@ def estimate_cent(imap : Float[np.ndarray, "nx ny"], sigma : float =5, buf : int
 
 
 def process_model(
-    aman : AxisManager,
-    solved : Float[np.ndarray, "nx ny"],
-    model : Float[np.ndarray, "nx ny"],
-    noise : float,
-    min_snr : float,
-    c : tuple[int, int],
-    map_units : u.Unit,
-    pixsize : float,
-    data_fwhm : float,
-    min_sigma : float,
-    job : Optional[jobdb.Job],
-    logger : Optional[Logger],
+    aman: AxisManager,
+    solved: Float[np.ndarray, "nx ny"],
+    model: Float[np.ndarray, "nx ny"],
+    noise: float,
+    min_snr: float,
+    c: tuple[int, int],
+    map_units: u.Unit,
+    pixsize: float,
+    data_fwhm: float,
+    min_sigma: float,
+    job: Optional[jobdb.Job],
+    logger: Optional[Logger],
 ) -> Optional[AxisManager]:
     """
     Convenience function to postproccess a map and it's fit model.
@@ -353,7 +376,9 @@ def process_model(
     return aman
 
 
-def load_beam_fits_from_jobs(fpath : str, joblist : list[jobdb.Job]) -> Shaped[np.ndarray, "nfits"]:
+def load_beam_fits_from_jobs(
+    fpath: str, joblist: list[jobdb.Job]
+) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
 
@@ -371,7 +396,7 @@ def load_beam_fits_from_jobs(fpath : str, joblist : list[jobdb.Job]) -> Shaped[n
         Loaded fits.
         This is a numpy structured array with the following collumns:
 
-        * obs_id : str, the obs_id of the fit data 
+        * obs_id : str, the obs_id of the fit data
         * wafer_slot : str, the wafer slot of the fit data
         * stream_id : str, the stream id of the fit data
         * band : str, the band (ie. f090) of the fit data
@@ -434,7 +459,9 @@ def load_beam_fits_from_jobs(fpath : str, joblist : list[jobdb.Job]) -> Shaped[n
     return all_fits
 
 
-def get_fit_vec(all_fits : Shaped[np.ndarray, "nfits"], name : str, fall_back : Optional[str]=None) -> u.Quantity:
+def get_fit_vec(
+    all_fits: Shaped[np.ndarray, "nfits"], name: str, fall_back: Optional[str] = None
+) -> u.Quantity:
     """
     Get a fit value from all fits in a structured array.
 
@@ -470,7 +497,9 @@ def get_fit_vec(all_fits : Shaped[np.ndarray, "nfits"], name : str, fall_back : 
     return dat
 
 
-def get_split_vec(fits : Shaped[np.ndarray, "nfits"], split : str, ctx : Context, round_to : int =2) -> Shaped[np.ndarray, "nfits"]:
+def get_split_vec(
+    fits: Shaped[np.ndarray, "nfits"], split: str, ctx: Context, round_to: int = 2
+) -> Shaped[np.ndarray, "nfits"]:
     """
     Get an array of metadata to split fits by.
 
