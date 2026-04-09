@@ -1,0 +1,1672 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://skhrg.github.io/LAT_beams/2.0.0/reference/fitting/tod/">
+      
+      
+        <link rel="prev" href="../profile/">
+      
+      
+        <link rel="next" href="../../mapmaking/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>tod - LAT_beams</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#lat_beams.fitting.tod" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="LAT_beams" class="md-header__button md-logo" aria-label="LAT_beams" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LAT_beams
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              tod
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="LAT_beams" class="md-nav__button md-logo" aria-label="LAT_beams" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LAT_beams
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../beam_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    beam_utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fitting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    fitting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tod
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tod
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.tod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.tod.fit_tod_pointing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fit_tod_pointing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.tod.get_xieta_src_centered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_xieta_src_centered
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mapmaking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mapmaking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utils
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    utils
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../utils/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../utils/io/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    io
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../utils/jobs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    jobs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../utils/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.tod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.tod.fit_tod_pointing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fit_tod_pointing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.tod.get_xieta_src_centered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_xieta_src_centered
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+  <h1>tod</h1>
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="lat_beams.fitting.tod"></a>
+    <div class="doc doc-contents first">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.tod.fit_tod_pointing" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">fit_tod_pointing</span><span class="p">(</span><span class="n">aman</span><span class="p">,</span> <span class="n">bandpass_range</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">fwhm</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span> <span class="n">max_rad</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s1">&#39;mars&#39;</span><span class="p">,</span> <span class="n">bin_priors</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bin_2d</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">pos_priors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show_tqdm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">min_snr</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.</p>
+<p>Arguments:</p>
+<pre><code>aman: AxisManager containing at minimum a source TOD and boresight TOD.
+      For best performance please fft trim ahead of time.
+
+bandpass_range: A tuple specifying the (low, high) cuttoffs for a bandpass filter in Hz.
+                Set a cutoff to None to not use it.
+
+max_rad: The maximum radius around the initial guess of the detector offset to use.
+         This is in radians, if None then 20  times the input fwhm is used.
+
+source: The name of the source to fit.
+
+bin_priors: If True try to guess the detector offsets by binning and smoothing the TODs.
+            If a positional prior is provided for a given detector it is used instead of this.
+
+bin_2d: If True the binned prior is done by binning the TOD into a naive map.
+        If False xi and eta are binned seperately.
+
+pos_priors: Positional priors. Pass None to not use.
+            If using pass in a (ndets, 2) array where each row is the (xi, eta) to
+            start the fit for that detector at. To disable for only some detectors set
+            the row to (nan, nan).
+
+show_tqdm: If True show a progress bar.
+
+min_snr: Calculates hits out to min_snr compared to white noise level.
+</code></pre>
+<p>Returns:</p>
+<pre><code>focal_plane: An AxisManager with the same detectors as the input aman.
+             This contains the following fields:
+
+             * xi (in radians)
+             * eta (in radians)
+             * gamma (all 0 placeholder)
+             * fwhm (in radians)
+             * amp (in units of aman.signal)
+             * dist (in radians), distance between fit offset and the initial guess
+             * az (in radians), the azimuth at the detector crossing
+             * el (in radians), the elevation at the detector crossing
+             * roll (in radians), the roll at the detector crossing
+             * reduced_chisq
+</code></pre>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/tod.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_tod_pointing</span><span class="p">(</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+    <span class="n">bandpass_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="n">fwhm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="mf">0.5</span><span class="p">),</span>
+    <span class="n">max_rad</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mars&quot;</span><span class="p">,</span>
+    <span class="n">bin_priors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">bin_2d</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">pos_priors</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">show_tqdm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">min_snr</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AxisManager</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.</span>
+
+<span class="sd">    Arguments:</span>
+
+<span class="sd">        aman: AxisManager containing at minimum a source TOD and boresight TOD.</span>
+<span class="sd">              For best performance please fft trim ahead of time.</span>
+
+<span class="sd">        bandpass_range: A tuple specifying the (low, high) cuttoffs for a bandpass filter in Hz.</span>
+<span class="sd">                        Set a cutoff to None to not use it.</span>
+
+<span class="sd">        max_rad: The maximum radius around the initial guess of the detector offset to use.</span>
+<span class="sd">                 This is in radians, if None then 20  times the input fwhm is used.</span>
+
+<span class="sd">        source: The name of the source to fit.</span>
+
+<span class="sd">        bin_priors: If True try to guess the detector offsets by binning and smoothing the TODs.</span>
+<span class="sd">                    If a positional prior is provided for a given detector it is used instead of this.</span>
+
+<span class="sd">        bin_2d: If True the binned prior is done by binning the TOD into a naive map.</span>
+<span class="sd">                If False xi and eta are binned seperately.</span>
+
+<span class="sd">        pos_priors: Positional priors. Pass None to not use.</span>
+<span class="sd">                    If using pass in a (ndets, 2) array where each row is the (xi, eta) to</span>
+<span class="sd">                    start the fit for that detector at. To disable for only some detectors set</span>
+<span class="sd">                    the row to (nan, nan).</span>
+
+<span class="sd">        show_tqdm: If True show a progress bar.</span>
+
+<span class="sd">        min_snr: Calculates hits out to min_snr compared to white noise level.</span>
+
+<span class="sd">    Returns:</span>
+
+<span class="sd">        focal_plane: An AxisManager with the same detectors as the input aman.</span>
+<span class="sd">                     This contains the following fields:</span>
+
+<span class="sd">                     * xi (in radians)</span>
+<span class="sd">                     * eta (in radians)</span>
+<span class="sd">                     * gamma (all 0 placeholder)</span>
+<span class="sd">                     * fwhm (in radians)</span>
+<span class="sd">                     * amp (in units of aman.signal)</span>
+<span class="sd">                     * dist (in radians), distance between fit offset and the initial guess</span>
+<span class="sd">                     * az (in radians), the azimuth at the detector crossing</span>
+<span class="sd">                     * el (in radians), the elevation at the detector crossing</span>
+<span class="sd">                     * roll (in radians), the roll at the detector crossing</span>
+<span class="sd">                     * reduced_chisq</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO: Can use full detector map to fit the array at once. This hasnt been written.</span>
+    <span class="c1"># Right now det maps for LAT not good; SAT will be ok to test with though. Should provide both options here,</span>
+    <span class="c1"># since doing full det maps fit is faster than per det.</span>
+    <span class="c1"># Either way, want to do per TOD because per TOD would be a refinement to the full det maps fit.</span>
+    <span class="k">if</span> <span class="n">pos_priors</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">pos_priors</span><span class="p">)</span> <span class="o">!=</span> <span class="n">aman</span><span class="o">.</span><span class="n">dets</span><span class="o">.</span><span class="n">count</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pos_priors</span><span class="p">)</span><span class="si">}</span><span class="s2"> positional priors given for </span><span class="si">{</span><span class="n">aman</span><span class="o">.</span><span class="n">dets</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2"> detectors&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">pos_priors</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">pos_priors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">dets</span><span class="o">.</span><span class="n">count</span><span class="p">),</span> <span class="mi">2</span><span class="p">))</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">sigma</span> <span class="o">=</span> <span class="n">fwhm</span> <span class="o">/</span> <span class="mf">2.3548</span>
+    <span class="k">if</span> <span class="n">max_rad</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">max_rad</span> <span class="o">=</span> <span class="mi">20</span> <span class="o">*</span> <span class="n">fwhm</span>
+
+    <span class="n">focal_plane</span> <span class="o">=</span> <span class="n">_empty_fp</span><span class="p">(</span><span class="n">aman</span><span class="p">)</span>
+    <span class="n">mean_el</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">el</span><span class="p">))</span>
+
+    <span class="c1"># getting xi eta in a coordinate system where (0, 0) is the planet youre fitting. Expecting trimmed TOD for source.</span>
+    <span class="c1"># Cannot include both rising and setting (ie a sign change). Note that a transit is flat -- so is ok.</span>
+    <span class="n">xi</span><span class="p">,</span> <span class="n">eta</span> <span class="o">=</span> <span class="n">get_xieta_src_centered</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">timestamps</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">az</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">el</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">roll</span><span class="p">),</span>
+        <span class="n">source</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">aman</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">&quot;xi&quot;</span><span class="p">,</span> <span class="n">xi</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;samps&quot;</span><span class="p">)])</span>
+    <span class="n">aman</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">&quot;eta&quot;</span><span class="p">,</span> <span class="n">eta</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;samps&quot;</span><span class="p">)])</span>
+
+    <span class="n">az_d</span> <span class="o">=</span> <span class="n">detrend</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">az</span><span class="p">)</span>
+    <span class="n">d_az</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">az_d</span><span class="p">,</span> <span class="n">prepend</span><span class="o">=</span><span class="n">az_d</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="n">turnarounds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">d_az</span><span class="p">,</span> <span class="n">prepend</span><span class="o">=</span><span class="n">d_az</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">0</span>
+    <span class="n">turnarounds</span> <span class="o">=</span> <span class="o">~</span><span class="n">Ranges</span><span class="o">.</span><span class="n">from_mask</span><span class="p">(</span><span class="n">turnarounds</span><span class="p">)</span>  <span class="c1"># Invert for convenience</span>
+
+    <span class="c1"># 0 is the highpass part, 1 lowpass part.</span>
+    <span class="n">filt</span> <span class="o">=</span> <span class="n">identity_filter</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">bandpass_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">filt</span> <span class="o">*=</span> <span class="n">high_pass_sine2</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="n">bandpass_range</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">bandpass_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">filt</span> <span class="o">*=</span> <span class="n">low_pass_sine2</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="n">bandpass_range</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit_func</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">fit_am</span><span class="p">,</span> <span class="n">filt</span><span class="p">,</span> <span class="n">rfft</span><span class="p">):</span>
+        <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span><span class="p">,</span> <span class="n">amp</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">,</span> <span class="n">offset</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">gaussian2d</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">eta</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">xi</span><span class="p">),</span> <span class="n">amp</span><span class="p">,</span> <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">offset</span>
+        <span class="p">)</span>
+        <span class="n">fit_am</span><span class="o">.</span><span class="n">resid</span> <span class="o">=</span> <span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">-</span> <span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">resid</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="n">fit_am</span> <span class="o">=</span> <span class="n">filter_tod</span><span class="p">(</span><span class="n">fit_am</span><span class="p">,</span> <span class="n">filt</span><span class="p">,</span> <span class="n">signal_name</span><span class="o">=</span><span class="s2">&quot;resid&quot;</span><span class="p">,</span> <span class="n">rfft</span><span class="o">=</span><span class="n">rfft</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">resid</span> <span class="o">*</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">resid_filt</span><span class="p">)</span> <span class="o">*</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">wn</span>
+
+    <span class="c1"># Loop through all detectors and fit them one at a time.</span>
+    <span class="n">it</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">dets</span><span class="o">.</span><span class="n">vals</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">show_tqdm</span><span class="p">:</span>
+        <span class="n">it</span> <span class="o">=</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">dets</span><span class="o">.</span><span class="n">vals</span><span class="p">))</span>
+    <span class="n">aman</span><span class="o">.</span><span class="n">signal</span> <span class="o">=</span> <span class="n">aman</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">det</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">it</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">show_tqdm</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+        <span class="c1"># Make a temporary restricted axis manager with just the one desired detector.</span>
+        <span class="n">fit_am</span> <span class="o">=</span> <span class="n">aman</span><span class="o">.</span><span class="n">restrict</span><span class="p">(</span><span class="s2">&quot;dets&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">det</span><span class="p">],</span> <span class="n">in_place</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="c1"># Containers for residual of fit and the filtered residual.</span>
+        <span class="n">fit_am</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">&quot;resid&quot;</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;dets&quot;</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;samps&quot;</span><span class="p">)])</span>
+        <span class="n">fit_am</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span>
+            <span class="s2">&quot;resid_filt&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">signal</span><span class="p">),</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;dets&quot;</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;samps&quot;</span><span class="p">)]</span>
+        <span class="p">)</span>
+        <span class="c1"># Estimateing white noise by taking the standard deviation of the filtered TOD.</span>
+        <span class="n">fit_am</span> <span class="o">=</span> <span class="n">filter_tod</span><span class="p">(</span><span class="n">fit_am</span><span class="p">,</span> <span class="n">filt</span><span class="p">)</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">resid_filt</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">std</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">amp</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+            <span class="k">continue</span>
+        <span class="n">fit_am</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">&quot;wn&quot;</span><span class="p">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">std</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="c1"># Get starting guess for where the detector is looking. Bad guess = bad pointing final fit. Descends into a local instead of global minima.</span>
+        <span class="c1"># Get xi, eta at maximum sample, but this is not a very good guess.</span>
+        <span class="n">max_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">resid_filt</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="n">xi_max</span> <span class="o">=</span> <span class="n">xi</span><span class="p">[</span><span class="n">max_idx</span><span class="p">]</span>
+        <span class="n">eta_max</span> <span class="o">=</span> <span class="n">eta</span><span class="p">[</span><span class="n">max_idx</span><span class="p">]</span>
+        <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">xi_max</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">eta_max</span><span class="p">)</span>
+        <span class="n">_bin_priors</span> <span class="o">=</span> <span class="n">bin_priors</span>
+        <span class="c1"># If it has a det map fit then can use given positional prior</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">pos_priors</span><span class="p">[</span><span class="n">i</span><span class="p">])):</span>
+            <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span> <span class="o">=</span> <span class="n">pos_priors</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">_bin_priors</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="c1"># Determine if 1d or 2d binning used.</span>
+        <span class="c1"># Bin in xi and eta</span>
+        <span class="k">if</span> <span class="n">_bin_priors</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">bin_2d</span><span class="p">:</span>
+            <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span> <span class="o">=</span> <span class="n">_bin_priors_1d</span><span class="p">(</span><span class="n">fit_am</span><span class="p">,</span> <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">_bin_priors</span> <span class="ow">and</span> <span class="n">bin_2d</span><span class="p">:</span>
+            <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span> <span class="o">=</span> <span class="n">_bin_priors_2d</span><span class="p">(</span><span class="n">fit_am</span><span class="p">,</span> <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">)</span>
+        <span class="n">msk_samps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">xi</span> <span class="o">-</span> <span class="n">xi0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">eta</span> <span class="o">-</span> <span class="n">eta0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">&lt;</span> <span class="n">max_rad</span><span class="o">**</span><span class="mi">2</span><span class="p">)[</span>
+            <span class="mi">0</span>
+        <span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">msk_samps</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">10</span> <span class="ow">and</span> <span class="n">_bin_priors</span><span class="p">:</span>
+            <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span> <span class="o">=</span> <span class="n">xi_max</span><span class="p">,</span> <span class="n">eta_max</span>
+            <span class="n">msk_samps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">xi</span> <span class="o">-</span> <span class="n">xi0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">eta</span> <span class="o">-</span> <span class="n">eta0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">&lt;</span> <span class="n">max_rad</span><span class="o">**</span><span class="mi">2</span><span class="p">)[</span>
+                <span class="mi">0</span>
+            <span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">msk_samps</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Not enouth samples flagged for </span><span class="si">{</span><span class="n">det</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">msk_samps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span><span class="p">))</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">msk_samps</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">msk_samps</span><span class="p">,</span> <span class="mi">95</span><span class="p">)</span>
+        <span class="n">cent</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">start</span> <span class="o">+</span> <span class="n">stop</span><span class="p">))</span>
+        <span class="n">nsamps</span> <span class="o">=</span> <span class="n">find_superior_integer</span><span class="p">(</span><span class="n">stop</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">nsamps</span> <span class="o">&gt;</span> <span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span><span class="p">):</span>
+            <span class="n">nsamps</span> <span class="o">=</span> <span class="n">find_inferior_integer</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">cent</span> <span class="o">-</span> <span class="n">nsamps</span> <span class="o">//</span> <span class="mi">2</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">cent</span> <span class="o">+</span> <span class="n">nsamps</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">nsamps</span> <span class="o">%</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">stop</span> <span class="o">+=</span> <span class="n">start</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">stop</span> <span class="o">&gt;</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span><span class="p">:</span>
+            <span class="n">start</span> <span class="o">-=</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span> <span class="o">-</span> <span class="n">stop</span>
+            <span class="n">stop</span> <span class="o">=</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span>
+        <span class="n">sl</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span>
+            <span class="n">start</span> <span class="o">+</span> <span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span>
+            <span class="n">stop</span> <span class="o">+</span> <span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">offset</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">fit_am</span><span class="o">.</span><span class="n">restrict</span><span class="p">(</span><span class="s2">&quot;samps&quot;</span><span class="p">,</span> <span class="n">sl</span><span class="p">)</span>
+        <span class="n">rfft</span> <span class="o">=</span> <span class="n">RFFTObj</span><span class="o">.</span><span class="n">for_shape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span><span class="p">),</span> <span class="s2">&quot;BOTH&quot;</span><span class="p">)</span>
+
+        <span class="n">ptp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ptp</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">signal</span><span class="p">))</span>
+        <span class="n">amp</span> <span class="o">=</span> <span class="n">ptp</span> <span class="o">*</span> <span class="mi">3</span>
+        <span class="n">init_pars</span> <span class="o">=</span> <span class="p">[</span><span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span><span class="p">,</span> <span class="n">amp</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">xi0</span> <span class="o">-</span> <span class="n">max_rad</span><span class="p">,</span> <span class="n">xi0</span> <span class="o">+</span> <span class="n">max_rad</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">eta0</span> <span class="o">-</span> <span class="n">max_rad</span><span class="p">,</span> <span class="n">eta0</span> <span class="o">+</span> <span class="n">max_rad</span><span class="p">),</span>
+            <span class="p">(</span><span class="o">-</span><span class="n">ptp</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">fwhm</span> <span class="o">*</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">1.1</span> <span class="o">*</span> <span class="n">fwhm</span><span class="p">),</span>
+            <span class="p">(</span><span class="o">-</span><span class="n">ptp</span><span class="p">,</span> <span class="n">ptp</span><span class="p">),</span>
+        <span class="p">]</span>
+
+        <span class="c1"># Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">minimize</span><span class="p">(</span>
+            <span class="n">fit_func</span><span class="p">,</span>
+            <span class="n">init_pars</span><span class="p">,</span>
+            <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">fit_am</span><span class="p">,</span> <span class="n">filt</span><span class="p">,</span> <span class="n">rfft</span><span class="p">),</span>
+            <span class="n">method</span><span class="o">=</span><span class="s2">&quot;Nelder-Mead&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">xi</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">eta</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">amp</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">res</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">R2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">fit_am</span><span class="o">.</span><span class="n">resid</span> <span class="o">=</span> <span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">signal</span><span class="p">))</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="n">fit_am</span><span class="o">.</span><span class="n">resid</span><span class="o">.</span><span class="n">shape</span>
+            <span class="p">)</span>
+            <span class="n">fit_am</span> <span class="o">=</span> <span class="n">filter_tod</span><span class="p">(</span><span class="n">fit_am</span><span class="p">,</span> <span class="n">filt</span><span class="p">,</span> <span class="n">signal_name</span><span class="o">=</span><span class="s2">&quot;resid&quot;</span><span class="p">,</span> <span class="n">rfft</span><span class="o">=</span><span class="n">rfft</span><span class="p">)</span>
+            <span class="n">ss_tot</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">fit_am</span><span class="o">.</span><span class="n">resid</span> <span class="o">*</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">resid_filt</span><span class="p">)</span> <span class="o">*</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">wn</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">R2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">fun</span> <span class="o">/</span> <span class="n">ss_tot</span><span class="p">)</span>
+
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">dist</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">focal_plane</span><span class="o">.</span><span class="n">xi</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="n">xi0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="o">+</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">focal_plane</span><span class="o">.</span><span class="n">eta</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="n">eta0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="p">)</span>
+        <span class="n">delta_xi</span> <span class="o">=</span> <span class="n">xi</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">focal_plane</span><span class="o">.</span><span class="n">xi</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">delta_eta</span> <span class="o">=</span> <span class="n">eta</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">focal_plane</span><span class="o">.</span><span class="n">eta</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="c1"># Lets calculate hits</span>
+        <span class="c1"># solved for delta(x) in gaussian eqn ie</span>
+        <span class="c1"># f(x)/wnl = A/wnl * e^(-.5 * delta(x) ^ 2 / sigma ^ 2)</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="n">focal_plane</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">/</span> <span class="mf">2.3548</span>
+        <span class="n">snr_peak</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">focal_plane</span><span class="o">.</span><span class="n">amp</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">min_snr</span> <span class="o">*</span> <span class="n">std</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">snr_peak</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">snr_rad</span> <span class="o">=</span> <span class="n">sigma</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">snr_peak</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">snr_rad</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">R2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">radius</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">delta_xi</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">delta_eta</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="c1"># We null out the mask where we turnaround so they count as seperate hits</span>
+        <span class="n">hits</span> <span class="o">=</span> <span class="n">Ranges</span><span class="o">.</span><span class="n">from_mask</span><span class="p">(</span><span class="n">radius</span> <span class="o">&lt;=</span> <span class="n">snr_rad</span><span class="p">)</span> <span class="o">*</span> <span class="n">turnarounds</span>
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">hits</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">hits</span><span class="o">.</span><span class="n">ranges</span><span class="p">())</span>
+
+        <span class="c1"># Azel crossings</span>
+        <span class="n">xi_weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">((</span><span class="n">delta_xi</span> <span class="o">/</span> <span class="n">sigma</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span>
+            <span class="n">sigma</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">eta_weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">((</span><span class="n">delta_eta</span> <span class="o">/</span> <span class="n">sigma</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span>
+            <span class="n">sigma</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">xi_weights</span> <span class="o">*</span> <span class="n">eta_weights</span>
+        <span class="n">tot_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tot_weight</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">R2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">az</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">az</span> <span class="o">*</span> <span class="n">weights</span><span class="p">)</span> <span class="o">/</span> <span class="n">tot_weight</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">el</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">boresight</span><span class="o">.</span><span class="n">el</span> <span class="o">*</span> <span class="n">weights</span><span class="p">)</span> <span class="o">/</span> <span class="n">tot_weight</span>
+            <span class="n">focal_plane</span><span class="o">.</span><span class="n">roll</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">focal_plane</span><span class="o">.</span><span class="n">roll</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="o">+</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">focal_plane</span><span class="o">.</span><span class="n">el</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="o">-</span> <span class="n">mean_el</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Chisq</span>
+        <span class="n">focal_plane</span><span class="o">.</span><span class="n">reduced_chisq</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">fun</span> <span class="o">/</span> <span class="p">(</span>
+            <span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fit_am</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">focal_plane</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.tod.get_xieta_src_centered" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_xieta_src_centered</span><span class="p">(</span><span class="n">ctime</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">roll</span><span class="p">,</span> <span class="n">sso_name</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get xieta in source centered coordinates.
+Here we get the source trajectory at the center of the ctime array,
+for a slow source this is a fairly good approximation but you may get bad results
+if you are spanning a very large ctime or a ctime that spans both sides of a transit.</p>
+<p>Arguments:</p>
+<pre><code>ctime: Array of times to get the source at. See docstring for caveat on this.
+
+az: Array of azimuth angles in radians to get the source at. Should be the same size as ctime.
+
+el: Array of elevation angles in radians to get the source at. Should be the same size as ctime.
+
+roll: Array of roll angles in radians to get the source at. Should be the same size as ctime.
+</code></pre>
+<p>Returns:</p>
+<pre><code>xi: The xi angles centered on the source in radians.
+
+eta: The eta angles centered on the source in radians.
+</code></pre>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/tod.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">37</span>
+<span class="normal">38</span>
+<span class="normal">39</span>
+<span class="normal">40</span>
+<span class="normal">41</span>
+<span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span>
+<span class="normal">48</span>
+<span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_xieta_src_centered</span><span class="p">(</span>
+    <span class="n">ctime</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
+    <span class="n">az</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
+    <span class="n">el</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
+    <span class="n">roll</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
+    <span class="n">sso_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get xieta in source centered coordinates.</span>
+<span class="sd">    Here we get the source trajectory at the center of the ctime array,</span>
+<span class="sd">    for a slow source this is a fairly good approximation but you may get bad results</span>
+<span class="sd">    if you are spanning a very large ctime or a ctime that spans both sides of a transit.</span>
+
+<span class="sd">    Arguments:</span>
+
+<span class="sd">        ctime: Array of times to get the source at. See docstring for caveat on this.</span>
+
+<span class="sd">        az: Array of azimuth angles in radians to get the source at. Should be the same size as ctime.</span>
+
+<span class="sd">        el: Array of elevation angles in radians to get the source at. Should be the same size as ctime.</span>
+
+<span class="sd">        roll: Array of roll angles in radians to get the source at. Should be the same size as ctime.</span>
+
+<span class="sd">    Returns:</span>
+
+<span class="sd">        xi: The xi angles centered on the source in radians.</span>
+
+<span class="sd">        eta: The eta angles centered on the source in radians.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">csl</span> <span class="o">=</span> <span class="n">so3g</span><span class="o">.</span><span class="n">proj</span><span class="o">.</span><span class="n">CelestialSightLine</span><span class="o">.</span><span class="n">az_el</span><span class="p">(</span>
+        <span class="n">ctime</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">roll</span><span class="o">=</span><span class="n">roll</span><span class="p">,</span> <span class="n">weather</span><span class="o">=</span><span class="s2">&quot;typical&quot;</span>
+    <span class="p">)</span>
+    <span class="n">q_bore</span> <span class="o">=</span> <span class="n">csl</span><span class="o">.</span><span class="n">Q</span>  <span class="c1"># type: ignore</span>
+
+    <span class="c1"># planet position</span>
+    <span class="n">planet</span> <span class="o">=</span> <span class="n">planets</span><span class="o">.</span><span class="n">SlowSource</span><span class="o">.</span><span class="n">for_named_source</span><span class="p">(</span><span class="n">sso_name</span><span class="p">,</span> <span class="n">ctime</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ctime</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)])</span>
+    <span class="n">ra0</span><span class="p">,</span> <span class="n">dec0</span> <span class="o">=</span> <span class="n">planet</span><span class="o">.</span><span class="n">pos</span><span class="p">(</span><span class="n">ctime</span><span class="p">)</span>
+    <span class="n">q_obj</span> <span class="o">=</span> <span class="n">so3g</span><span class="o">.</span><span class="n">proj</span><span class="o">.</span><span class="n">quat</span><span class="o">.</span><span class="n">rotation_lonlat</span><span class="p">(</span><span class="n">ra0</span><span class="p">,</span> <span class="n">dec0</span><span class="p">)</span>
+
+    <span class="n">q_total</span> <span class="o">=</span> <span class="o">~</span><span class="n">q_bore</span> <span class="o">*</span> <span class="n">q_obj</span>
+    <span class="n">xi</span><span class="p">,</span> <span class="n">eta</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">quat</span><span class="o">.</span><span class="n">decompose_xieta</span><span class="p">(</span><span class="n">q_total</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">xi</span><span class="p">,</span> <span class="n">eta</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
