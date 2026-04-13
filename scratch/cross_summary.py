@@ -1,5 +1,3 @@
-# TODO: plot vs encoders
-
 import argparse
 import os
 
@@ -108,17 +106,28 @@ for split in cfg.split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"hour_scatter_{start}_{end}.png"))
         plt.close()
 
+        enc = bu.get_split_vec(tfits, "az_center+el_center+roll_center", ctx)
+        az, el, roll = np.array(np.char.split(enc, "+").tolist()).astype(float).T
+        to_scatter = [("hour", "Hour of Day (hr)", tfits["hour"]),
+                      ("az", "Azimuth (deg)", az), 
+                      ("el", "Elevation (deg)", el), 
+                      ("roll", "Roll (deg)", roll),
+                      ("corot", "Corotation (deg)", el - 60 - roll),
+                      ("pwv", "PWV (mm)", bu.get_split_vec(tfits, "pwv_mean", ctx))] 
+
+
         # Individual splits
         for spl in np.unique(tvec):
             smsk = tvec == spl
 
-            # Scatter vs time of day
-            plt.scatter(tfits["hour"][smsk], tamps[smsk], alpha=.4)
-            plt.title(f"{spl} Octopole Amplitude by Hour ({start}, {end})")
-            plt.xlabel("Hour of Day (hr)")
-            plt.ylabel("Octopole Amplitude")
-            plt.savefig(os.path.join(plot_dir_spl, f"hour_scatter_{spl}_{start}_{end}.png"))
-            plt.close()
+            # Scatter vs interesting things
+            for name, xax, dat in to_scatter:
+                plt.scatter(dat[smsk], tamps[smsk], alpha=.4)
+                plt.title(f"{spl} Octopole Amplitude by {name.title()} ({start}, {end})")
+                plt.xlabel(xax)
+                plt.ylabel("Octopole Amplitude")
+                plt.savefig(os.path.join(plot_dir_spl, f"{name}_scatter_{spl}_{start}_{end}.png"))
+                plt.close()
 
             # Simple histogram
             plt.hist(tamps[smsk], bins="auto")
