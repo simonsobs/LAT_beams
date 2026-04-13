@@ -7,7 +7,7 @@ imports:
   - sotodlib.io.metadata
 
 obsfiledb: '{basedir}/lat_obsfiledb_local.sqlite'
-obsdb: '{basedir}/lat_obsdb_240911m_local.sqlite'
+obsdb: '/global/cfs/cdirs/sobs/users/mhasse/work/250514/enhanced_obsdbs/lat_obsdb_251114m.sqlite' #'{basedir}/lat_obsdb_240911m_local.sqlite'
 
 obs_loader_type: 'obs-book'
 obs_colon_tags: [wafer.bandpass, wafer_slot]
