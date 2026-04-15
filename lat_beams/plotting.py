@@ -3,14 +3,15 @@ Plotting utilities.
 These are all fairly implementation specific right now,
 they should be refactored to rely on more generic units.
 """
+
 import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import SymLogNorm
-from sotodlib.core import AxisManager
 from jaxtyping import Float
+from matplotlib.colors import SymLogNorm
 from pixell import enmap
+from sotodlib.core import AxisManager
 
 from .beam_utils import radial_profile
 
@@ -18,18 +19,18 @@ plt.rcParams["image.cmap"] = "coolwarm"  # "RdGy_r"
 
 
 def plot_map(
-        data : Float[np.ndarray, "nx ny"] | enmap.ndmap,
-        posmap : Float[np.ndarray, "2 nx ny"] | enmap.ndmap,
-        pixsize : float,
-        extent : float,
-        cent : tuple[float, float],
-        plot_dir : str,
-        title : str,
-        comp : str ="T",
-        log : bool =False,
-        log_thresh : float =1e-3,
-        append : str ="",
-        units : str='"',
+    data: Float[np.ndarray, "nx ny"] | enmap.ndmap,
+    posmap: Float[np.ndarray, "2 nx ny"] | enmap.ndmap,
+    pixsize: float,
+    extent: float,
+    cent: tuple[float, float],
+    plot_dir: str,
+    title: str,
+    comp: str = "T",
+    log: bool = False,
+    log_thresh: float = 1e-3,
+    append: str = "",
+    units: str = '"',
 ):
     """
     Plot a beam map using `imshow` using the `coolwarm` colormap.
@@ -130,19 +131,19 @@ def plot_map(
 
 
 def plot_map_complete(
-        data : Float[np.ndarray, "nx ny"] | enmap.ndmap,
-        posmap : Float[np.ndarray, "2 nx ny"] | enmap.ndmap,
-        pixsize : float,
-        extent : float,
-        cent : tuple[float, float],
-        plot_dir : str,
-        title : str,
-        comps : str ="TQU",
-        log_thresh : float =1e-3,
-        append : str ="",
-        units : str='"',
-        lognorm : float =1.,
-        qrur : bool =False,
+    data: Float[np.ndarray, "nx ny"] | enmap.ndmap,
+    posmap: Float[np.ndarray, "2 nx ny"] | enmap.ndmap,
+    pixsize: float,
+    extent: float,
+    cent: tuple[float, float],
+    plot_dir: str,
+    title: str,
+    comps: str = "TQU",
+    log_thresh: float = 1e-3,
+    append: str = "",
+    units: str = '"',
+    lognorm: float = 1.0,
+    qrur: bool = False,
 ):
     """
     Wrapper for `plot_map` that plots all comps in both linear and log scales.
@@ -230,7 +231,13 @@ def plot_map_complete(
             )
 
 
-def plot_tod(aman : AxisManager, sig_filt : Float[np.ndarray, "ndet nsamp"], tod_plot_dir : str, file_label : str, max_dets : int):
+def plot_tod(
+    aman: AxisManager,
+    sig_filt: Float[np.ndarray, "ndet nsamp"],
+    tod_plot_dir: str,
+    file_label: str,
+    max_dets: int,
+):
     """
     Plot a TOD and its filtered signal.
 
@@ -266,7 +273,7 @@ def plot_tod(aman : AxisManager, sig_filt : Float[np.ndarray, "ndet nsamp"], tod
     plt.close()
 
 
-def plot_focal_plane(focal_plane : AxisManager, fit_plot_dir : str, ufm : str):
+def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str):
     """
     Plot the results of a the focal plane fit.
     We assume here that all angular values are in radians
@@ -276,11 +283,11 @@ def plot_focal_plane(focal_plane : AxisManager, fit_plot_dir : str, ufm : str):
 
     * Xi vs Eta scatter, file = "{ufm}_fp.png"
     * Az vs El scatter, file = "{ufm}_enc.png"
-    * amplitude histogram, "{ufm}_fp_amp.png" 
-    * FWHM histogram, "{ufm}_fp_fwhm.png" 
-    * Hits histogram, "{ufm}_fp_hits.png" 
-    * Reduced Chi Squared histogram, "{ufm}_fp_red_chisq.png" 
-    * R^2 histogram, "{ufm}_fp_r2.png" 
+    * amplitude histogram, "{ufm}_fp_amp.png"
+    * FWHM histogram, "{ufm}_fp_fwhm.png"
+    * Hits histogram, "{ufm}_fp_hits.png"
+    * Reduced Chi Squared histogram, "{ufm}_fp_red_chisq.png"
+    * R^2 histogram, "{ufm}_fp_r2.png"
 
     Parameters
     ----------
