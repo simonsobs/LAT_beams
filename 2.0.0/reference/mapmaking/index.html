@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.6">
     
     
       
@@ -541,6 +541,61 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.add_obs_to_mapmaker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_obs_to_mapmaker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.get_passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_passes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.make_cuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_cuts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.make_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.make_ml_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_ml_map
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -787,6 +842,61 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.add_obs_to_mapmaker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_obs_to_mapmaker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.get_passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_passes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.make_cuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_cuts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.make_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.mapmaking.make_ml_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make_ml_map
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -813,6 +923,8 @@
 <a id="lat_beams.mapmaking"></a>
     <div class="doc doc-contents first">
 
+        <p>Functions for producing source maps.</p>
+
 
 
 
@@ -832,6 +944,1931 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.mapmaking.add_obs_to_mapmaker" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">add_obs_to_mapmaker</span><span class="p">(</span><span class="n">aman</span><span class="p">,</span> <span class="n">sub_id</span><span class="p">,</span> <span class="n">mapmaker</span><span class="p">,</span> <span class="n">ipass</span><span class="p">,</span> <span class="n">passinfo</span><span class="p">,</span> <span class="n">P</span><span class="p">,</span> <span class="n">guess</span><span class="p">,</span> <span class="n">eval_prev</span><span class="p">,</span> <span class="n">mapmaker_prev</span><span class="p">,</span> <span class="n">logger</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Add an observation to the MLMapmaker.
+This makes sure that the correct weather and site are included and will use
+an input map or a previous iteration of the mapmaker to estimate the signal
+when computing the noise model if they are provided.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>aman</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The TOD after preprocessing.
+The cut samples should be in the <code>glitch</code> flag.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>sub_id</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The <code>sub_id</code> of the TOD.
+Should have format <code>{obs_id}:{ws}:{band}</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mapmaker</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.mapmaking.MLMapmaker">MLMapmaker</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The mapmaker instance to add the observation to.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ipass</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The pass number.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>passinfo</code>
+            </td>
+            <td>
+                  <code><span title="pixell.bunch.Bunch">Bunch</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The pass we are on. See <code>setup_passes</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>P</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.coords.pmat.P">P</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The <code>sotodlib</code> projectioe matrix.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>guess</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pixell.enmap.ndmap">ndmap</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A guess at what the map is.
+If this is not <code>None</code> and <code>ipass == 0</code> then this is
+used to estimate the signal when building the noise model.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>eval_prev</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="mapmakin.MLEvaluator">MLEvaluator</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Evaluator for the previous pass of the mapmaker.
+If <code>ipass &gt; 0</code> and both this and <code>mapmaker_prev</code> are not <code>None</code>
+then they ary used to estimate the signal when building the noise model.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mapmaker_prev</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="mapmakin.MLMapmaker">MLMapmaker</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Mapmaker instance for the previous pass of the mapmaker.
+If <code>ipass &gt; 0</code> and both this and <code>eval_prev</code> are not <code>None</code>
+then they ary used to estimate the signal when building the noise model.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>logger</code>
+            </td>
+            <td>
+                  <code><span title="logging.Logger">Logger</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The logger to log to.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">add_obs_to_mapmaker</span><span class="p">(</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+    <span class="n">sub_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">mapmaker</span><span class="p">:</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">MLMapmaker</span><span class="p">,</span>
+    <span class="n">ipass</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">passinfo</span><span class="p">:</span> <span class="n">bunch</span><span class="o">.</span><span class="n">Bunch</span><span class="p">,</span>
+    <span class="n">P</span><span class="p">:</span> <span class="n">pmat</span><span class="o">.</span><span class="n">P</span><span class="p">,</span>
+    <span class="n">guess</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">],</span>
+    <span class="n">eval_prev</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">mapmaking</span><span class="o">.</span><span class="n">MLEvaluator</span><span class="p">],</span>
+    <span class="n">mapmaker_prev</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">mapmaking</span><span class="o">.</span><span class="n">MLMapmaker</span><span class="p">],</span>
+    <span class="n">logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Add an observation to the MLMapmaker.</span>
+<span class="sd">    This makes sure that the correct weather and site are included and will use</span>
+<span class="sd">    an input map or a previous iteration of the mapmaker to estimate the signal</span>
+<span class="sd">    when computing the noise model if they are provided.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    aman : AxisManager</span>
+<span class="sd">        The TOD after preprocessing.</span>
+<span class="sd">        The cut samples should be in the `glitch` flag.</span>
+<span class="sd">    sub_id : str</span>
+<span class="sd">        The `sub_id` of the TOD.</span>
+<span class="sd">        Should have format `{obs_id}:{ws}:{band}`.</span>
+<span class="sd">    mapmaker : mapmaking.MLMapmaker</span>
+<span class="sd">        The mapmaker instance to add the observation to.</span>
+<span class="sd">    ipass : int</span>
+<span class="sd">        The pass number.</span>
+<span class="sd">    passinfo : bunch.Bunch</span>
+<span class="sd">        The pass we are on. See `setup_passes` for details.</span>
+<span class="sd">    P : pmat.P</span>
+<span class="sd">        The `sotodlib` projectioe matrix.</span>
+<span class="sd">    guess : Optional[enmap.ndmap]</span>
+<span class="sd">        A guess at what the map is.</span>
+<span class="sd">        If this is not `None` and `ipass == 0` then this is</span>
+<span class="sd">        used to estimate the signal when building the noise model.</span>
+<span class="sd">    eval_prev : Optional[mapmakin.MLEvaluator]</span>
+<span class="sd">        Evaluator for the previous pass of the mapmaker.</span>
+<span class="sd">        If `ipass &gt; 0` and both this and `mapmaker_prev` are not `None`</span>
+<span class="sd">        then they ary used to estimate the signal when building the noise model.</span>
+<span class="sd">    mapmaker_prev : Optional[mapmakin.MLMapmaker]</span>
+<span class="sd">        Mapmaker instance for the previous pass of the mapmaker.</span>
+<span class="sd">        If `ipass &gt; 0` and both this and `eval_prev` are not `None`</span>
+<span class="sd">        then they ary used to estimate the signal when building the noise model.</span>
+<span class="sd">    logger : Logger</span>
+<span class="sd">        The logger to log to.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">passinfo</span><span class="o">.</span><span class="n">downsample</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">aman</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">downsample_obs</span><span class="p">(</span><span class="n">aman</span><span class="p">,</span> <span class="n">passinfo</span><span class="o">.</span><span class="n">downsample</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;downsampling not properly implemented currently&quot;</span><span class="p">)</span>
+    <span class="n">aman</span><span class="o">.</span><span class="n">signal</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">signal</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">&quot;weather&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">aman</span><span class="p">:</span>
+        <span class="n">aman</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">&quot;weather&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;typical&quot;</span><span class="p">))</span>
+    <span class="k">if</span> <span class="s2">&quot;site&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">aman</span><span class="p">:</span>
+        <span class="n">aman</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">&quot;site&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;so_lat&quot;</span><span class="p">))</span>
+
+    <span class="c1"># Estimate noise</span>
+    <span class="k">if</span> <span class="n">ipass</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">guess</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">signal_estimate</span> <span class="o">=</span> <span class="n">P</span><span class="o">.</span><span class="n">from_map</span><span class="p">(</span><span class="n">guess</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">eval_prev</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">mapmaker_prev</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">signal_estimate</span> <span class="o">=</span> <span class="n">eval_prev</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">mapmaker_prev</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">mapmaker</span><span class="o">.</span><span class="n">data</span><span class="p">)])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">signal_estimate</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">signal</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">signal_estimate</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">signal_estimate</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">resample</span><span class="o">.</span><span class="n">resample_fft_simple</span><span class="p">(</span>
+            <span class="n">signal_estimate</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">samps</span><span class="o">.</span><span class="n">count</span>
+        <span class="p">)</span>
+    <span class="k">with</span> <span class="n">log_lvl</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">):</span>
+        <span class="n">mapmaker</span><span class="o">.</span><span class="n">add_obs</span><span class="p">(</span><span class="n">sub_id</span><span class="p">,</span> <span class="n">aman</span><span class="p">,</span> <span class="n">signal_estimate</span><span class="o">=</span><span class="n">signal_estimate</span><span class="p">,</span> <span class="n">pmap</span><span class="o">=</span><span class="n">P</span><span class="p">)</span>
+    <span class="k">del</span> <span class="n">signal_estimate</span>
+    <span class="k">del</span> <span class="n">aman</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.mapmaking.get_passes" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_passes</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Setup passes for making an ML mapmaker.
+The output will have <code>cfg.mlpass</code> elements with all of them
+having a downsampling factor of 1.
+The last pass will hade bilinear interpolations and the rest will be nearest neighbor.
+The i'th pass will have <code>max(1, cfg.cgiters//2, cfg.cgiters//(i + 1))</code> CG iters.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>cfg</code>
+            </td>
+            <td>
+                  <code><span title="argparse.Namespace">Namespace</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The loaded configuration.
+See <code>lat_beams.utils.config</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>passes</code></td>            <td>
+                  <code><span title="list">list</span>[<span title="pixell.bunch.Bunch">Bunch</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The passes for the sotodlib ML mapmaker.
+See this function's docstring for details on the contents.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_passes</span><span class="p">(</span><span class="n">cfg</span><span class="p">:</span> <span class="n">Namespace</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">bunch</span><span class="o">.</span><span class="n">Bunch</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Setup passes for making an ML mapmaker.</span>
+<span class="sd">    The output will have `cfg.mlpass` elements with all of them</span>
+<span class="sd">    having a downsampling factor of 1.</span>
+<span class="sd">    The last pass will hade bilinear interpolations and the rest will be nearest neighbor.</span>
+<span class="sd">    The i&#39;th pass will have `max(1, cfg.cgiters//2, cfg.cgiters//(i + 1))` CG iters.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cfg : Namespace</span>
+<span class="sd">        The loaded configuration.</span>
+<span class="sd">        See `lat_beams.utils.config` for details.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    passes : list[bunch.Bunch]</span>
+<span class="sd">        The passes for the sotodlib ML mapmaker.</span>
+<span class="sd">        See this function&#39;s docstring for details on the contents.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">passes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">mlpass</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">dsstr</span> <span class="o">=</span> <span class="s2">&quot;1&quot;</span>
+        <span class="n">maxiter</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">cgiters</span><span class="p">)</span>
+        <span class="n">interpol</span> <span class="o">=</span> <span class="s2">&quot;bilinear&quot;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">mlpass</span><span class="p">):</span>
+            <span class="n">interpol</span> <span class="o">=</span> <span class="s2">&quot;nearest,&quot;</span> <span class="o">+</span> <span class="n">interpol</span>
+            <span class="n">maxiter</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="o">.</span><span class="n">cgiters</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="o">.</span><span class="n">cgiters</span><span class="o">//</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="si">}</span><span class="s2">,&quot;</span> <span class="o">+</span> <span class="n">maxiter</span>
+        <span class="n">passes</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">setup_passes</span><span class="p">(</span>
+            <span class="n">downsample</span><span class="o">=</span><span class="n">dsstr</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">,</span> <span class="n">interpol</span><span class="o">=</span><span class="n">interpol</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">passes</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.mapmaking.make_cuts" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">make_cuts</span><span class="p">(</span><span class="n">aman</span><span class="p">,</span> <span class="n">source_flags</span><span class="p">,</span> <span class="n">n_modes</span><span class="p">,</span> <span class="n">job</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute cuts on a source TOD before mapping.
+This filters for the source and then calculates the peak SNR of each detector
+by dividing the max of the region in <code>source_flags</code> by the standard deviation of the region outside of <code>source_flags</code>.
+Any detector with an SNR less than <code>cfg.min_snr</code> is cut.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>aman</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The loaded data ready to be mapped.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>source_flags</code>
+            </td>
+            <td>
+                  <code><span title="so3g.proj.RangesMatrix">RangesMatrix</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>RangesMatrix with all samples within some radius of the source flagged.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_modes</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The number of modes to use when filtering.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>job</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.site_pipeline.jobdb.Job">Job</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The job associated with making this map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>logger</code>
+            </td>
+            <td>
+                  <code><span title="logging.Logger">Logger</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The logger to log to.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cfg</code>
+            </td>
+            <td>
+                  <code><span title="argparse.Namespace">Namespace</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The loaded configuration.
+See <code>lat_beams.utils.config</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>cuts</code></td>            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="so3g.proj.RangesMatrix">RangesMatrix</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The calculated cuts.
+If the number of uncut detectors is less than <code>cfg.min_dets</code> then <code>None</code> is returned.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
+<span class="normal">33</span>
+<span class="normal">34</span>
+<span class="normal">35</span>
+<span class="normal">36</span>
+<span class="normal">37</span>
+<span class="normal">38</span>
+<span class="normal">39</span>
+<span class="normal">40</span>
+<span class="normal">41</span>
+<span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span>
+<span class="normal">48</span>
+<span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span>
+<span class="normal">91</span>
+<span class="normal">92</span>
+<span class="normal">93</span>
+<span class="normal">94</span>
+<span class="normal">95</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_cuts</span><span class="p">(</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+    <span class="n">source_flags</span><span class="p">:</span> <span class="n">RangesMatrix</span><span class="p">,</span>
+    <span class="n">n_modes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">job</span><span class="p">:</span> <span class="n">jobdb</span><span class="o">.</span><span class="n">Job</span><span class="p">,</span>
+    <span class="n">logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span>
+    <span class="n">cfg</span><span class="p">:</span> <span class="n">Namespace</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">RangesMatrix</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute cuts on a source TOD before mapping.</span>
+<span class="sd">    This filters for the source and then calculates the peak SNR of each detector</span>
+<span class="sd">    by dividing the max of the region in `source_flags` by the standard deviation of the region outside of `source_flags`.</span>
+<span class="sd">    Any detector with an SNR less than `cfg.min_snr` is cut.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    aman : AxisManager</span>
+<span class="sd">        The loaded data ready to be mapped.</span>
+<span class="sd">    source_flags : RangesMatrix</span>
+<span class="sd">        RangesMatrix with all samples within some radius of the source flagged.</span>
+<span class="sd">    n_modes : int</span>
+<span class="sd">        The number of modes to use when filtering.</span>
+<span class="sd">    job : jobdb.Job</span>
+<span class="sd">        The job associated with making this map.</span>
+<span class="sd">    logger : Logger</span>
+<span class="sd">        The logger to log to.</span>
+<span class="sd">    cfg : Namespace</span>
+<span class="sd">        The loaded configuration.</span>
+<span class="sd">        See `lat_beams.utils.config` for details.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    cuts : Optional[RangesMatrix]</span>
+<span class="sd">        The calculated cuts.</span>
+<span class="sd">        If the number of uncut detectors is less than `cfg.min_dets` then `None` is returned.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sig_filt</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">filter_for_sources</span><span class="p">(</span>
+        <span class="n">tod</span><span class="o">=</span><span class="n">aman</span><span class="p">,</span>
+        <span class="n">signal</span><span class="o">=</span><span class="n">aman</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="n">source_flags</span><span class="o">=</span><span class="n">source_flags</span><span class="p">,</span>
+        <span class="n">n_modes</span><span class="o">=</span><span class="n">n_modes</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smsk</span> <span class="o">=</span> <span class="n">source_flags</span><span class="o">.</span><span class="n">mask</span><span class="p">()</span>
+    <span class="n">sig_filt_src</span> <span class="o">=</span> <span class="n">sig_filt</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">sig_filt_src</span><span class="p">[</span><span class="o">~</span><span class="n">smsk</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">sig_filt</span><span class="p">[</span><span class="n">smsk</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">all_src</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">smsk</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">no_src</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">smsk</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">sdets</span> <span class="o">=</span> <span class="o">~</span><span class="p">(</span><span class="n">all_src</span> <span class="o">+</span> <span class="n">no_src</span><span class="p">)</span>
+    <span class="n">peak_snr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sig_filt</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">sdets</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">):</span>
+            <span class="n">peak_snr</span><span class="p">[</span><span class="n">sdets</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">sig_filt_src</span><span class="p">[</span><span class="n">sdets</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">nanstd</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">sig_filt</span><span class="p">[</span><span class="n">sdets</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="p">)</span>
+    <span class="n">to_cut</span> <span class="o">=</span> <span class="n">peak_snr</span> <span class="o">&lt;</span> <span class="n">cfg</span><span class="o">.</span><span class="n">min_snr</span>  <span class="c1"># + ~np.isfinite(peak_snr)</span>
+    <span class="n">to_cut</span><span class="p">[</span><span class="o">~</span><span class="n">sdets</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">cuts</span> <span class="o">=</span> <span class="n">RangesMatrix</span><span class="o">.</span><span class="n">from_mask</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">signal</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">+</span> <span class="n">to_cut</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">])</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Cutting </span><span class="si">%s</span><span class="s2"> detectors from map&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">to_cut</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">~</span><span class="n">to_cut</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">cfg</span><span class="o">.</span><span class="n">min_dets</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Not enough detectors after source flag cuts!&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+        <span class="n">set_tag</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">jstate</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">sqy</span><span class="o">.</span><span class="n">Column</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">jobdb</span><span class="o">.</span><span class="n">JState</span><span class="o">.</span><span class="n">failed</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">cuts</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.mapmaking.make_map" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">make_map</span><span class="p">(</span><span class="n">aman</span><span class="p">,</span> <span class="n">src_to_map</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">cuts</span><span class="p">,</span> <span class="n">source_flags</span><span class="p">,</span> <span class="n">comps</span><span class="p">,</span> <span class="n">n_modes</span><span class="p">,</span> <span class="n">pixsize</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">min_det_secs</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">job</span><span class="p">,</span> <span class="n">map_str</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">cfg</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Make a filter-bin map of a source and estimate the center.
+The map will be in source-scan coordinates and uses <code>domdir</code> threading.
+If the mapping fails the associated job will have its message updated with an explanation.
+If mapping succeeds then paths to the map's files will be added to the job.</p>
+<p>Once mapped the center of the map and its SNR are estimated.
+If the SNR is below <code>cfg.min_snr</code> and <code>cfg.del_map</code> is set then the files
+associated with the map are deleted.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>aman</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The loaded data ready to be mapped.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>src_to_map</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The name of the source to map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>res</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The desired map resolution in radians.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cuts</code>
+            </td>
+            <td>
+                  <code><span title="so3g.proj.RangesMatrix">RangesMatrix</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The output of <code>make_cuts</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>source_flags</code>
+            </td>
+            <td>
+                  <code><span title="so3g.proj.RangesMatrix">RangesMatrix</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>RangesMatrix with all samples within some radius of the source flagged.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>comps</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The maps to compute, should be <code>T</code> or <code>TQU</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_modes</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The number of modes to use when filtering.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pixsize</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>res</code> in arcseconds</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>filename</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The pattern for the output map filename.
+See <code>sotodlib.coords.planets.make_map</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>min_det_secs</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The minimum number of detector seconds.
+If we are below this a map is not made.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>info</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The information used to fill in <code>filename</code>.
+See <code>sotodlib.coords.planets.make_map</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>job</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.site_pipeline.jobdb.Job">Job</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The job associated with making this map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>map_str</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A short string to describe the map in the logs and job (ie. "initial").</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>logger</code>
+            </td>
+            <td>
+                  <code><span title="logging.Logger">Logger</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The logger to log to.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cfg</code>
+            </td>
+            <td>
+                  <code><span title="argparse.Namespace">Namespace</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The loaded configuration.
+See <code>lat_beams.utils.config</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>outmap</code></td>            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="dict">dict</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The output of <code>sotodlib.coords.planets.make_map</code>.
+<code>None</code> is returned if we are below <code>min_det_secs</code> or <code>cfg.min_snr</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td><code>cent</code></td>            <td>
+                  <code>Optional[tuple[int, int]]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The estimated center of the map.
+<code>None</code> is returned if we are below <code>min_det_secs</code> or <code>cfg.min_snr</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_map</span><span class="p">(</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+    <span class="n">src_to_map</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">res</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">cuts</span><span class="p">:</span> <span class="n">RangesMatrix</span><span class="p">,</span>
+    <span class="n">source_flags</span><span class="p">:</span> <span class="n">RangesMatrix</span><span class="p">,</span>
+    <span class="n">comps</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">n_modes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">pixsize</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>  <span class="c1"># TODO: This doesn&#39;t need to exist</span>
+    <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">min_det_secs</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+    <span class="n">job</span><span class="p">:</span> <span class="n">jobdb</span><span class="o">.</span><span class="n">Job</span><span class="p">,</span>
+    <span class="n">map_str</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span>
+    <span class="n">cfg</span><span class="p">:</span> <span class="n">Namespace</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Make a filter-bin map of a source and estimate the center.</span>
+<span class="sd">    The map will be in source-scan coordinates and uses `domdir` threading.</span>
+<span class="sd">    If the mapping fails the associated job will have its message updated with an explanation.</span>
+<span class="sd">    If mapping succeeds then paths to the map&#39;s files will be added to the job.</span>
+
+<span class="sd">    Once mapped the center of the map and its SNR are estimated.</span>
+<span class="sd">    If the SNR is below `cfg.min_snr` and `cfg.del_map` is set then the files</span>
+<span class="sd">    associated with the map are deleted.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    aman : AxisManager</span>
+<span class="sd">        The loaded data ready to be mapped.</span>
+<span class="sd">    src_to_map : str</span>
+<span class="sd">        The name of the source to map.</span>
+<span class="sd">    res : float</span>
+<span class="sd">        The desired map resolution in radians.</span>
+<span class="sd">    cuts : RangesMatrix</span>
+<span class="sd">        The output of `make_cuts`.</span>
+<span class="sd">    source_flags : RangesMatrix</span>
+<span class="sd">        RangesMatrix with all samples within some radius of the source flagged.</span>
+<span class="sd">    comps : str</span>
+<span class="sd">        The maps to compute, should be `T` or `TQU`.</span>
+<span class="sd">    n_modes : int</span>
+<span class="sd">        The number of modes to use when filtering.</span>
+<span class="sd">    pixsize : float</span>
+<span class="sd">        `res` in arcseconds</span>
+<span class="sd">    filename : str</span>
+<span class="sd">        The pattern for the output map filename.</span>
+<span class="sd">        See `sotodlib.coords.planets.make_map` for details.</span>
+<span class="sd">    min_det_secs : float</span>
+<span class="sd">        The minimum number of detector seconds.</span>
+<span class="sd">        If we are below this a map is not made.</span>
+<span class="sd">    info : dict[str, str]</span>
+<span class="sd">        The information used to fill in `filename`.</span>
+<span class="sd">        See `sotodlib.coords.planets.make_map` for details.</span>
+<span class="sd">    job : jobdb.Job</span>
+<span class="sd">        The job associated with making this map.</span>
+<span class="sd">    map_str : str</span>
+<span class="sd">        A short string to describe the map in the logs and job (ie. &quot;initial&quot;).</span>
+<span class="sd">    logger : Logger</span>
+<span class="sd">        The logger to log to.</span>
+<span class="sd">    cfg : Namespace</span>
+<span class="sd">        The loaded configuration.</span>
+<span class="sd">        See `lat_beams.utils.config` for details.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    outmap : Optional[dict]</span>
+<span class="sd">        The output of `sotodlib.coords.planets.make_map`.</span>
+<span class="sd">        `None` is returned if we are below `min_det_secs` or `cfg.min_snr`.</span>
+<span class="sd">    cent : Optional[tuple[int, int]]]</span>
+<span class="sd">        The estimated center of the map.</span>
+<span class="sd">        `None` is returned if we are below `min_det_secs` or `cfg.min_snr`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Get time on source</span>
+    <span class="n">sf_uncut</span> <span class="o">=</span> <span class="n">source_flags</span> <span class="o">*</span> <span class="o">~</span><span class="n">cuts</span>
+    <span class="k">if</span> <span class="n">sf_uncut</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;RangesMatrix somehow became none...&quot;</span><span class="p">)</span>
+    <span class="n">det_secs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">sf_uncut</span><span class="o">.</span><span class="n">get_stats</span><span class="p">()[</span><span class="s2">&quot;samples&quot;</span><span class="p">])</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">timestamps</span><span class="p">))</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="si">%s</span><span class="s2"> detector seconds on source in </span><span class="si">%s</span><span class="s2"> mask&quot;</span><span class="p">,</span> <span class="n">det_secs</span><span class="p">,</span> <span class="n">map_str</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">det_secs</span> <span class="o">&lt;</span> <span class="n">min_det_secs</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Not enough time on source in </span><span class="si">{</span><span class="n">map_str</span><span class="si">}</span><span class="s2"> mask.&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+        <span class="n">set_tag</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">jstate</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">sqy</span><span class="o">.</span><span class="n">Column</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">jobdb</span><span class="o">.</span><span class="n">JState</span><span class="o">.</span><span class="n">failed</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+
+    <span class="c1"># Initial map</span>
+    <span class="k">with</span> <span class="n">log_lvl</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">make_map</span><span class="p">(</span>
+            <span class="n">aman</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+            <span class="n">thread_algo</span><span class="o">=</span><span class="s2">&quot;domdir&quot;</span><span class="p">,</span>  <span class="c1"># type: ignore</span>
+            <span class="n">center_on</span><span class="o">=</span><span class="n">src_to_map</span><span class="p">,</span>
+            <span class="n">res</span><span class="o">=</span><span class="n">res</span><span class="p">,</span>
+            <span class="n">cuts</span><span class="o">=</span><span class="n">cuts</span><span class="p">,</span>
+            <span class="n">source_flags</span><span class="o">=</span><span class="n">source_flags</span><span class="p">,</span>
+            <span class="n">comps</span><span class="o">=</span><span class="n">comps</span><span class="p">,</span>
+            <span class="n">filename</span><span class="o">=</span><span class="n">filename</span><span class="p">,</span>
+            <span class="n">n_modes</span><span class="o">=</span><span class="n">n_modes</span><span class="p">,</span>
+            <span class="n">info</span><span class="o">=</span><span class="n">info</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Smooth and find the center</span>
+    <span class="n">cent</span> <span class="o">=</span> <span class="n">estimate_cent</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;solved&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">cfg</span><span class="o">.</span><span class="n">smooth_kern</span> <span class="o">/</span> <span class="n">pixsize</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span>
+
+    <span class="c1"># Estimate SNR</span>
+    <span class="n">peak</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="s2">&quot;solved&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="n">cent</span><span class="p">]</span>
+    <span class="n">snr</span> <span class="o">=</span> <span class="n">peak</span> <span class="o">/</span> <span class="n">tod_ops</span><span class="o">.</span><span class="n">jumps</span><span class="o">.</span><span class="n">std_est</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="s2">&quot;solved&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ravel</span><span class="p">()),</span> <span class="n">ds</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">ndets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="o">~</span><span class="n">cuts</span><span class="o">.</span><span class="n">mask</span><span class="p">(),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="si">%s</span><span class="s2"> map SNR approximately </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">map_str</span><span class="o">.</span><span class="n">title</span><span class="p">(),</span> <span class="n">snr</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">snr</span> <span class="o">&lt;</span> <span class="n">cfg</span><span class="o">.</span><span class="n">min_snr</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">ndets</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">map_str</span><span class="o">.</span><span class="n">title</span><span class="p">()</span><span class="si">}</span><span class="s2"> map SNR too low.&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+        <span class="n">set_tag</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">jstate</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">sqy</span><span class="o">.</span><span class="n">Column</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">jobdb</span><span class="o">.</span><span class="n">JState</span><span class="o">.</span><span class="n">failed</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">del_map</span> <span class="ow">and</span> <span class="n">filename</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Deleting map files&quot;</span><span class="p">)</span>
+            <span class="n">glob_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">filename</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;*.*&quot;</span>
+            <span class="n">flist</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">glob_path</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">flist</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;binned&quot;</span><span class="p">,</span> <span class="s2">&quot;detweights&quot;</span><span class="p">,</span> <span class="s2">&quot;solved&quot;</span><span class="p">,</span> <span class="s2">&quot;weights&quot;</span><span class="p">]:</span>
+                <span class="n">set_tag</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">out</span><span class="p">,</span> <span class="n">cent</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.mapmaking.make_ml_map" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">make_ml_map</span><span class="p">(</span><span class="n">amans</span><span class="p">,</span> <span class="n">passes</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">wcs</span><span class="p">,</span> <span class="n">prefix</span><span class="p">,</span> <span class="n">out_dir</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="n">guess</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Make a multipass ML source map using the sotodlib ML mapmaker.
+May be worth adding a <code>sogma</code> option down the line.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>amans</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="tuple">tuple</span>[<span title="sotodlib.core.AxisManager">AxisManager</span>, <span title="sotodlib.coords.pmat.P">P</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The AxisManagers to map.
+Each entry should map a sub_id (with format <code>{obs_id}:{ws}:{band}</code>)
+to a tuple consisting of an AxisManager that is preprocessed and ready to map
+and the corresponding projection matrix.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>passes</code>
+            </td>
+            <td>
+                  <code><span title="list">list</span>[<span title="pixell.bunch.Bunch">Bunch</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The output of <code>setup_passes</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>shape</code>
+            </td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The desired shape of the output map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>wcs</code>
+            </td>
+            <td>
+                  <code><span title="astropy.wcs.WCS">WCS</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The WCS to be used for the output map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>prefix</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The prefix to be preprended to the map filenames.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>out_dir</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The directory to save maps to.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>comm</code>
+            </td>
+            <td>
+                  <code><span title="mpi4py.MPI.Comm">Comm</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The MPI communicator to use when mapmaking.
+All processes must have a non-zero sized <code>amans</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>logger</code>
+            </td>
+            <td>
+                  <code><span title="logging.Logger">Logger</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The logger to log to.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cfg</code>
+            </td>
+            <td>
+                  <code><span title="argparse.Namespace">Namespace</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The loaded configuration.
+See <code>lat_beams.utils.config</code> for details.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>guess</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pixell.enmap.ndmap">ndmap</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A map to use to estimate the signal when constructing
+the noise model in the first pass of mapmaking.
+Pass <code>None</code> if you don't have a good starting guess.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>outmap</code></td>            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="pixell.enmap.ndmap">ndmap</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The signal map from the final pass.
+Will be <code>None</code> if no passes are run.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td><code>paths</code></td>            <td>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, <span title="str">str</span>, <span title="str">str</span>, <span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The paths to the signal, rhs, div, and bin maps from the final pass.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span>
+<span class="normal">444</span>
+<span class="normal">445</span>
+<span class="normal">446</span>
+<span class="normal">447</span>
+<span class="normal">448</span>
+<span class="normal">449</span>
+<span class="normal">450</span>
+<span class="normal">451</span>
+<span class="normal">452</span>
+<span class="normal">453</span>
+<span class="normal">454</span>
+<span class="normal">455</span>
+<span class="normal">456</span>
+<span class="normal">457</span>
+<span class="normal">458</span>
+<span class="normal">459</span>
+<span class="normal">460</span>
+<span class="normal">461</span>
+<span class="normal">462</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span>
+<span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_ml_map</span><span class="p">(</span>
+    <span class="n">amans</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">pmat</span><span class="o">.</span><span class="n">P</span><span class="p">]],</span>
+    <span class="n">passes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">bunch</span><span class="o">.</span><span class="n">Bunch</span><span class="p">],</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+    <span class="n">wcs</span><span class="p">:</span> <span class="n">WCS</span><span class="p">,</span>
+    <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">comm</span><span class="p">:</span> <span class="n">MPI</span><span class="o">.</span><span class="n">Comm</span><span class="p">,</span>
+    <span class="n">logger</span><span class="p">:</span> <span class="n">Logger</span><span class="p">,</span>
+    <span class="n">cfg</span><span class="p">:</span> <span class="n">Namespace</span><span class="p">,</span>
+    <span class="n">guess</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Make a multipass ML source map using the sotodlib ML mapmaker.</span>
+<span class="sd">    May be worth adding a `sogma` option down the line.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    amans : dict[str, tuple[AxisManager, pmat.P]]</span>
+<span class="sd">        The AxisManagers to map.</span>
+<span class="sd">        Each entry should map a sub_id (with format `{obs_id}:{ws}:{band}`)</span>
+<span class="sd">        to a tuple consisting of an AxisManager that is preprocessed and ready to map</span>
+<span class="sd">        and the corresponding projection matrix.</span>
+<span class="sd">    passes : list[bunch.Bunch]</span>
+<span class="sd">        The output of `setup_passes`.</span>
+<span class="sd">    shape : tuple[int, int]</span>
+<span class="sd">        The desired shape of the output map.</span>
+<span class="sd">    wcs : WCS</span>
+<span class="sd">        The WCS to be used for the output map.</span>
+<span class="sd">    prefix : str</span>
+<span class="sd">        The prefix to be preprended to the map filenames.</span>
+<span class="sd">    out_dir : str</span>
+<span class="sd">        The directory to save maps to.</span>
+<span class="sd">    comm : MPI.Comm</span>
+<span class="sd">        The MPI communicator to use when mapmaking.</span>
+<span class="sd">        All processes must have a non-zero sized `amans`.</span>
+<span class="sd">    logger : Logger</span>
+<span class="sd">        The logger to log to.</span>
+<span class="sd">    cfg : Namespace</span>
+<span class="sd">        The loaded configuration.</span>
+<span class="sd">        See `lat_beams.utils.config` for details.</span>
+<span class="sd">    guess : Optional[enmap.ndmap], default: None</span>
+<span class="sd">        A map to use to estimate the signal when constructing</span>
+<span class="sd">        the noise model in the first pass of mapmaking.</span>
+<span class="sd">        Pass `None` if you don&#39;t have a good starting guess.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    outmap : Optional[enmap.ndmap]</span>
+<span class="sd">        The signal map from the final pass.</span>
+<span class="sd">        Will be `None` if no passes are run.</span>
+<span class="sd">    paths : tuple[str, str, str, str]</span>
+<span class="sd">        The paths to the signal, rhs, div, and bin maps from the final pass.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mlmap_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">rhs_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">div_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">bin_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">outmap</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">eval_prev</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">mapmaker_prev</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">for</span> <span class="n">ipass</span><span class="p">,</span> <span class="n">passinfo</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">passes</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">Get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Starting pass </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> maxit </span><span class="si">%d</span><span class="s2"> down </span><span class="si">%d</span><span class="s2"> interp </span><span class="si">%s</span><span class="s2">&quot;</span>
+                <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">ipass</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">passes</span><span class="p">),</span>
+                    <span class="n">passinfo</span><span class="o">.</span><span class="n">maxiter</span><span class="p">,</span>
+                    <span class="n">passinfo</span><span class="o">.</span><span class="n">downsample</span><span class="p">,</span>
+                    <span class="n">passinfo</span><span class="o">.</span><span class="n">interpol</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="n">pass_prefix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">pass</span><span class="si">{</span><span class="n">ipass</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">_&quot;</span><span class="p">)</span>
+        <span class="n">noise_model</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">NmatDetvecs</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">signal_cut</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">SignalCut</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">signal_map</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">SignalMap</span><span class="p">(</span>
+            <span class="n">shape</span><span class="p">,</span>
+            <span class="n">wcs</span><span class="p">,</span>
+            <span class="n">comm</span><span class="p">,</span>
+            <span class="n">comps</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">comps</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>  <span class="c1"># type: ignore</span>
+            <span class="n">tiled</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">interpol</span><span class="o">=</span><span class="n">passinfo</span><span class="o">.</span><span class="n">interpol</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">signals</span> <span class="o">=</span> <span class="p">[</span><span class="n">signal_cut</span><span class="p">,</span> <span class="n">signal_map</span><span class="p">]</span>
+        <span class="n">mapmaker</span> <span class="o">=</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">MLMapmaker</span><span class="p">(</span>
+            <span class="n">signals</span><span class="p">,</span> <span class="n">noise_model</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">sub_id</span><span class="p">,</span> <span class="p">(</span><span class="n">aman</span><span class="p">,</span> <span class="n">P</span><span class="p">)</span> <span class="ow">in</span> <span class="n">amans</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">P</span><span class="o">.</span><span class="n">interpol</span> <span class="o">=</span> <span class="n">passinfo</span><span class="o">.</span><span class="n">interpol</span>
+            <span class="n">add_obs_to_mapmaker</span><span class="p">(</span>
+                <span class="n">aman</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+                <span class="n">sub_id</span><span class="p">,</span>
+                <span class="n">mapmaker</span><span class="p">,</span>
+                <span class="n">ipass</span><span class="p">,</span>
+                <span class="n">passinfo</span><span class="p">,</span>
+                <span class="n">P</span><span class="p">,</span>
+                <span class="n">guess</span><span class="p">,</span>
+                <span class="n">eval_prev</span><span class="p">,</span>
+                <span class="n">mapmaker_prev</span><span class="p">,</span>
+                <span class="n">logger</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Write the starting maps</span>
+        <span class="n">mapmaker</span><span class="o">.</span><span class="n">prepare</span><span class="p">()</span>
+        <span class="n">rhs_path</span> <span class="o">=</span> <span class="n">signal_map</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">out_dir</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="s2">&quot;rhs&quot;</span><span class="p">,</span> <span class="n">signal_map</span><span class="o">.</span><span class="n">rhs</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;pW^-1&quot;</span><span class="p">)</span>
+        <span class="n">div_path</span> <span class="o">=</span> <span class="n">signal_map</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">out_dir</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="s2">&quot;div&quot;</span><span class="p">,</span> <span class="n">signal_map</span><span class="o">.</span><span class="n">div</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;pW^-2&quot;</span><span class="p">)</span>
+        <span class="n">bin_path</span> <span class="o">=</span> <span class="n">signal_map</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+            <span class="n">out_dir</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;bin&quot;</span><span class="p">,</span>
+            <span class="n">enmap</span><span class="o">.</span><span class="n">map_mul</span><span class="p">(</span><span class="n">signal_map</span><span class="o">.</span><span class="n">idiv</span><span class="p">,</span> <span class="n">signal_map</span><span class="o">.</span><span class="n">rhs</span><span class="p">),</span>
+            <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;pW&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">Get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Wrote rhs, div, bin&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Set up initial condition</span>
+        <span class="n">x0</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">ipass</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">eval_prev</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">mapmaker_prev</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="n">mapmaker</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="n">mapmaker_prev</span><span class="p">,</span> <span class="n">eval_prev</span><span class="o">.</span><span class="n">x_zip</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Solve</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">step</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">mapmaker</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">maxiter</span><span class="o">=</span><span class="n">passinfo</span><span class="o">.</span><span class="n">maxiter</span><span class="p">,</span> <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">):</span>
+            <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="n">dump</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">i</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">==</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">Get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="p">(</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span> <span class="k">if</span> <span class="n">dump</span> <span class="k">else</span> <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">)(</span>
+                    <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">CG step </span><span class="si">%4d</span><span class="s2"> </span><span class="si">%15.7e</span><span class="s2"> </span><span class="si">%8.3f</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span>
+                    <span class="o">%</span> <span class="p">(</span><span class="n">step</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">step</span><span class="o">.</span><span class="n">err</span><span class="p">,</span> <span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">dump</span> <span class="k">else</span> <span class="s2">&quot;(write)&quot;</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">dump</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">signal</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">signals</span><span class="p">,</span> <span class="n">step</span><span class="o">.</span><span class="n">x</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">signal</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
+                        <span class="n">mlmap_path</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">pass_prefix</span><span class="p">,</span> <span class="s2">&quot;map</span><span class="si">%04d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">step</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
+            <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Done with ML map&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">step</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Mapmaker ran 0 steps!&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">signal</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">signals</span><span class="p">,</span> <span class="n">step</span><span class="o">.</span><span class="n">x</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">signal</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
+                <span class="n">outmap</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
+                <span class="n">mlmap_path</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">pass_prefix</span><span class="p">,</span> <span class="s2">&quot;map&quot;</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;pW&quot;</span><span class="p">)</span>
+
+        <span class="n">mapmaker_prev</span> <span class="o">=</span> <span class="n">mapmaker</span>
+        <span class="n">eval_prev</span> <span class="o">=</span> <span class="n">mapmaker</span><span class="o">.</span><span class="n">evaluator</span><span class="p">(</span><span class="n">step</span><span class="o">.</span><span class="n">x_zip</span><span class="p">)</span>
+
+    <span class="n">mlmap_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="n">mlmap_path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">mlmap_path</span>
+    <span class="n">rhs_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="n">rhs_path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">rhs_path</span>
+    <span class="n">div_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="n">div_path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">div_path</span>
+    <span class="n">bin_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="n">bin_path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">bin_path</span>
+
+    <span class="k">return</span> <span class="n">outmap</span><span class="p">,</span> <span class="p">(</span><span class="n">mlmap_path</span><span class="p">,</span> <span class="n">rhs_path</span><span class="p">,</span> <span class="n">div_path</span><span class="p">,</span> <span class="n">bin_path</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 
