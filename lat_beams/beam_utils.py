@@ -7,7 +7,7 @@ TODO: Make everything radians
 import datetime as dt
 import os
 from logging import Logger
-from typing import Optional
+from typing import Optional, cast
 
 import astropy.units as u
 import h5py
@@ -210,7 +210,7 @@ def get_fwhm_radial_bins(
     d = y - half_point
     inds = np.where(d > 0)[0]
     fwhm = 2 * (r[inds[-1]])
-    return fwhm
+    return cast(float, fwhm)
 
 
 def crop_maps(
@@ -283,7 +283,7 @@ def estimate_cent(
     smoothed[:, -1 * buf :] = 0
     cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
 
-    return cent
+    return (int(cent[0]), int(cent[1]))
 
 
 def process_model(
