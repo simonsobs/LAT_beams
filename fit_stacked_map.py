@@ -1,5 +1,4 @@
 import os
-import sys
 
 import astropy.units as u
 import numpy as np
@@ -121,7 +120,7 @@ for split in cfg.split_by:
                 guess,
                 "pW",
                 cfg.sym_gauss,
-                7,
+                1000,
             )
             if gauss_params is None or model is None:
                 print("\t\tGauss fit failed")
@@ -156,7 +155,7 @@ for split in cfg.split_by:
                 cfg.aperature,
                 const.c / (float(band[1:]) * u.GHz),
                 band_mask_size,
-                data_fwhm,
+                cfg.bessel_wing_n_sigma
             )
             if bessel_beam_params is None or model is None:
                 print("\t\tBessel fit failed")

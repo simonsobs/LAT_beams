@@ -181,6 +181,8 @@ def fit_gauss_map(
             guess.fwhm_xi / 3,
             guess.fwhm_eta / 3,
             0,
+            # r0,
+            # 0,
         ],
         [
             np.max(x) + guess.fwhm_xi,
@@ -192,9 +194,9 @@ def fit_gauss_map(
             2 * np.pi,
         ],
     ]
-    map_units = u.Unit(map_units)
-    par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"]
-    par_units = [u.radian, u.radian, map_units, map_units, u.radian, u.radian, u.radian]  # type: ignore
+    map_unit = u.Unit(map_units)
+    par_names = ["xi0", "eta0", "off", "amp", "fwhm_xi", "fwhm_eta", "phi"] #, "wing_r0", "wing_amp"]
+    par_units = [u.radian, u.radian, map_unit, map_unit, u.radian, u.radian, u.radian] #, u.radian, map_unit]  # type: ignore
     if force_sym:
         x0 = x0[:-2]
         bounds[0] = bounds[0][:-2]
@@ -319,8 +321,7 @@ def fit_bessel_map(
     d: u.Quantity = 6 * u.m,
     lmd: u.Quantity = 90 * u.GHz,
     mask_size: float = np.inf,
-    data_fwhm: float = np.inf,
-    fit_wing: bool = True,
+    n_sigma: float = 5,
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -340,13 +341,11 @@ def fit_bessel_map(
         Wavelength of the beam being fit.
     mask_size : float, default: np.inf
         Size (in radians) of the mask used when making the map.
-        Used to zero out `ivar` outside the mask,
+        Used to zero out `ivar` outside the mask when fitting the core,
         also used to set bounds when fitting the wing.
-    data_fwhm : float, default: np.inf
-        The FWHM of the data profile.
-        Used for the initial guess of the wing.
-    fit_wing : bool, default: True
-        If True fit for a $r^{-3}$ wing.
+    n_sigma : float, default: 5
+        The number of sigma to re-scale the input gaussian amplitude from
+        `guess` by in order to determine the target wing amplitude.
 
     Returns
     -------
@@ -354,6 +353,7 @@ def fit_bessel_map(
         The following scalars:
 
         - ell_max: The $\ell$ to scale $r$ by when fitting
+        - off: The offset of the bessel mode, this is in addition to the offset from the input `guess`.
         - r0_wing: The radius to start the wing at
         - amp_wing: The amplitude of the wing
         - off_wing: The offset of the wing, currently fixed to 0
@@ -369,23 +369,6 @@ def fit_bessel_map(
         The model evaluated with the fit parameters.
     """
 
-    def _wing_msk(beam_model, amp_wing, r, r0_wing):
-        msk = r > r0_wing
-        blk_msk = block_replicate(
-            (block_reduce((beam_model < amp_wing).astype(int), 2) > 0), 2, False
-        ).astype(bool)
-        sl = tuple(slice(0, s) for s in blk_msk.shape)
-        msk[sl] += blk_msk
-        return msk
-
-    def _wing_obj(coeffs, beam_model, r, imap, ivar):
-        r0, a, off = coeffs
-        wing_model = beam_model.copy()
-        wmsk = _wing_msk(beam_model, a + off, r, r0)
-        wing_model[wmsk] = off + a * (r0**3) / np.power(r[wmsk], 3)
-
-        return np.nansum(ivar * (imap - wing_model) ** 2)
-
     ell_max = (np.pi * d / lmd).decompose().value
     eta, xi = posmap
     eta0 = guess.eta0.to(u.radian).value
@@ -396,62 +379,19 @@ def fit_bessel_map(
     r = np.sqrt(xi**2 + eta**2)
 
     # Setup aman
-    map_units = u.Unit(map_units)
+    map_unit = u.Unit(map_units)
     aman = AxisManager()
     b_ax = IndexAxis("bessel", n_bessel)
     mp_ax = IndexAxis("multipoles", n_multipoles)
     sc_ax = LabelAxis("term", ["cos", "sin"])
     aman.wrap("ell_max", ell_max * u.dimensionless_unscaled)
-    aman.wrap("fit_wing", fit_wing)
-    aman.wrap("r0_wing", np.inf * u.radian)
-    aman.wrap("amp_wing", -1 * np.inf * map_units)
-    aman.wrap("off_wing", 0 * map_units)
+    aman.wrap("mask_size", mask_size * u.radian)
+    aman.wrap("n_sigma", n_sigma * u.dimensionless_unscaled)
 
     # Compute initial model
-    cent_pix = r < np.deg2rad(posmap.wcs.wcs.cdelt[1]) / 2
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
     beam_model = np.zeros_like(xi)
-    ivar_orig = ivar.copy()
-    ivar[cent_pix] = 0
-    for n0 in range(len(amps)):
-        b0 = bessel_term(r, ell_max, n0)
-        for n1 in range(n0, len(amps)):
-            b1 = bessel_term(r, ell_max, n1)
-            base_beam = b0 * b1
-            amps[n0, n1] = multipole_decomp(
-                base_beam, imap - beam_model, ivar, n_multipoles, theta, True, True
-            )
-            beam_model += multipole_expansion(base_beam, amps[n0, n1], theta)
-
-    # Fit for a symmetric r^-3 wing with the intial model
-    wmsk = np.zeros_like(beam_model, dtype=bool)
-    if fit_wing:
-        ivar = ivar_orig.copy()
-        ivar[r > mask_size] = 0
-        ivar[r <= mask_size] = 1
-        avg_sig = (data_fwhm).to(u.radian).value / 2.355
-        r0 = min(mask_size, np.max(r))
-        w_guess = [min(5 * avg_sig, 0.7 * r0), 0, 0]
-        bounds = [
-            (min(0.5 * r0, w_guess[0] * 0.5), min(0.85 * r0, 2 * w_guess[0])),
-            (0, 1),
-            (-np.inf, np.inf),
-        ]
-        res = minimize(
-            _wing_obj,
-            w_guess,
-            bounds=bounds,
-            args=(beam_model, r, imap, ivar),
-            method="powell",
-        )
-        if not res.success:
-            return None, None
-        wmsk = _wing_msk(beam_model, res.x[1] + res.x[2], r, res.x[0])
-
-    # Now use the wing mask to do a lstsq fit in a limited range
-    ivar = ivar_orig.copy()
-    core_r = max(np.max(r[~wmsk]), 1.5 * mask_size)
-    core_msk = r <= core_r
+    core_msk = r <= mask_size 
     X = []
     idx = []
     for n0 in range(len(amps)):
@@ -466,43 +406,50 @@ def fit_bessel_map(
                     idx += [(n0, n1, m, i)]
     X += [np.ones_like(beam_model[core_msk])]
     X = np.column_stack(X) * np.sqrt(ivar[core_msk])[..., None]
-    als, _, _, _ = lstsq(
-        X, imap[core_msk] * np.sqrt(ivar[core_msk]), cond=1e-3 * np.min(amps)
+    lres = lstsq(
+        X, (imap[core_msk] - guess.off.value) * np.sqrt(ivar[core_msk]), cond=1e-8 * guess.amp.value
     )
+    if lres is None:
+        return None, None
+    als = lres[0]
     als, off = als[:-1], als[-1]
     amps[:] = 0
     for i, a in zip(idx, als):
         amps[i] = a
-    beam_model = bessel_beam(
-        posmap, xi0, eta0, ell_max, amps, off, np.max(r), -1 * np.inf, 0
-    )
-    aman.wrap("amps", amps * map_units, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
-    aman.wrap("off", off * map_units)
+    aman.wrap("amps", amps * map_unit, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
+    aman.wrap("off", off * map_unit)
+    beam_model = bessel_beam(posmap, xi0, eta0, guess.amp.value, 0, ell_max, amps, off, [], [], [], mask_size, n_sigma)
 
-    # Refit the wing
-    if fit_wing:
-        ivar[r > mask_size] = 0
-        ivar[r <= mask_size] = 1
-        bounds[2] = (0, 0)
-        w_guess[:2] = res.x[:2]
-        res = minimize(
-            _wing_obj,
-            w_guess,
-            bounds=bounds,
-            args=(beam_model, r, imap, ivar),
-            method="powell",
-        )
-        if not res.success:
-            return None, None
-        aman.r0_wing = res.x[0] * u.radian
-        aman.amp_wing = res.x[1] * map_units
-        aman.off_wing = res.x[2] * map_units
-        wmsk = _wing_msk(
-            beam_model, aman.amp_wing.value + aman.off_wing.value, r, aman.r0_wing.value
-        )
-        beam_model[wmsk] = (
-            aman.amp_wing.value * (aman.r0_wing.value**3) / np.power(r[wmsk], 3)
-            + aman.off_wing.value
-        )
+    # Fix the wing based on the n_sigma sigma level of the data
+    thresh = guess.amp.value * np.exp(-.5 * (n_sigma**2))
+    wmsk = (beam_model < thresh)
+    beam_model += guess.off.value
+    thetas = np.linspace(-np.pi, np.pi, 72)
+    tbins = np.digitize(theta, thetas)
+
+    # Setup output
+    tax = IndexAxis("theta_bins", len(thetas))
+    aman.wrap("thetas", thetas * u.radian, [(0, tax)])
+    r0_wing = np.zeros_like(thetas)
+    amp_wing = np.zeros_like(thetas)
+
+    for tb in np.unique(tbins):
+        tmsk = (tbins == tb)
+        twmsk = tmsk * wmsk
+        if np.sum(twmsk) == 0:
+            r0 = mask_size
+            if np.max(r[tmsk]) < r0 or np.sum(tmsk) == 0:
+                amp = guess.off.value
+            else:
+                amp = beam_model[tmsk][np.argmin(np.abs(mask_size - r[tmsk]))]
+        else:
+            r0 = np.min(r[twmsk])
+            amp = np.mean(beam_model[(r == r0) * twmsk]).item()  #thresh 
+        r0_wing[tb] = r0
+        amp_wing[tb] = amp
+        rmsk = (r > 1.*mask_size) * tmsk
+        beam_model[twmsk + rmsk] = amp * (r0/r[twmsk + rmsk])**3
+    aman.wrap("r0_wing", r0_wing * u.radian, [(0, tax)])
+    aman.wrap("amp_wing", amp_wing * map_unit, [(0, tax)])
 
     return aman, beam_model

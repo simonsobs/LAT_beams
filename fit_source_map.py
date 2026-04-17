@@ -276,8 +276,8 @@ for i, j in enumerate(joblist):
         posmap,
         guess,
         "pW",
-        cfg.sym_gauss,
-        7,
+        False, #cfg.sym_gauss,
+        1000,
     )
     if gauss_params is None or model is None:
         msg = "Fit failed"
@@ -322,7 +322,7 @@ for i, j in enumerate(joblist):
     # Process and save fit model
     gauss_params = process_model(
         gauss_params,
-        solved,
+        solved - gauss_params.off.value,
         model - gauss_params.off.value,
         noise,
         cfg.min_snr,
@@ -336,6 +336,7 @@ for i, j in enumerate(joblist):
     )
     if gauss_params is None:
         to_save = (None, None)
+        continue
     aman.wrap("gauss", gauss_params)
     for to_parent in ["amp", "off", "xi0", "eta0"]:
         aman.wrap(to_parent, gauss_params[to_parent])
@@ -383,13 +384,20 @@ for i, j in enumerate(joblist):
             cfg.aperature,
             const.c / (float(band[1:]) * u.GHz),
             band_mask_size,
-            data_fwhm,
-            cfg.bessel_wing,
+            cfg.bessel_wing_n_sigma
         )
+        if bessel_beam_params is None or model is None:
+            msg = "Fit failed"
+            logger.error("\t%s", msg)
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            to_save = (None, None)
+            continue
+
         bessel_beam_params = process_model(
             bessel_beam_params,
-            solved,
-            model,
+            solved - gauss_params.off.value,
+            model - gauss_params.off.value,
             noise,
             cfg.min_snr,
             c,

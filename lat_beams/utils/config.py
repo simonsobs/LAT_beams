@@ -153,7 +153,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["n_multipoles"] = cfg.get("n_multipoles", 3)
     cfg["n_bessel"] = cfg.get("n_bessel", 10)
     cfg["force_bessel_cent"] = cfg.get("force_bessel_cent", False)
-    cfg["bessel_wing"] = cfg.get("bessel_wing", False)
+    cfg["bessel_wing_n_sigma"] = cfg.get("bessel_wing_n_sigma", 5)
     cfg["sym_gauss"] = cfg.get("sym_gauss", True)
 
     # Hardware info

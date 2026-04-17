@@ -2,6 +2,10 @@ import astropy.units as u
 import numpy as np
 from astropy.nddata import block_reduce, block_replicate
 from scipy.special import factorial, jv, spherical_jn
+from joblib import Memory
+
+location = "/tmp/lat_beams"
+memory = Memory(location, verbose=0)
 
 
 def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
@@ -38,6 +42,13 @@ def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     sim_data = a * np.exp(xi_coef + eta_coef)
     return sim_data + off
 
+def gaussian2d_wing(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off, wing_r0, wing_amp):
+    gauss = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
+    r = np.sqrt((posmap[0] - dy)**2 + (posmap[1] - dx)**2)
+    r_msk = r > wing_r0
+    gauss[r_msk] = (wing_amp * np.power(r[r_msk], -3))
+
+    return gauss + off
 
 def multipole(theta, mp, sin):
     order = mp
@@ -109,17 +120,22 @@ def bessel_term(r, ell_max, i):
         bessel = jv(i, r * ell_max) / (r * ell_max)
     return bessel
 
+bessel_term_cached = memory.cache(bessel_term)
 
 def bessel_beam(
     posmap,
     xi0,
     eta0,
+    gauss_amp,
+    gauss_off,
     ell_max,
     amps,
-    off,
+    off_bessel,
     r0_wing,
     amp_wing,
-    off_wing,
+    thetas,
+    mask_size,
+    n_sigma,
 ):
     eta, xi = posmap
     xi = xi - xi0
@@ -127,24 +143,31 @@ def bessel_beam(
     r = np.sqrt(xi**2 + eta**2)
     theta = np.arctan2(eta, xi)
 
-    beam_model = np.zeros_like(xi)
-    r_msk = r <= r0_wing
-    beam_model[r_msk] = off
+    beam_model = np.zeros_like(xi) + off_bessel
     for n0 in range(len(amps)):
-        b0 = bessel_term(r[r_msk], ell_max, n0)
+        b0 = np.array(bessel_term_cached(r, ell_max, n0))
         for n1 in range(n0, len(amps)):
-            b1 = bessel_term(r[r_msk], ell_max, n1)
+            b1 = np.array(bessel_term_cached(r, ell_max, n1))
             base_beam = b0 * b1
-            beam_model[r_msk] += multipole_expansion(
-                base_beam, amps[n0, n1], theta[r_msk]
+            beam_model += multipole_expansion(
+                base_beam, amps[n0, n1], theta
             )
-    wmsk = r > r0_wing
-    blk_msk = block_replicate(
-        (block_reduce((beam_model < amp_wing + off_wing).astype(int), 2) > 0), 2, False
-    ).astype(bool)
-    sl = tuple(slice(0, s) for s in blk_msk.shape)
-    wmsk[sl] += blk_msk
-    beam_model[wmsk] = off_wing + amp_wing * (r0_wing**3) / np.power(r[wmsk], 3)
+
+    if len(thetas) == 0:
+        return beam_model + gauss_off
+
+    thresh = gauss_amp * np.exp(-.5 * (n_sigma**2))
+    wmsk = (beam_model < thresh)
+    beam_model += gauss_off
+    tbins = np.digitize(theta, thetas)
+
+    for tb in np.unique(tbins):
+        tmsk = (tbins == tb)
+        twmsk = tmsk * wmsk
+        r0 = r0_wing[tb]
+        amp = amp_wing[tb]
+        rmsk = (r > 1.*mask_size) * tmsk
+        beam_model[twmsk + rmsk] = amp * (r0/r[twmsk + rmsk])**3
 
     return beam_model
 
@@ -181,12 +204,16 @@ def bessel_beam_from_aman(posmap, aman):
         posmap,
         aman.gauss.xi0.to(u.radian).value,
         aman.gauss.eta0.to(u.radian).value,
+        aman.gauss.amp.value,
+        aman.gauss.off.value,
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
         aman.bessel.off.value,
-        aman.bessel.r0_wing.value,
+        aman.bessel.r0_wing.to(u.radian).value,
         aman.bessel.amp_wing.value,
-        aman.bessel.off_wing.value,
+        aman.bessel.thetas.to(u.radian).value,
+        aman.bessel.mask_size.value,
+        aman.bessel.n_sigma.value,
     )
 
 
