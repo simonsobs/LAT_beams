@@ -34,8 +34,7 @@ cgiters_single: 30
 cgiters_full: 400
 mlpass: 3
 sym_gauss: False 
-n_bessel: 20
-n_multipoles: 8
-force_bessel_cent: False 
-bessel_wing: False 
+n_bessel: 15
+n_multipoles: 6
+bessel_wing: True 
 extent: 720
