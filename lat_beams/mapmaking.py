@@ -173,7 +173,7 @@ def make_ml_map(
     mapmaker_prev = None
     for ipass, passinfo in enumerate(passes):
         if comm.Get_rank() == 0:
-            logger.debug(
+            logger.info(
                 "Starting pass %d/%d maxit %d down %d interp %s"
                 % (
                     ipass + 1,
@@ -183,6 +183,7 @@ def make_ml_map(
                     passinfo.interpol,
                 )
             )
+            logger.flush()
         pass_prefix = os.path.join(out_dir, f"{prefix}pass{ipass+1}_")
         noise_model = mapmaking.NmatDetvecs(verbose=False)
         signal_cut = mapmaking.SignalCut(comm, dtype=np.float32)
@@ -197,7 +198,7 @@ def make_ml_map(
         )
         signals = [signal_cut, signal_map]
         mapmaker = mapmaking.MLMapmaker(
-            signals, noise_model=None, dtype=np.float32, verbose=True
+            signals, noise_model=noise_model, dtype=np.float32, verbose=True
         )
 
         for sub_id, (aman, P) in amans.items():
@@ -238,10 +239,11 @@ def make_ml_map(
             t2 = time.time()
             dump = step.i % 10 == 0
             if comm.Get_rank() == 0:
-                (logger.debug if dump else logger.debug)(
+                (logger.info if dump else logger.debug)(
                     "\tCG step %4d %15.7e %8.3f %s"
                     % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
                 )
+                logger.flush()
             if dump:
                 for signal, val in zip(signals, step.x):
                     if signal.output:
@@ -258,5 +260,6 @@ def make_ml_map(
 
         mapmaker_prev = mapmaker
         eval_prev = mapmaker.evaluator(step.x_zip)
+        logger.flush()
 
     return outmap, (mlmap_path, rhs_path, div_path, bin_path)

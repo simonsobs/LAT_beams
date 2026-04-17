@@ -1,7 +1,6 @@
 import gc
 import logging
 import os
-import sys
 
 import astropy.units as u
 import numpy as np
@@ -10,7 +9,11 @@ from mpi4py import MPI
 from pixell import enmap
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
+from so3g.proj import quat
+from sotodlib import coords
 from sotodlib.core import Context, metadata
+from functools import partial
+from sotodlib.site_pipeline.jobdb import Job
 
 import lat_beams.mapmaking as lbm
 from lat_beams import beam_utils as bu
@@ -22,6 +25,8 @@ from lat_beams.utils import (
     make_jobdb,
     setup_cfg,
     setup_paths,
+    setup_jobs,
+    set_tag
 )
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
@@ -39,13 +44,15 @@ def get_jobdict(jdb):
 
 
 def get_jobit(jdb, cfg, all_fits, all_fjobs):
+    _ = jdb
     jobit = []
-    if comm.Get_rank == 0:
+    if comm.Get_rank() == 0:
         for epoch in cfg.epochs:
             times = all_fits["time"]
             tmsk = (times >= epoch[0]) * (times < epoch[1])
+            if np.sum(tmsk) == 0:
+                continue
             fjobs = all_fjobs[tmsk]
-            fjobs = np.array_split(fjobs, nproc)
             fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
             for split in cfg.split_by:
                 split_vec = bu.get_split_vec(fits, split, ctx)
@@ -113,6 +120,7 @@ if cfg.preprocess_cfg is None:
     raise ValueError("Must specify a valid preprocess config!")
 with open(cfg.preprocess_cfg) as f:
     preprocess_cfg = yaml.safe_load(f)
+    preprocess_str = yaml.dump(preprocess_cfg)
 preprocess_cfg["archive"]["index"] = os.path.join(
     data_dir_root, preprocess_cfg["archive"]["index"]
 )
@@ -137,7 +145,8 @@ tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 plt_extent = (ra_min, ra_max, dec_min, dec_max)
 
 # Load and filter fits in rank 0
-all_fjobs = None
+all_fjobs = [] 
+all_fits = []
 if myrank == 0:
     all_fjobs = jdb.get_jobs(jclass="fit_map", jstate="done")
     logger.info(f"{len(all_fjobs)} sub_ids to map")
@@ -165,6 +174,7 @@ jdb, all_jobs = setup_jobs(
     get_jobdict,
     partial(
         get_jobit,
+        cfg=cfg,
         all_fits=all_fits,
         all_fjobs=all_fjobs,
     ),
@@ -177,7 +187,19 @@ jdb, all_jobs = setup_jobs(
     args.job_memory_buffer,
     args.plot_only,
     logger,
+
 )
+# Profiler setup
+profiler = None
+if args.profile:
+    from pyinstrument import Profiler
+
+    profiler = Profiler()
+    logger.info(f"Running in profiler mode! Only keeping {4*nproc} subobs and running the first split!")
+    all_fits = all_fits[:4*nproc]
+    all_fjobs = all_fjobs[:4*nproc]
+    profiler.start()
+
 
 # Loop through epochs
 passes = lbm.get_passes(cfg)
@@ -189,7 +211,7 @@ for epoch in cfg.epochs:
     ejobs = [
         job
         for job in all_jobs
-        if job.tags["epoch_start"] == epoch[0] and job.tags["epoch_end"] == epoch[1]
+        if float(job.tags["epoch_start"]) == epoch[0] and float(job.tags["epoch_end"]) == epoch[1]
     ]
     if len(ejobs) == 0:
         logger.info("No open jobs found!")
@@ -219,6 +241,8 @@ for epoch in cfg.epochs:
     # Load and process TODs
     amans = {}
     msk = np.ones(len(fits), bool)
+    logger.info("Adding TODs")
+    logger.flush()
     for i, (job, fit) in enumerate(zip(fjobs, fits)):
         obs_id = job.tags["obs_id"]
         ws = job.tags["wafer_slot"]
@@ -252,9 +276,9 @@ for epoch in cfg.epochs:
         )
         aman.focal_plane.xi += cent[0]
         aman.focal_plane.eta -= cent[1]
-        planet = cp.SlowSource.for_named_source(job.tags[source], aman.timestamps[0])
+        planet = cp.SlowSource.for_named_source(job.tags["source"], aman.timestamps[0])
         ra0, dec0 = planet.pos(aman.timestamps.mean())
-        rot = ~quat.rotation_lonlat(ra0, dec0)
+        rot = quat.rotation_lonlat(0, 0) *  ~quat.rotation_lonlat(ra0, dec0)
         P = coords.P.for_tod(
             aman, comps=cfg.comps, threads="domdir", wcs_kernel=tmap.wcs, rot=rot
         )
@@ -264,6 +288,7 @@ for epoch in cfg.epochs:
         P.geom = enmap.Geometry(shape=tmap.shape, wcs=tmap.wcs)
 
         logger.debug("Added %s", sub_id)
+        logger.flush()
         amans[sub_id] = (aman, P)
     all_ids = np.array(list(amans.keys()))
     fits = fits[msk]
@@ -275,6 +300,7 @@ for epoch in cfg.epochs:
         split_vec = bu.get_split_vec(fits, split, ctx)
         for j in sjobs:
             comm.barrier()
+            spl = j.tags["split_str"]
 
             data_dir_spl = os.path.join(data_dir, split, spl)
             plot_dir_spl = os.path.join(plot_dir, split, spl)
@@ -288,12 +314,17 @@ for epoch in cfg.epochs:
             sids = all_ids[smsk]
             logger.normal("Have %d TODs in rank", len(sids))
             all_sids = comm.reduce(sids)
+            if all_sids is None:
+                all_sids = []
 
             # Have rank 0 handle the jobdb
+            job = None
             if myrank == 0:
                 with jdb.session_scope() as session:
                     job = session.get(Job, j.id)
                     session.expunge(job)
+                if job is None:
+                    raise ValueError("Job is None!")
                 job.mark_visited()
                 # Save metadata and config info
                 set_tag(job, "config", cfg_str)
@@ -306,6 +337,7 @@ for epoch in cfg.epochs:
             # This is somewhat innefecient, in an ideal world I can provide an optimal TOD splitting scheme
             run_comm = comm.Split(len(sids) > 0, myrank)
             jobdat = ("", "", "", "", "")
+            logger.flush()
             if len(sids) > 0:
                 amans_to_map = {sid: amans[sid] for sid in sids}
 
@@ -322,10 +354,19 @@ for epoch in cfg.epochs:
                     cfg,
                     guess=None,
                 )
+                if outmap is None:
+                    if myrank == 0 and job is not None:
+                        job.jstate = "failed"
+                        set_tag(job, "message", "Mapmaker didn't run?")
+                        with jdb.session_scope() as session:
+                            session.merge(job)
+                            session.commit()
+                        continue
+
                 message = "Success!"
 
                 # Plot
-                if run_comm.Get_rank() == 0:
+                if run_comm.Get_rank() == 0 and outmap is not None:
                     try:
                         posmap = np.rad2deg(outmap.posmap()) * 3600
                         for append, smap in [
@@ -357,9 +398,18 @@ for epoch in cfg.epochs:
                 with jdb.session_scope() as session:
                     session.merge(job)
                     session.commit()
+            if args.profile:
+                break
+        if args.profile:
+            break
+    if args.profile:
+        break
 
-        del amans
-        gc.collect()
-        comm.barrier()
+    del amans
+    gc.collect()
+    comm.barrier()
+if args.profile and profiler is not None:
+    profiler.stop()
+    profiler.write_html(f"solve_beam_map_profile_{myrank}.html")
 logger.flush()
 comm.barrier()
