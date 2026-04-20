@@ -62,6 +62,7 @@ def make_map(
     map_str,
     logger,
     cfg,
+    det_splits={},
 ):
     # Get time on source
     det_secs = np.sum((source_flags * ~cuts).get_stats()["samples"]) * np.mean(
@@ -75,8 +76,8 @@ def make_map(
         job.jstate = "failed"
         return None, None
 
-    # Initial map
     with log_lvl(logger, logging.WARNING):
+        # Full map
         out = cp.make_map(
             aman.copy(),
             thread_algo="domdir",
@@ -89,6 +90,22 @@ def make_map(
             n_modes=n_modes,
             info=info,
         )
+
+        # Splits, being a litte inefficient by fitering again here 
+        if len(det_splits):
+            _ = cp.make_map(
+                aman.copy(),
+                thread_algo="domdir",
+                center_on=src_to_map,
+                res=res,
+                cuts=cuts,
+                source_flags=source_flags,
+                comps=comps,
+                filename=filename,
+                n_modes=n_modes,
+                info=info,
+                data_splits=det_splits,
+            )
 
     # Smooth and find the center
     cent = estimate_cent(out["solved"][0], cfg.smooth_kern / pixsize, cfg.buf)
