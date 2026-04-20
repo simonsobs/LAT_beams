@@ -77,23 +77,9 @@ def make_map(
         return None, None
 
     with log_lvl(logger, logging.WARNING):
-        # Full map
-        out = cp.make_map(
-            aman.copy(),
-            thread_algo="domdir",
-            center_on=src_to_map,
-            res=res,
-            cuts=cuts,
-            source_flags=source_flags,
-            comps=comps,
-            filename=filename,
-            n_modes=n_modes,
-            info=info,
-        )
-
-        # Splits, being a litte inefficient by fitering again here 
-        if len(det_splits):
-            _ = cp.make_map(
+        try:
+            # Full map
+            out = cp.make_map(
                 aman.copy(),
                 thread_algo="domdir",
                 center_on=src_to_map,
@@ -104,8 +90,27 @@ def make_map(
                 filename=filename,
                 n_modes=n_modes,
                 info=info,
-                data_splits=det_splits,
             )
+
+            # Splits, being a litte inefficient by fitering again here 
+            if len(det_splits):
+                _ = cp.make_map(
+                    aman.copy(),
+                    thread_algo="domdir",
+                    center_on=src_to_map,
+                    res=res,
+                    cuts=cuts,
+                    source_flags=source_flags,
+                    comps=comps,
+                    filename=filename,
+                    n_modes=n_modes,
+                    info=info,
+                    data_splits=det_splits,
+                )
+        except Exception as e:
+            msg = f"Failed to load metadata with error {e}"
+            logger.error("\t%s", msg)
+            return None, None
 
     # Smooth and find the center
     cent = estimate_cent(out["solved"][0], cfg.smooth_kern / pixsize, cfg.buf)

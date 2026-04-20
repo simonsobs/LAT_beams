@@ -356,7 +356,14 @@ for i, j in enumerate(joblist):
 
     # Get metadata
     with log_lvl(logger, logging.ERROR):
-        meta = ctx.get_meta(obs_id)
+        try:
+            meta = ctx.get_meta(obs_id)
+        except Exception as e:
+            msg = f"Failed to load metadata with error {e}"
+            logger.error("\t%s", msg)
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            continue
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
         logger.error("\t%s", msg)
