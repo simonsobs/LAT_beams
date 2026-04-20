@@ -1,14 +1,18 @@
 import os
 import sys
+from glob import glob
 
 import astropy.units as u
 import numpy as np
 from pixell import enmap, reproject
 from sotodlib.core import Context
+from tqdm import tqdm
 
 from lat_beams import beam_utils as bu
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
+
+# TODO: streamline so there is less repeated code between types of maps (det splits, resid maps, etc.)
 
 
 def view_TQU(imap):
@@ -91,6 +95,9 @@ tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 if args.plot_only:
     print("Running in plot only mode!")
 
+# Get det splits 
+det_split_names = [os.path.splitext(os.path.basename(fname))[0] for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))]
+
 # Loop through splits
 for split in cfg.split_by:
     print(f"Splitting by {split}")
@@ -130,7 +137,9 @@ for split in cfg.split_by:
             mwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rmcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            for fit, mjob, fjob in zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]):
+            det_split_mcoadd = {name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names}
+            det_split_wcoadd = {name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names}
+            for fit, mjob, fjob in tqdm(zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk])):
                 if args.plot_only:
                     continue
                 # Load
@@ -150,6 +159,17 @@ for split in cfg.split_by:
                             np.diag_indices(len(resid_weights))
                         ]
                     resid_weights = resid_weights.reshape(resid.shape)
+                    det_split_maps = {}
+                    det_split_weights = {}
+                    for name in det_split_names:
+                        map_path = os.path.join(data_dir, mjob.tags["solved"]).replace("solved.fits", f"{name}_map.fits")
+                        weight_path = os.path.join(data_dir, mjob.tags["solved"]).replace("solved.fits", f"{name}_weights.fits")
+                        if not (os.path.isfile(map_path) and os.path.isfile(weight_path)):
+                            continue
+                        det_split_maps[name] = enmap.read_map(map_path)
+                        det_split_weights[name] = enmap.read_map(weight_path)[np.diag_indices(len(solved))]
+
+
                 except FileNotFoundError:
                     print(f"Maps missing for job: {mjob}")
                     continue
@@ -176,6 +196,8 @@ for split in cfg.split_by:
                 mlweights = view_TQU(mlweights)
                 resid = view_TQU(resid)
                 resid_weights = view_TQU(resid_weights)
+                det_split_maps = {name : view_TQU(smap) for name, smap in det_split_maps.items()}
+                det_split_weights = {name : view_TQU(smap) for name, smap in det_split_weights.items()}
                 if not np.all(
                     np.array(
                         [
@@ -262,6 +284,8 @@ for split in cfg.split_by:
                     )
                     * fit["aman"].gauss.amp.value**2
                 )
+                det_split_maps = {name : smap/fit["aman"].gauss.amp.value for name, smap in det_split_maps.items()}
+                det_split_weights = {name : smap*fit["aman"].gauss.amp.value**2 for name, smap in det_split_weights.items()}
 
                 # If the new center seems very far from the origin then lets skip
                 cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
@@ -279,30 +303,45 @@ for split in cfg.split_by:
                 np.nan_to_num(mlweights, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(resid, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(resid_weights, copy=False, nan=0, posinf=0, neginf=0)
+                det_split_maps = {name : np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0) for name, smap in det_split_maps.items()}
+                det_split_weights = {name : np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0) for name, smap in det_split_weights.items()}
                 mcoadd.insert(solved * weights, op=op)
                 wcoadd.insert(weights, op=op)
                 mlcoadd.insert(mlmap * mlweights, op=op)
                 mwcoadd.insert(mlweights, op=op)
                 rmcoadd.insert(resid * resid_weights, op=op)
                 rwcoadd.insert(resid_weights, op=op)
+                for name in det_split_names:
+                    if name not in det_split_maps or name not in det_split_weights:
+                        continue
+                    det_split_mcoadd[name].insert(det_split_maps[name] * det_split_weights[name], op=op)
+                    det_split_wcoadd[name].insert(det_split_weights[name], op=op)
 
             # Divide weights
             with np.errstate(divide="ignore", invalid="ignore"):
                 mcoadd /= wcoadd
                 mlcoadd /= mwcoadd
                 rmcoadd /= rwcoadd
+                for name in det_split_names:
+                    det_split_mcoadd[name] /= det_split_wcoadd[name] # type: ignore
+                    np.nan_to_num(det_split_mcoadd[name], copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num(mcoadd, copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num(mlcoadd, copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num(rmcoadd, copy=False, nan=0, posinf=0, neginf=0)
 
             # Save and plot
+            det_split_out = []
+            for name in det_split_names:
+                if not np.any(det_split_wcoadd[name]):
+                    continue
+                det_split_out += [(det_split_mcoadd[name], f"{name}_stack"), (det_split_wcoadd[name], f"{name}_stack_ivar")]
             for omap, name in [
                 (mcoadd, "stack"),
                 (wcoadd, "stack_ivar"),
                 (mlcoadd, "ml_stack"),
                 (mwcoadd, "ml_stack_ivar"),
                 (rmcoadd, "resid_stack"),
-            ]:
+            ] + det_split_out:
                 path = os.path.join(
                     data_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_{name}.fits"
                 )
