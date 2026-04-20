@@ -166,7 +166,7 @@ def bessel_beam(
         twmsk = tmsk * wmsk
         r0 = r0_wing[tb]
         amp = amp_wing[tb]
-        rmsk = (r > 1.*mask_size) * tmsk
+        rmsk = ((r > 1.*mask_size) + (r > r0)) * tmsk
         beam_model[twmsk + rmsk] = amp * (r0/r[twmsk + rmsk])**3
 
     return beam_model

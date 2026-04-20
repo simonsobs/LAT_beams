@@ -391,7 +391,7 @@ def fit_bessel_map(
     # Compute initial model
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
     beam_model = np.zeros_like(xi)
-    core_msk = r <= mask_size 
+    core_msk = r <= min(mask_size, n_sigma*.5*(guess.fwhm_xi.to(u.radian).value + guess.fwhm_eta.to(u.radian).value))
     X = []
     idx = []
     for n0 in range(len(amps)):
@@ -407,7 +407,7 @@ def fit_bessel_map(
     X += [np.ones_like(beam_model[core_msk])]
     X = np.column_stack(X) * np.sqrt(ivar[core_msk])[..., None]
     lres = lstsq(
-        X, (imap[core_msk] - guess.off.value) * np.sqrt(ivar[core_msk]), cond=1e-8 * guess.amp.value
+        X, (imap[core_msk] - guess.off.value) * np.sqrt(ivar[core_msk]), cond=1e-20 * guess.amp.value
     )
     if lres is None:
         return None, None
@@ -447,8 +447,9 @@ def fit_bessel_map(
             amp = np.mean(beam_model[(r == r0) * twmsk]).item()  #thresh 
         r0_wing[tb] = r0
         amp_wing[tb] = amp
-        rmsk = (r > 1.*mask_size) * tmsk
+        rmsk = ((r > 1.*mask_size) + (r > r0)) * tmsk
         beam_model[twmsk + rmsk] = amp * (r0/r[twmsk + rmsk])**3
+        # print(np.rad2deg(thetas[tb]), 3600*np.rad2deg(r0), amp)
     aman.wrap("r0_wing", r0_wing * u.radian, [(0, tax)])
     aman.wrap("amp_wing", amp_wing * map_unit, [(0, tax)])
 
