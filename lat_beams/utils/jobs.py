@@ -68,6 +68,7 @@ def setup_jobs(
     jdb = make_jobdb(comm, data_dir)
     joblist = []
     jobs_to_make = []
+    jobs_to_open = []
     logger.info("Getting jobdict")
     logger.flush()
     jobdict = None
@@ -114,6 +115,9 @@ def setup_jobs(
             or job.jstate.name == "open"
             or (job.jstate.name == "failed" and retry_failed)
         ):
+            if job.jstate.name != "open":
+                job.jstate = "open"
+                jobs_to_open += [job]
             joblist += [job]
         elif replot and job.jstate.name == "done":
             joblist += [job]
@@ -124,6 +128,9 @@ def setup_jobs(
     tot_missing = 0
     tot_missing = comm.reduce(len(jobs_to_make), root=0)
     logger.info("Adding %s new jobs", tot_missing)
+    tot_opening = 0
+    tot_opening = comm.reduce(len(jobs_to_open), root=0)
+    logger.info("Opening %s old jobs", tot_opening)
     logger.flush()
     t0 = time.time()
     for i in range(nproc):
@@ -131,6 +138,10 @@ def setup_jobs(
             logger.debug("\tRank %s writing", i)
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
+            with jdb.session_scope() as session:
+                for job in jobs_to_open:
+                    session.merge(job)
+                session.commit()
         comm.barrier()
     t1 = time.time()
     logger.flush()
