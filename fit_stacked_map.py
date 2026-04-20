@@ -2,12 +2,14 @@ import os
 from glob import glob
 
 import astropy.units as u
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy import constants as const
 from astropy import units as u
 from pixell import enmap
 from scipy.interpolate import PchipInterpolator
 from sotodlib.core import AxisManager
+from healpy.sphtfunc import beam2bl
 
 import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile
@@ -47,7 +49,6 @@ plot_dir, data_dir = setup_paths(
     cfg.tel,
     f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
 )
-plot_dir = os.path.join(plot_dir, "stacks")
 out_file = os.path.join(data_dir, "stacks", "beam_pars.h5")
 
 # Make highres template
@@ -80,11 +81,18 @@ for split in cfg.split_by:
     band_idx = np.where(np.array(split.split("+")) == "band")[0][0]
     for spl_dir in sorted([f.path for f in os.scandir(data_dir_spl) if f.is_dir()]):
         spl_rel = os.path.relpath(spl_dir, data_dir_spl)
-        plot_dir_spl = os.path.join(plot_dir, split, spl_rel)
+        plot_dir_spl = os.path.join(plot_dir, "stacks", split, spl_rel)
+        prof_plot_dir = os.path.join(plot_dir, "stack_profiles", split, spl_rel)
         os.makedirs(plot_dir_spl, exist_ok=True)
+        os.makedirs(prof_plot_dir, exist_ok=True)
         band = spl_rel.split("+")[band_idx]
         fscale_fac = 90.0 / float(band[1:])
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
+        labels = []
+        rprofiles = []
+        windows = []
+        mprofiles = []
+        mwindows = []
         for epoch in cfg.epochs:
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
@@ -182,6 +190,7 @@ for split in cfg.split_by:
                 interp = PchipInterpolator(mr, mprof)
                 mr_highres = np.arange(0, cfg.extent_highres, cfg.pixsize_highres)
                 mprofile = np.column_stack((mr_highres, interp(mr_highres)))
+                rprofile = np.column_stack((r, rprof))
                 prof_dir = os.path.join(data_dir, "stack_profiles", split, spl_rel)
                 os.makedirs(prof_dir, exist_ok=True)
                 np.savetxt(
@@ -192,8 +201,30 @@ for split in cfg.split_by:
                 )
                 np.savetxt(
                     os.path.join(prof_dir, f"profile_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"),
-                    np.column_stack((r, rprof)),
+                    rprofile,
                 )
+                # Compute and save b_ell
+                bl = beam2bl(rprofile[:, 1], np.deg2rad(rprofile[:, 0] / 3600), cfg.lmax)
+                ells = np.arange(cfg.lmax + 1)
+                window = np.column_stack((ells, bl))
+                np.savetxt(
+                    os.path.join(prof_dir, f"window_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"),
+                    window,
+                )
+                mbl = beam2bl(mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), cfg.lmax)
+                mwindow = np.column_stack((ells, mbl))
+                np.savetxt(
+                    os.path.join(prof_dir, f"model_window_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"),
+                    mwindow,
+                )
+
+                # Save for plots
+                labels += [f"{epoch[0]}_{epoch[1]}{dstr}"]
+                rprofiles += [rprofile]
+                mprofiles += [mprofile]
+                windows += [window]
+                mwindows += [mwindow]
+
 
                 # Save and plot maps
                 aman.save(
@@ -230,3 +261,67 @@ for split in cfg.split_by:
                         units='"',
                         lognorm=1,
                     )
+
+        # Plot profiles and windows
+        plt.close()
+        for label, rprofile, mprofile in zip(labels, rprofiles, mprofiles):
+            label=label.replace("_", " ")
+            plt.plot(
+                rprofile[:, 0],
+                rprofile[:, 1],
+                label=label + " Data",
+                marker="x",
+                alpha=0.4,
+            )
+            plt.plot(
+                mprofile[:, 0],
+                mprofile[:, 1],
+                label=label + " Model",
+                # marker="+",
+                linestyle="--",
+                color=plt.gca().lines[-1].get_color(),
+                alpha=0.4,
+            )
+        plt.xlim(0, 3600*np.rad2deg(band_mask_size))
+        plt.legend()
+        plt.title(f"{spl_rel} Profile")
+        plt.xlabel('r (")')
+        plt.ylabel("Profile")
+        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}.png"))
+
+        plt.yscale("log")
+        plt.title(f"{spl_rel} Log Profile")
+        plt.xlabel('r (")')
+        plt.ylabel("Log Profile")
+        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}_log.png"))
+        plt.close()
+
+        for label, window in zip(labels, windows):
+            label=label.replace("_", " ")
+            plt.loglog(
+                window[:, 0],
+                window[:, 1],
+                label=label,
+                alpha=0.5,
+            )
+        plt.legend()
+        plt.title(f"{spl_rel} Window Function")
+        plt.xlabel("l")
+        plt.ylabel("b_l")
+        plt.savefig(os.path.join(prof_plot_dir, f"window_{spl_rel}.png"))
+        plt.close()
+
+        for label, window in zip(labels, mwindows):
+            label=label.replace("_", " ")
+            plt.loglog(
+                window[:, 0],
+                window[:, 1],
+                label=label,
+                alpha=0.5,
+            )
+        plt.legend()
+        plt.title(f"{spl_rel} Model Window Function")
+        plt.xlabel("l")
+        plt.ylabel("b_l")
+        plt.savefig(os.path.join(prof_plot_dir, f"model_window_{spl_rel}.png"))
+        plt.close()
