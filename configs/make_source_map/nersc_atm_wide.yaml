@@ -19,7 +19,7 @@ ctx_path: 'contexts/nersc_pointing_model_atm.yaml'
 start_time: 1749600000 
 stop_time: 20000000000
 n_med: 3
-map_mask_size: .2
+map_mask_size: .4
 search_mask:
   shape: "circle"
   xyr:
@@ -29,13 +29,13 @@ search_mask:
 epochs:
     - [1749600000, 1756699200]
     - [1756699200, 20000000000]
-append: "atm_relcal"
+append: "atm_relcal_wide"
 cgiters_single: 0
 cgiters_full: 400
 mlpass: 3
 sym_gauss: False 
-n_bessel: 20
+n_bessel: 15
 n_multipoles: 6
-bessel_wing_n_sigma: 5
+bessel_wing: True 
 extent: 720
 det_split_dir: "det_lists"
