@@ -44,8 +44,8 @@ process_pipe:
 
     - name: "trends"
       calc:
-        max_trend: 5
-        t_piece: 30
+        max_trend: 1
+        t_piece: 10
       save: True
       select:
         kind: "any"
@@ -72,9 +72,50 @@ process_pipe:
         use_pca: False
         modes: 1
 
+    # - name: "jumps"
+    #   calc:
+    #     function: "slow_jumps"
+    #   save:
+    #     jumps_name: "jumps_slow"
+    #   select:
+    #     max_n_jumps: 10
+    #
+    # - name: "fix_jumps"
+    #   process:
+    #     jumps_aman: "jumps_slow"
+    #
+    # - name: "glitchfill"
+    #   flags: "jumps_slow.jump_flag"
+    #   process:
+    #     nbuf: 100
+    #     use_pca: False
+    #     modes: 1
+    #     wrap: "signal"
+    #     in_place: True
+    #
+    # - name: "glitches"
+    #   calc:
+    #     t_glitch: 0.007
+    #     buffer: 100
+    #     hp_fc: 10
+    #     n_sig: 15
+    #   save: True
+    #   select:
+    #     max_n_glitch: 100
+    #     sig_glitch: 15
+    #
+    # - name: "glitchfill"
+    #   flags: "glitches.glitch_flags"
+    #   process:
+    #     nbuf: 100
+    #     use_pca: False
+    #     modes: 1
+    #     wrap: "signal"
+    #     in_place: True
+    #
     - name : "combine_flags"
       process:
-        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps']
+        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps'] #, 'jumps_slow.jump_flag'] #, 'glitches.glitch_flags']
         total_flags_label: 'glitch_flags'
         method: 'union'
 
@@ -82,11 +123,11 @@ process_pipe:
       process:
         method: "linear"
 
-    - name: "calibrate"
-      skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
-      process:
-        kind: "array"
-        cal_array: "det_cal.phase_to_pW"
+    # - name: "calibrate"
+    #   skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
+    #   process:
+    #     kind: "array"
+    #     cal_array: "det_cal.phase_to_pW"
 
     - name: "fourier_filter"
       process:

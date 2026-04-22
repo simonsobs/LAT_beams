@@ -39,3 +39,5 @@ n_multipoles: 6
 bessel_wing: True 
 extent: 720
 det_split_dir: "det_lists"
+split_by:
+  - "source+tube_slot+band"
