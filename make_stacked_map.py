@@ -139,7 +139,7 @@ for split in cfg.split_by:
             rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             det_split_mcoadd = {name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names}
             det_split_wcoadd = {name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names}
-            for fit, mjob, fjob in tqdm(zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk])):
+            for fit, mjob, fjob in tqdm(zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)):
                 if args.plot_only:
                     continue
                 # Load
@@ -185,7 +185,7 @@ for split in cfg.split_by:
                         print(f"ML Maps missing for job: {mjob}")
                         continue
                 else:
-                    print(f"No ML maps for jobs: {mjob}")
+                    # print(f"No ML maps for jobs: {mjob}")
                     mlmap = enmap.zeros(solved.shape, solved.wcs)
                     mlweights = enmap.zeros(weights.shape, weights.wcs)
 
@@ -284,8 +284,8 @@ for split in cfg.split_by:
                     )
                     * fit["aman"].gauss.amp.value**2
                 )
-                det_split_maps = {name : smap/fit["aman"].gauss.amp.value for name, smap in det_split_maps.items()}
-                det_split_weights = {name : smap*fit["aman"].gauss.amp.value**2 for name, smap in det_split_weights.items()}
+                det_split_maps = {name : reproject.thumbnails(smap,r=ext_rad,coords=cent,oshape=(pix_extent, pix_extent),owcs=twcs)/fit["aman"].gauss.amp.value for name, smap in det_split_maps.items()}
+                det_split_weights = {name : reproject.thumbnails_ivar(smap,r=ext_rad,coords=cent,oshape=(pix_extent, pix_extent),owcs=twcs)*fit["aman"].gauss.amp.value**2 for name, smap in det_split_weights.items()}
 
                 # If the new center seems very far from the origin then lets skip
                 cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
