@@ -33,9 +33,9 @@ append: "atm_relcal"
 cgiters_single: 0
 cgiters_full: 400
 mlpass: 3
-sym_gauss: False 
-n_bessel: 20
-n_multipoles: 6
+sym_gauss: False
+n_bessel: 25
+n_multipoles: 8
 bessel_wing_n_sigma: 5
 extent: 720
 det_split_dir: "det_lists"

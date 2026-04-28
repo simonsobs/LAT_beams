@@ -178,8 +178,8 @@ for split in cfg.split_by:
                 aman.wrap("final_model", "bessel")
 
                 # Make and save a higher resolution profile
-                # TODO: profile plotting and window funcs
-                model_highres = bm.bessel_beam_from_aman(posmap_highres, aman)
+                # We want to remove the offset here so the beam goes to 0 and inf
+                model_highres = bm.bessel_beam_from_aman(posmap_highres, aman) - aman.bessel.off.value
                 cent = np.unravel_index(
                     np.argmin(posmap_highres[0] ** 2 + posmap_highres[1] ** 2, axis=None),
                     posmap_highres.shape,
@@ -236,7 +236,7 @@ for split in cfg.split_by:
                 resid = imap.copy()
                 resid -= model
                 for omap, name in [
-                    (model, "model"),
+                    (model - aman.bessel.off.value, "model"),
                     (resid, "resid"),
                 ]:
                     enmap.write_map(
@@ -277,7 +277,6 @@ for split in cfg.split_by:
                 mprofile[:, 0],
                 mprofile[:, 1],
                 label=label + " Model",
-                # marker="+",
                 linestyle="--",
                 color=plt.gca().lines[-1].get_color(),
                 alpha=0.4,

@@ -126,16 +126,14 @@ def bessel_beam(
     posmap,
     xi0,
     eta0,
-    gauss_amp,
-    gauss_off,
     ell_max,
     amps,
-    off_bessel,
+    bessel_off,
     r0_wing,
     amp_wing,
     thetas,
-    mask_size,
-    n_sigma,
+    off,
+    thresh,
 ):
     eta, xi = posmap
     xi = xi - xi0
@@ -143,31 +141,36 @@ def bessel_beam(
     r = np.sqrt(xi**2 + eta**2)
     theta = np.arctan2(eta, xi)
 
-    beam_model = np.zeros_like(xi) + off_bessel
+    rmsk = np.ones_like(xi, dtype=bool)
+    if len(r0_wing) > 0:
+        rmsk = r <= 1.5*np.max(r0_wing)
+    beam_model = np.zeros_like(xi)
     for n0 in range(len(amps)):
-        b0 = np.array(bessel_term_cached(r, ell_max, n0))
+        b0 = np.array(bessel_term_cached(r[rmsk], ell_max, n0))
         for n1 in range(n0, len(amps)):
-            b1 = np.array(bessel_term_cached(r, ell_max, n1))
+            b1 = np.array(bessel_term_cached(r[rmsk], ell_max, n1))
             base_beam = b0 * b1
-            beam_model += multipole_expansion(
-                base_beam, amps[n0, n1], theta
+            base_beam = np.nan_to_num(base_beam, copy=False, nan=0, posinf=0, neginf=0)
+            beam_model[rmsk] += multipole_expansion(
+                base_beam, amps[n0, n1], theta[rmsk]
             )
+    beam_model[rmsk] += bessel_off
 
     if len(thetas) == 0:
-        return beam_model + gauss_off
+        return beam_model + off
 
-    thresh = gauss_amp * np.exp(-.5 * (n_sigma**2))
     wmsk = (beam_model < thresh)
-    beam_model += gauss_off
-    tbins = np.digitize(theta, thetas)
+    tbins = np.digitize(theta, np.hstack([[-np.pi], thetas[1:-1] + .5*np.diff(thetas)[:-1], [np.pi]]))
 
     for tb in np.unique(tbins):
         tmsk = (tbins == tb)
         twmsk = tmsk * wmsk
-        r0 = r0_wing[tb]
-        amp = amp_wing[tb]
-        rmsk = ((r > 1.*mask_size) + (r > r0)) * tmsk
+        r0 = r0_wing[tb-1]
+        amp = amp_wing[tb-1]
+        rmsk = tmsk * (r > r0) # + (beam_model < amp))
         beam_model[twmsk + rmsk] = amp * (r0/r[twmsk + rmsk])**3
+
+    beam_model += off
 
     return beam_model
 
@@ -204,16 +207,14 @@ def bessel_beam_from_aman(posmap, aman):
         posmap,
         aman.gauss.xi0.to(u.radian).value,
         aman.gauss.eta0.to(u.radian).value,
-        aman.gauss.amp.value,
-        aman.gauss.off.value,
         aman.bessel.ell_max.value,
         aman.bessel.amps.value,
-        aman.bessel.off.value,
+        aman.bessel.bessel_off.value,
         aman.bessel.r0_wing.to(u.radian).value,
         aman.bessel.amp_wing.value,
         aman.bessel.thetas.to(u.radian).value,
-        aman.bessel.mask_size.value,
-        aman.bessel.n_sigma.value,
+        aman.bessel.off.value,
+        aman.bessel.thresh.value,
     )
 
 
