@@ -72,7 +72,7 @@ if len(alljobstr) == 0:
 # Load fits
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
 snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
-solid_angle = bu.get_fit_vec(all_fits, "data_solid_angle_corr")
+solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
 msk = snr > 100
 msk *= solid_angle > 0
 all_fits = all_fits[msk]
@@ -183,9 +183,9 @@ for split in cfg.split_by:
                         )[np.diag_indices(len(mlmap))]
                     except FileNotFoundError:
                         print(f"ML Maps missing for job: {mjob}")
-                        continue
+                        mlmap = enmap.zeros(solved.shape, solved.wcs)
+                        mlweights = enmap.zeros(weights.shape, weights.wcs)
                 else:
-                    # print(f"No ML maps for jobs: {mjob}")
                     mlmap = enmap.zeros(solved.shape, solved.wcs)
                     mlweights = enmap.zeros(weights.shape, weights.wcs)
 
@@ -232,8 +232,7 @@ for split in cfg.split_by:
                     coords=cent,
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
-                )
-                solved = (solved) / fit["aman"].gauss.amp.value
+                ) / fit["aman"].gauss.amp.value
                 weights = (
                     reproject.thumbnails_ivar(
                         weights,
