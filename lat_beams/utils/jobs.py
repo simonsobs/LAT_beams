@@ -138,10 +138,10 @@ def setup_jobs(
             logger.debug("\tRank %s writing", i)
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
-            with jdb.session_scope() as session:
-                for job in jobs_to_open:
-                    session.merge(job)
-                session.commit()
+            # with jdb.session_scope() as session:
+            #     for job in jobs_to_open:
+            #         session.merge(job)
+            #     session.commit()
         comm.barrier()
     t1 = time.time()
     logger.flush()
