@@ -65,7 +65,9 @@ twcs = enmap.wcsutils.build(
 posmap_highres = enmap.posmap((pix_extent, pix_extent), twcs)
 
 # Get det splits 
-det_split_names = [""] + [os.path.splitext(os.path.basename(fname))[0] for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))]
+det_split_names = [""]
+if cfg.det_split_dir != "":
+    det_split_names += [os.path.splitext(os.path.basename(fname))[0] for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))]
 
 # Loop through splits
 # TODO: Have make_stacked_map save paths in jobdb
@@ -190,7 +192,7 @@ for split in cfg.split_by:
                 interp = PchipInterpolator(mr, mprof)
                 mr_highres = np.arange(0, cfg.extent_highres, cfg.pixsize_highres)
                 mprofile = np.column_stack((mr_highres, interp(mr_highres)))
-                rprofile = np.column_stack((r, rprof))
+                rprofile = np.column_stack((r, rprof - aman.bessel.off.value))
                 prof_dir = os.path.join(data_dir, "stack_profiles", split, spl_rel)
                 os.makedirs(prof_dir, exist_ok=True)
                 np.savetxt(
@@ -282,17 +284,18 @@ for split in cfg.split_by:
                 alpha=0.4,
             )
         plt.xlim(0, 3600*np.rad2deg(band_mask_size))
-        plt.legend()
+        plt.ylim((1e-5, 1))
+        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.title(f"{spl_rel} Profile")
         plt.xlabel('r (")')
         plt.ylabel("Profile")
-        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}.png"))
+        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}.png"), bbox_inches="tight")
 
         plt.yscale("log")
         plt.title(f"{spl_rel} Log Profile")
         plt.xlabel('r (")')
         plt.ylabel("Log Profile")
-        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}_log.png"))
+        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}_log.png"), bbox_inches="tight")
         plt.close()
 
         for label, window in zip(labels, windows):
@@ -303,11 +306,11 @@ for split in cfg.split_by:
                 label=label,
                 alpha=0.5,
             )
-        plt.legend()
+        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.title(f"{spl_rel} Window Function")
         plt.xlabel("l")
         plt.ylabel("b_l")
-        plt.savefig(os.path.join(prof_plot_dir, f"window_{spl_rel}.png"))
+        plt.savefig(os.path.join(prof_plot_dir, f"window_{spl_rel}.png"), bbox_inches="tight")
         plt.close()
 
         for label, window in zip(labels, mwindows):
@@ -318,9 +321,9 @@ for split in cfg.split_by:
                 label=label,
                 alpha=0.5,
             )
-        plt.legend()
+        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.title(f"{spl_rel} Model Window Function")
         plt.xlabel("l")
         plt.ylabel("b_l")
-        plt.savefig(os.path.join(prof_plot_dir, f"model_window_{spl_rel}.png"))
+        plt.savefig(os.path.join(prof_plot_dir, f"model_window_{spl_rel}.png"), bbox_inches="tight")
         plt.close()
