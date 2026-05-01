@@ -322,6 +322,7 @@ def fit_bessel_map(
     lmd: u.Quantity = 90 * u.GHz,
     mask_size: float = np.inf,
     n_sigma: float = 5,
+    skip_multipoles: list[int] = [],
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -346,6 +347,8 @@ def fit_bessel_map(
     n_sigma : float, default: 5
         The number of sigma to re-scale the input gaussian amplitude from
         `guess` by in order to determine the initial wing amplitude.
+    skip_multipoles : list[int], default
+        Multipoles to exclude from the fit.
 
     Returns
     -------
@@ -410,6 +413,8 @@ def fit_bessel_map(
             base_beam = b0 * b1
             base_beam = np.nan_to_num(base_beam, copy=False, nan=0, posinf=0, neginf=0)
             for m in range(n_multipoles):
+                if m in skip_multipoles:
+                    continue
                 for i in range(2):
                     mp = multipole(theta[core_msk], m, i)
                     X += [base_beam * mp]
@@ -499,4 +504,4 @@ def fit_bessel_map(
 
     beam_model += woff
 
-    return aman, beam_model - woff
+    return aman, beam_model
