@@ -223,20 +223,28 @@ def make_ml_map(
             signals, noise_model=noise_model, dtype=np.float32, verbose=True
         )
 
+        logger.info("Adding obs to mapmaker")
+        logger.flush()
         for sub_id, (aman, P) in amans.items():
             P.interpol = passinfo.interpol
-            add_obs_to_mapmaker(
-                aman.copy(),
-                sub_id,
-                mapmaker,
-                ipass,
-                passinfo,
-                P,
-                guess,
-                eval_prev,
-                mapmaker_prev,
-                logger,
-            )
+            try:
+                add_obs_to_mapmaker(
+                    aman.copy(),
+                    sub_id,
+                    mapmaker,
+                    ipass,
+                    passinfo,
+                    P,
+                    guess,
+                    eval_prev,
+                    mapmaker_prev,
+                    logger,
+                )
+            except Exception as e:
+                logger.error("Failed to add %s with errer %s", sub_id, str(e))
+        comm.barrier()
+        logger.info("Done adding obs to mapmaker")
+        logger.flush()
 
         # Write the starting maps
         mapmaker.prepare()
