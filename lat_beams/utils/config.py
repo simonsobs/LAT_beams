@@ -99,6 +99,8 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     )
     cfg["root_dir"] = os.path.expanduser(cfg.get("root_dir", "~"))
     cfg["append"] = cfg.get("append", "")
+    cfg["det_split_dir"] = cfg.get("det_split_dir", "")
+    cfg["fit_append"] = cfg.get("fit_append", "")
 
     # Source masking and projection settings
     cfg["res"] = cfg.get("res", (10 / 3600.0) * np.pi / 180.0)
@@ -155,6 +157,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["force_bessel_cent"] = cfg.get("force_bessel_cent", False)
     cfg["bessel_wing_n_sigma"] = cfg.get("bessel_wing_n_sigma", 5)
     cfg["sym_gauss"] = cfg.get("sym_gauss", True)
+    cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(
