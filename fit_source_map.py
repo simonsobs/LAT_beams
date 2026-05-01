@@ -108,7 +108,7 @@ plot_dir, data_dir = setup_paths(
 )
 outfile = None
 if myrank == 0:
-    outfile = h5py.File(os.path.join(data_dir, "beam_pars.h5"), "a")
+    outfile = h5py.File(os.path.join(data_dir, f"beam_pars{cfg.fit_append}.h5"), "a")
 
 # Get the jobs, make them if we need to
 ctx = Context(cfg.ctx_path)
@@ -154,6 +154,7 @@ for i, j in enumerate(joblist):
     if myrank == 0 and to_save is not None and outfile is not None:
         for aman, path in to_save:
             if aman is None:
+                to_save = (None, None)
                 continue
             aman.save(outfile, path, overwrite=True)
         outfile.flush()
@@ -384,7 +385,8 @@ for i, j in enumerate(joblist):
             cfg.aperature,
             const.c / (float(band[1:]) * u.GHz),
             band_mask_size,
-            cfg.bessel_wing_n_sigma
+            cfg.bessel_wing_n_sigma,
+            cfg.skip_multipoles,
         )
         if bessel_beam_params is None or model is None:
             msg = "Fit failed"
@@ -396,8 +398,8 @@ for i, j in enumerate(joblist):
 
         bessel_beam_params = process_model(
             bessel_beam_params,
-            solved - gauss_params.off.value,
-            model - gauss_params.off.value,
+            solved - bessel_beam_params.off.value,
+            model - bessel_beam_params.off.value,
             noise,
             cfg.min_snr,
             c,
@@ -409,6 +411,7 @@ for i, j in enumerate(joblist):
             logger,
         )
         if bessel_beam_params is None:
+            to_save = (None, None)
             continue
         aman.wrap("bessel", bessel_beam_params)
         aman.final_model = "bessel"
