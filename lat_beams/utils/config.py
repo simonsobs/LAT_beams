@@ -79,7 +79,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["tel"] = cfg.get("tel", "lat")
     cfg["forced_ws"] = args.forced_ws if args.forced_ws is not None else []
     if cfg.get("try_all", False):
-        cfg["forced_ws"] = ["ws0", "ws1", "ws2"]
+        cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws."]
     cfg["fit_source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
     cfg["map_source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
     cfg["start_time"] = cfg.get("start_time", 0)
