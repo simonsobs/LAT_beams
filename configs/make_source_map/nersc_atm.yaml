@@ -31,7 +31,7 @@ epochs:
     - [1756699200, 20000000000]
 append: "atm_relcal"
 cgiters_single: 0
-cgiters_full: 400
+cgiters_full: 200
 mlpass: 3
 sym_gauss: False
 n_bessel: 25
