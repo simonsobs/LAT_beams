@@ -113,7 +113,7 @@ fpath = os.path.join(data_dir_root, "beam_pars.h5")
 plot_dir = os.path.join(plot_dir, "ml_maps")
 data_dir = os.path.join(data_dir_root, "ml_maps")
 os.makedirs(plot_dir, exist_ok=True)
-jdb = make_jobdb(None, data_dir_root)
+jdb = make_jobdb(None, os.path.join(data_dir_root, "ml_maps"))
 
 # Get preproc config
 if cfg.preprocess_cfg is None:
@@ -157,12 +157,9 @@ if myrank == 0:
     )
     sang_exp = (2 * np.pi * (fwhm_exp.to(u.radian) / 2.355) ** 2).to(u.sr)
     data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
-    solid_angle = bu.get_fit_vec(all_fits, "data_solid_angle_corr")
+    solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
     msk = snr > 100
-    msk *= data_fwhm < 1.5 * fwhm_exp
-    msk *= data_fwhm > 0.5 * fwhm_exp
-    msk *= solid_angle < 2 * sang_exp
-    msk *= solid_angle > 0.25 * sang_exp
+    msk *= solid_angle > 0
     all_fits = all_fits[msk]
     all_fjobs = np.array(all_fjobs)[msk]
 
@@ -200,7 +197,6 @@ if args.profile:
     all_fjobs = all_fjobs[:4*nproc]
     profiler.start()
 
-
 # Loop through epochs
 passes = lbm.get_passes(cfg)
 for epoch in cfg.epochs:
@@ -218,86 +214,27 @@ for epoch in cfg.epochs:
         continue
 
     # Split up fits in this epoch
-    fjobs = None
+    fjobs = []
+    fits = None
     if myrank == 0:
         times = all_fits["time"]
         tmsk = (times >= epoch[0]) * (times < epoch[1])
         fjobs = all_fjobs[tmsk]
-        fjobs = np.array_split(fjobs, nproc)
-
-    # Now distribute jobs
-    fjobs = comm.scatter(fjobs, root=0)
-    nkept = len(fjobs)
-    nkept_all = np.array(comm.allgather(nkept))
-    if np.sum(nkept_all) == 0:
+        fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
+    nkept = comm.bcast(len(fjobs))
+    if nkept == 0:
         logger.info("Nothing to map!")
         continue
-    # if np.any(nkept_all == 0):
-    #     if nkept == 0:
-    #         logger.info("No tods assigned to this process. Pruning")
-    #     comm = mapmaking.prune_mpi(comm, np.where(nkept_all > 0)[0])
-    fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
-
-    # Load and process TODs
-    amans = {}
-    msk = np.ones(len(fits), bool)
-    logger.info("Adding TODs")
-    logger.flush()
-    for i, (job, fit) in enumerate(zip(fjobs, fits)):
-        obs_id = job.tags["obs_id"]
-        ws = job.tags["wafer_slot"]
-        band = job.tags["band"]
-        sub_id = f"{obs_id}:{ws}:{band}"
-
-        aman = load_aman(
-            obs_id,
-            preprocess_cfg,
-            {"wafer_slot": ws, "wafer.bandpass": band},
-            job,
-            cfg.min_dets,
-            logger,
-            fp_flag=True,
-            save=(nproc == 1),
-        )
-        if aman is None:
-            logger.warning("Could not add %s", sub_id)
-            msk[i] = False
-            continue
-
-        # Normalize by the fit amp
-        aman.signal /= fit["aman"].gauss.amp.value
-
-        # Make projection operator
-        cent = np.array(
-            (
-                fit["aman"].gauss.xi0.to(u.rad).value,
-                fit["aman"].gauss.eta0.to(u.rad).value,
-            )
-        )
-        aman.focal_plane.xi += cent[0]
-        aman.focal_plane.eta -= cent[1]
-        planet = cp.SlowSource.for_named_source(job.tags["source"], aman.timestamps[0])
-        ra0, dec0 = planet.pos(aman.timestamps.mean())
-        rot = quat.rotation_lonlat(0, 0) *  ~quat.rotation_lonlat(ra0, dec0)
-        P = coords.P.for_tod(
-            aman, comps=cfg.comps, threads="domdir", wcs_kernel=tmap.wcs, rot=rot
-        )
-        # P, X = cp.get_scan_P(
-        #     aman, job.tags["source"], res=cfg.res, comps=cfg.comps, threads="domdir"
-        # )
-        P.geom = enmap.Geometry(shape=tmap.shape, wcs=tmap.wcs)
-
-        logger.debug("Added %s", sub_id)
-        logger.flush()
-        amans[sub_id] = (aman, P)
-    all_ids = np.array(list(amans.keys()))
-    fits = fits[msk]
+    if myrank == 0 and fits is None:
+        raise ValueError("Failed to load fits?")
 
     # Loop through jobs
     for split in cfg.split_by:
         logger.info(f"Splitting by {split}")
         sjobs = [job for job in ejobs if job.tags["split"] == split]
-        split_vec = bu.get_split_vec(fits, split, ctx)
+        split_vec = []
+        if myrank == 0 and fits is not None:
+            split_vec = bu.get_split_vec(fits, split, ctx)
         for j in sjobs:
             comm.barrier()
             spl = j.tags["split_str"]
@@ -306,18 +243,84 @@ for epoch in cfg.epochs:
             plot_dir_spl = os.path.join(plot_dir, split, spl)
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             data_dir_epc = os.path.join(data_dir_spl, f"{epoch[0]}_{epoch[1]}")
-            os.makedirs(plot_dir_epc, exist_ok=True)
-            os.makedirs(data_dir_epc, exist_ok=True)
             logger.info(f"Mapping {spl} {epoch}")
 
-            smsk = split_vec == spl
-            sids = all_ids[smsk]
-            logger.normal("Have %d TODs in rank", len(sids))
-            all_sids = comm.reduce(sids)
+            # Now distribute jobs
+            sfits = []
+            sfjobs = []
+            if myrank == 0 and fits is not None:
+                os.makedirs(plot_dir_epc, exist_ok=True)
+                os.makedirs(data_dir_epc, exist_ok=True)
+                smsk = split_vec == spl
+                sfits = fits[smsk]
+                sfjobs = fjobs[smsk]
+                sfjobs = np.array_split(sfjobs, nproc)
+                sfits = np.array_split(sfits, nproc)
+            sfjobs = comm.scatter(sfjobs, root=0)
+            sfits = comm.scatter(sfits, root=0)
+
+            # Load and process TODs
+            amans = {}
+            msk = np.ones(len(sfits), bool)
+            logger.normal(f"Adding {len(sfits)} TODs")
+            logger.flush()
+            for i, (job, fit) in enumerate(zip(sfjobs, sfits)):
+                obs_id = job.tags["obs_id"]
+                ws = job.tags["wafer_slot"]
+                band = job.tags["band"]
+                sub_id = f"{obs_id}:{ws}:{band}"
+
+                aman = load_aman(
+                    obs_id,
+                    preprocess_cfg,
+                    {"wafer_slot": ws, "wafer.bandpass": band},
+                    job,
+                    cfg.min_dets,
+                    logger,
+                    fp_flag=True,
+                    save=(nproc == 1),
+                )
+                if aman is None:
+                    logger.warning("Could not add %s", sub_id)
+                    msk[i] = False
+                    continue
+
+                # Normalize by the fit amp
+                aman.signal /= fit["aman"].gauss.amp.value
+
+                # Make projection operator
+                cent = np.array(
+                    (
+                        fit["aman"].gauss.xi0.to(u.rad).value,
+                        fit["aman"].gauss.eta0.to(u.rad).value,
+                    )
+                )
+                aman.focal_plane.xi += cent[0]
+                aman.focal_plane.eta -= cent[1]
+                planet = cp.SlowSource.for_named_source(job.tags["source"], aman.timestamps[0])
+                ra0, dec0 = planet.pos(aman.timestamps.mean())
+                rot = quat.rotation_lonlat(0, 0) *  ~quat.rotation_lonlat(ra0, dec0)
+                P = coords.P.for_tod(
+                    aman, comps=cfg.comps, threads="domdir", wcs_kernel=tmap.wcs, rot=rot
+                )
+                P.geom = enmap.Geometry(shape=tmap.shape, wcs=tmap.wcs)
+
+                logger.debug("Added %s (%d/%d)", sub_id, i+1, len(sfits))
+                logger.flush()
+                amans[sub_id] = (aman, P)
+            all_ids = list(amans.keys())
+            sfits = sfits[msk]
+            logger.normal(f"Loaded {len(sfits)} TODs")
+            logger.flush()
+
+            all_sids = comm.reduce(all_ids)
             if all_sids is None:
                 all_sids = []
+            comm.barrier()
+            logger.info(f"Ready to map %s", spl)
+            logger.flush()
 
-            # Have rank 0 handle the jobdb
+            # # Have rank 0 handle the jobdb
             job = None
             if myrank == 0:
                 with jdb.session_scope() as session:
@@ -333,17 +336,15 @@ for epoch in cfg.epochs:
                 set_tag(job, "comps", cfg.comps)
                 set_tag(job, "obslist", ",".join(all_sids))
 
-            # Make a comm with just the procs that have TODs loaded
-            # This is somewhat innefecient, in an ideal world I can provide an optimal TOD splitting scheme
-            run_comm = comm.Split(len(sids) > 0, myrank)
+            # # Make a comm with just the procs that have TODs loaded
+            # # This is somewhat innefecient, in an ideal world I can provide an optimal TOD splitting scheme
+            run_comm = comm.Split(len(all_ids) > 0, myrank)
             jobdat = ("", "", "", "", "")
             logger.flush()
-            if len(sids) > 0:
-                amans_to_map = {sid: amans[sid] for sid in sids}
-
+            if len(all_ids) > 0:
                 # TODO: Load stack as the initial guess
                 outmap, (mlmap_path, rhs_path, div_path, bin_path) = lbm.make_ml_map(
-                    amans_to_map,
+                    amans,
                     passes,
                     tmap.shape,
                     tmap.wcs,
@@ -387,17 +388,32 @@ for epoch in cfg.epochs:
                             )
                     except:
                         message = "Plotting failed!"
-                    jobdat = comm.bcast(jobdat)
 
-            if myrank == 0:
+            # Get jobdat from root of run_comm to comm
+            comm.barrier()
+            rc_rank = run_comm.Get_rank() if len(all_ids) > 0 else -1
+            rc_ranks = comm.allgather(rc_rank)
+            jobdat = comm.bcast(jobdat, root=np.where(np.array(rc_ranks) == 0)[0][0].item())
+
+            if run_comm.Get_rank() == 0 and len(all_ids) > 0:
+                logger.normal("Done with map!")
+                logger.flush()
+            if myrank == 0 and job is not None:
                 for m, d in zip(
                     ("message", "ml_map", "ml_div", "ml_rhs", "ml_bin"), jobdat
                 ):
                     set_tag(job, m, d)
                 job.jstate = "done"
                 with jdb.session_scope() as session:
-                    session.merge(job)
+                    session.add(job)
                     session.commit()
+
+            logger.normal("Cleaning up memory")
+            logger.flush()
+            del amans
+            gc.collect()
+            logger.normal("Done cleaning up memory")
+            logger.flush()
             if args.profile:
                 break
         if args.profile:
@@ -405,8 +421,6 @@ for epoch in cfg.epochs:
     if args.profile:
         break
 
-    del amans
-    gc.collect()
     comm.barrier()
 if args.profile and profiler is not None:
     profiler.stop()
