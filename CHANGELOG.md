@@ -1,3 +1,36 @@
+## 3.0.0 (2026-05-04)
+
+### Feat
+
+- allow for modified jobdb path
+- add ws? to try_all list
+- add multipole skip and fix offset
+- fit bessel wing in bins
+- add window output and profile and window plots
+- smoother wing and lower singular thresh on lstsq
+- update stacking code for splits
+- mark jobs as open when rerunning obs
+- add ability to produce maps from detector split lists
+- much more streamlined bessel wing procedure
+- include encoders and pwv
+- add script to get stats on the cross
+
+### Fix
+
+- make cross summary work
+- dont error out when noise model fails for one OT
+- add missing config options
+- switch to updated bessel fit
+- plotting fixes
+- lots of mpi fixes
+- tmp dont open obs
+- tmp use gauss SA
+- recenter splits, fix tqdm, remove extra print
+- handle more errors
+- some small typing fixes
+- dont use mpi logger when nproc=1
+- fixes to ml mapper from jobdb integration and coordinate change, also add profiling mode
+
 ## 2.0.0 (2026-04-07)
 
 ### Feat
