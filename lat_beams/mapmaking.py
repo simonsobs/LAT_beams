@@ -111,7 +111,7 @@ def make_map(
     map_str: str,
     logger: Logger,
     cfg: Namespace,
-    det_splits : dict[str, RangesMatrix] ={},
+    det_splits: dict[str, RangesMatrix] = {},
 ) -> tuple[Optional[dict], Optional[tuple[int, int]]]:
     """
     Make a filter-bin map of a source and estimate the center.
@@ -202,7 +202,7 @@ def make_map(
                 info=info,
             )
 
-            # Splits, being a litte inefficient by fitering again here 
+            # Splits, being a litte inefficient by fitering again here
             if len(det_splits):
                 _ = cp.make_map(
                     aman.copy(),

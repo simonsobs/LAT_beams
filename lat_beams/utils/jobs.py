@@ -25,7 +25,7 @@ def make_jobdb(comm, data_dir, append=""):
     # Let rank 0 make jobdb first to avoid race conditions
     if myrank == 0:
         engine = sqy.create_engine(
-            f'sqlite:///{path}',
+            f"sqlite:///{path}",
             connect_args={"timeout": 10},
             poolclass=NullPool,
         )
@@ -36,7 +36,7 @@ def make_jobdb(comm, data_dir, append=""):
     comm.barrier()
     if myrank != 0:
         engine = sqy.create_engine(
-            f'sqlite:///{path}',
+            f"sqlite:///{path}",
             connect_args={"timeout": 10},
             poolclass=NullPool,
         )

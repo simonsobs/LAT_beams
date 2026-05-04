@@ -1,18 +1,17 @@
 import gc
 import logging
 import os
+from functools import partial
 
 import astropy.units as u
 import numpy as np
 import yaml
 from mpi4py import MPI
 from pixell import enmap
-from sotodlib import tod_ops
-from sotodlib.coords import planets as cp
 from so3g.proj import quat
-from sotodlib import coords
+from sotodlib import coords, tod_ops
+from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
-from functools import partial
 from sotodlib.site_pipeline.jobdb import Job
 
 import lat_beams.mapmaking as lbm
@@ -23,10 +22,10 @@ from lat_beams.utils import (
     init_log,
     load_aman,
     make_jobdb,
+    set_tag,
     setup_cfg,
-    setup_paths,
     setup_jobs,
-    set_tag
+    setup_paths,
 )
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
@@ -145,7 +144,7 @@ tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 plt_extent = (ra_min, ra_max, dec_min, dec_max)
 
 # Load and filter fits in rank 0
-all_fjobs = [] 
+all_fjobs = []
 all_fits = []
 if myrank == 0:
     all_fjobs = jdb.get_jobs(jclass="fit_map", jstate="done")
@@ -184,7 +183,6 @@ jdb, all_jobs = setup_jobs(
     args.job_memory_buffer,
     args.plot_only,
     logger,
-
 )
 # Profiler setup
 profiler = None
@@ -192,9 +190,11 @@ if args.profile:
     from pyinstrument import Profiler
 
     profiler = Profiler()
-    logger.info(f"Running in profiler mode! Only keeping {4*nproc} subobs and running the first split!")
-    all_fits = all_fits[:4*nproc]
-    all_fjobs = all_fjobs[:4*nproc]
+    logger.info(
+        f"Running in profiler mode! Only keeping {4*nproc} subobs and running the first split!"
+    )
+    all_fits = all_fits[: 4 * nproc]
+    all_fjobs = all_fjobs[: 4 * nproc]
     profiler.start()
 
 # Loop through epochs
@@ -207,7 +207,8 @@ for epoch in cfg.epochs:
     ejobs = [
         job
         for job in all_jobs
-        if float(job.tags["epoch_start"]) == epoch[0] and float(job.tags["epoch_end"]) == epoch[1]
+        if float(job.tags["epoch_start"]) == epoch[0]
+        and float(job.tags["epoch_end"]) == epoch[1]
     ]
     if len(ejobs) == 0:
         logger.info("No open jobs found!")
@@ -297,15 +298,21 @@ for epoch in cfg.epochs:
                 )
                 aman.focal_plane.xi += cent[0]
                 aman.focal_plane.eta -= cent[1]
-                planet = cp.SlowSource.for_named_source(job.tags["source"], aman.timestamps[0])
+                planet = cp.SlowSource.for_named_source(
+                    job.tags["source"], aman.timestamps[0]
+                )
                 ra0, dec0 = planet.pos(aman.timestamps.mean())
-                rot = quat.rotation_lonlat(0, 0) *  ~quat.rotation_lonlat(ra0, dec0)
+                rot = quat.rotation_lonlat(0, 0) * ~quat.rotation_lonlat(ra0, dec0)
                 P = coords.P.for_tod(
-                    aman, comps=cfg.comps, threads="domdir", wcs_kernel=tmap.wcs, rot=rot
+                    aman,
+                    comps=cfg.comps,
+                    threads="domdir",
+                    wcs_kernel=tmap.wcs,
+                    rot=rot,
                 )
                 P.geom = enmap.Geometry(shape=tmap.shape, wcs=tmap.wcs)
 
-                logger.debug("Added %s (%d/%d)", sub_id, i+1, len(sfits))
+                logger.debug("Added %s (%d/%d)", sub_id, i + 1, len(sfits))
                 logger.flush()
                 amans[sub_id] = (aman, P)
             all_ids = list(amans.keys())
@@ -393,7 +400,9 @@ for epoch in cfg.epochs:
             comm.barrier()
             rc_rank = run_comm.Get_rank() if len(all_ids) > 0 else -1
             rc_ranks = comm.allgather(rc_rank)
-            jobdat = comm.bcast(jobdat, root=np.where(np.array(rc_ranks) == 0)[0][0].item())
+            jobdat = comm.bcast(
+                jobdat, root=np.where(np.array(rc_ranks) == 0)[0][0].item()
+            )
 
             if run_comm.Get_rank() == 0 and len(all_ids) > 0:
                 logger.normal("Done with map!")

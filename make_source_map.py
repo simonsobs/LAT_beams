@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from functools import partial, cache
+from functools import cache, partial
 from glob import glob
 
 import numpy as np
@@ -9,11 +9,11 @@ import yaml
 from mpi4py import MPI
 from pixell import enmap
 from pshmem.locking import MPILock
+from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
 from sotodlib.site_pipeline.jobdb import Job
-from so3g.proj import RangesMatrix
 
 import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
@@ -148,12 +148,19 @@ def get_tags(info):
     }
     return tags
 
+
 @cache
 def load_det_splits(split_dir):
     det_splits = []
     for fname in glob(os.path.join(split_dir, "*.txt")):
         name = os.path.splitext(os.path.basename(fname))[0]
-        dets = np.genfromtxt(fname, dtype=str, usecols=[0,])
+        dets = np.genfromtxt(
+            fname,
+            dtype=str,
+            usecols=[
+                0,
+            ],
+        )
         det_splits += [(name, dets)]
     return det_splits
 
@@ -164,11 +171,14 @@ def make_det_splits(aman, split_dir, min_dets):
         return det_splits
     for name, dets in load_det_splits(split_dir):
         msk = np.isin(aman.det_info.det_id, dets)
-        if np.sum(msk) < min_dets/2:
+        if np.sum(msk) < min_dets / 2:
             continue
-        rmat = RangesMatrix.from_mask(np.broadcast_to(~msk[..., None], aman.signal.shape))
+        rmat = RangesMatrix.from_mask(
+            np.broadcast_to(~msk[..., None], aman.signal.shape)
+        )
         det_splits[name] = rmat
     return det_splits
+
 
 # Setup logger
 logger = init_log()
@@ -512,7 +522,7 @@ for i, j in enumerate(joblist):
         "final",
         logger,
         cfg,
-        det_splits
+        det_splits,
     )
     if out is None or cent is None:
         continue

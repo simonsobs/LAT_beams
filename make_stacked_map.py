@@ -95,8 +95,11 @@ tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 if args.plot_only:
     print("Running in plot only mode!")
 
-# Get det splits 
-det_split_names = [os.path.splitext(os.path.basename(fname))[0] for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))]
+# Get det splits
+det_split_names = [
+    os.path.splitext(os.path.basename(fname))[0]
+    for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
+]
 
 # Loop through splits
 for split in cfg.split_by:
@@ -137,9 +140,15 @@ for split in cfg.split_by:
             mwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rmcoadd = enmap.zeros(tmap.shape, tmap.wcs)
             rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            det_split_mcoadd = {name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names}
-            det_split_wcoadd = {name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names}
-            for fit, mjob, fjob in tqdm(zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)):
+            det_split_mcoadd = {
+                name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names
+            }
+            det_split_wcoadd = {
+                name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names
+            }
+            for fit, mjob, fjob in tqdm(
+                zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)
+            ):
                 if args.plot_only:
                     continue
                 # Load
@@ -162,13 +171,20 @@ for split in cfg.split_by:
                     det_split_maps = {}
                     det_split_weights = {}
                     for name in det_split_names:
-                        map_path = os.path.join(data_dir, mjob.tags["solved"]).replace("solved.fits", f"{name}_map.fits")
-                        weight_path = os.path.join(data_dir, mjob.tags["solved"]).replace("solved.fits", f"{name}_weights.fits")
-                        if not (os.path.isfile(map_path) and os.path.isfile(weight_path)):
+                        map_path = os.path.join(data_dir, mjob.tags["solved"]).replace(
+                            "solved.fits", f"{name}_map.fits"
+                        )
+                        weight_path = os.path.join(
+                            data_dir, mjob.tags["solved"]
+                        ).replace("solved.fits", f"{name}_weights.fits")
+                        if not (
+                            os.path.isfile(map_path) and os.path.isfile(weight_path)
+                        ):
                             continue
                         det_split_maps[name] = enmap.read_map(map_path)
-                        det_split_weights[name] = enmap.read_map(weight_path)[np.diag_indices(len(solved))]
-
+                        det_split_weights[name] = enmap.read_map(weight_path)[
+                            np.diag_indices(len(solved))
+                        ]
 
                 except FileNotFoundError:
                     print(f"Maps missing for job: {mjob}")
@@ -196,8 +212,12 @@ for split in cfg.split_by:
                 mlweights = view_TQU(mlweights)
                 resid = view_TQU(resid)
                 resid_weights = view_TQU(resid_weights)
-                det_split_maps = {name : view_TQU(smap) for name, smap in det_split_maps.items()}
-                det_split_weights = {name : view_TQU(smap) for name, smap in det_split_weights.items()}
+                det_split_maps = {
+                    name: view_TQU(smap) for name, smap in det_split_maps.items()
+                }
+                det_split_weights = {
+                    name: view_TQU(smap) for name, smap in det_split_weights.items()
+                }
                 if not np.all(
                     np.array(
                         [
@@ -226,13 +246,16 @@ for split in cfg.split_by:
                         fit["aman"].gauss.xi0.to(u.rad).value,
                     )
                 )
-                solved = reproject.thumbnails(
-                    solved,
-                    r=ext_rad,
-                    coords=cent,
-                    oshape=(pix_extent, pix_extent),
-                    owcs=twcs,
-                ) / fit["aman"].gauss.amp.value
+                solved = (
+                    reproject.thumbnails(
+                        solved,
+                        r=ext_rad,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    / fit["aman"].gauss.amp.value
+                )
                 weights = (
                     reproject.thumbnails_ivar(
                         weights,
@@ -283,8 +306,28 @@ for split in cfg.split_by:
                     )
                     * fit["aman"].gauss.amp.value**2
                 )
-                det_split_maps = {name : reproject.thumbnails(smap,r=ext_rad,coords=cent,oshape=(pix_extent, pix_extent),owcs=twcs)/fit["aman"].gauss.amp.value for name, smap in det_split_maps.items()}
-                det_split_weights = {name : reproject.thumbnails_ivar(smap,r=ext_rad,coords=cent,oshape=(pix_extent, pix_extent),owcs=twcs)*fit["aman"].gauss.amp.value**2 for name, smap in det_split_weights.items()}
+                det_split_maps = {
+                    name: reproject.thumbnails(
+                        smap,
+                        r=ext_rad,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    / fit["aman"].gauss.amp.value
+                    for name, smap in det_split_maps.items()
+                }
+                det_split_weights = {
+                    name: reproject.thumbnails_ivar(
+                        smap,
+                        r=ext_rad,
+                        coords=cent,
+                        oshape=(pix_extent, pix_extent),
+                        owcs=twcs,
+                    )
+                    * fit["aman"].gauss.amp.value**2
+                    for name, smap in det_split_weights.items()
+                }
 
                 # If the new center seems very far from the origin then lets skip
                 cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
@@ -302,8 +345,14 @@ for split in cfg.split_by:
                 np.nan_to_num(mlweights, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(resid, copy=False, nan=0, posinf=0, neginf=0)
                 np.nan_to_num(resid_weights, copy=False, nan=0, posinf=0, neginf=0)
-                det_split_maps = {name : np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0) for name, smap in det_split_maps.items()}
-                det_split_weights = {name : np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0) for name, smap in det_split_weights.items()}
+                det_split_maps = {
+                    name: np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0)
+                    for name, smap in det_split_maps.items()
+                }
+                det_split_weights = {
+                    name: np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0)
+                    for name, smap in det_split_weights.items()
+                }
                 mcoadd.insert(solved * weights, op=op)
                 wcoadd.insert(weights, op=op)
                 mlcoadd.insert(mlmap * mlweights, op=op)
@@ -313,7 +362,9 @@ for split in cfg.split_by:
                 for name in det_split_names:
                     if name not in det_split_maps or name not in det_split_weights:
                         continue
-                    det_split_mcoadd[name].insert(det_split_maps[name] * det_split_weights[name], op=op)
+                    det_split_mcoadd[name].insert(
+                        det_split_maps[name] * det_split_weights[name], op=op
+                    )
                     det_split_wcoadd[name].insert(det_split_weights[name], op=op)
 
             # Divide weights
@@ -322,8 +373,10 @@ for split in cfg.split_by:
                 mlcoadd /= mwcoadd
                 rmcoadd /= rwcoadd
                 for name in det_split_names:
-                    det_split_mcoadd[name] /= det_split_wcoadd[name] # type: ignore
-                    np.nan_to_num(det_split_mcoadd[name], copy=False, nan=0, posinf=0, neginf=0)
+                    det_split_mcoadd[name] /= det_split_wcoadd[name]  # type: ignore
+                    np.nan_to_num(
+                        det_split_mcoadd[name], copy=False, nan=0, posinf=0, neginf=0
+                    )
             np.nan_to_num(mcoadd, copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num(mlcoadd, copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num(rmcoadd, copy=False, nan=0, posinf=0, neginf=0)
@@ -333,7 +386,10 @@ for split in cfg.split_by:
             for name in det_split_names:
                 if not np.any(det_split_wcoadd[name]):
                     continue
-                det_split_out += [(det_split_mcoadd[name], f"{name}_stack"), (det_split_wcoadd[name], f"{name}_stack_ivar")]
+                det_split_out += [
+                    (det_split_mcoadd[name], f"{name}_stack"),
+                    (det_split_wcoadd[name], f"{name}_stack_ivar"),
+                ]
             for omap, name in [
                 (mcoadd, "stack"),
                 (wcoadd, "stack_ivar"),

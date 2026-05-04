@@ -1,8 +1,8 @@
 import astropy.units as u
 import numpy as np
 from astropy.nddata import block_reduce, block_replicate
-from scipy.special import factorial, jv, spherical_jn
 from joblib import Memory
+from scipy.special import factorial, jv, spherical_jn
 
 location = "/tmp/lat_beams"
 memory = Memory(location, verbose=0)
@@ -42,13 +42,17 @@ def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     sim_data = a * np.exp(xi_coef + eta_coef)
     return sim_data + off
 
-def gaussian2d_wing(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off, wing_r0, wing_amp):
+
+def gaussian2d_wing(
+    posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off, wing_r0, wing_amp
+):
     gauss = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
-    r = np.sqrt((posmap[0] - dy)**2 + (posmap[1] - dx)**2)
+    r = np.sqrt((posmap[0] - dy) ** 2 + (posmap[1] - dx) ** 2)
     r_msk = r > wing_r0
-    gauss[r_msk] = (wing_amp * np.power(r[r_msk], -3))
+    gauss[r_msk] = wing_amp * np.power(r[r_msk], -3)
 
     return gauss + off
+
 
 def multipole(theta, mp, sin):
     order = mp
@@ -120,7 +124,9 @@ def bessel_term(r, ell_max, i):
         bessel = jv(i, r * ell_max) / (r * ell_max)
     return bessel
 
+
 bessel_term_cached = memory.cache(bessel_term)
+
 
 def bessel_beam(
     posmap,
@@ -143,7 +149,7 @@ def bessel_beam(
 
     rmsk = np.ones_like(xi, dtype=bool)
     if len(r0_wing) > 0:
-        rmsk = r <= 1.5*np.max(r0_wing)
+        rmsk = r <= 1.5 * np.max(r0_wing)
     beam_model = np.zeros_like(xi)
     for n0 in range(len(amps)):
         b0 = np.array(bessel_term_cached(r[rmsk], ell_max, n0))
@@ -159,16 +165,18 @@ def bessel_beam(
     if len(thetas) == 0:
         return beam_model + off
 
-    wmsk = (beam_model < thresh)
-    tbins = np.digitize(theta, np.hstack([[-np.pi], thetas[1:-1] + .5*np.diff(thetas)[:-1], [np.pi]]))
+    wmsk = beam_model < thresh
+    tbins = np.digitize(
+        theta, np.hstack([[-np.pi], thetas[1:-1] + 0.5 * np.diff(thetas)[:-1], [np.pi]])
+    )
 
     for tb in np.unique(tbins):
-        tmsk = (tbins == tb)
+        tmsk = tbins == tb
         twmsk = tmsk * wmsk
-        r0 = r0_wing[tb-1]
-        amp = amp_wing[tb-1]
-        rmsk = tmsk * (r > r0) # + (beam_model < amp))
-        beam_model[twmsk + rmsk] = amp * (r0/r[twmsk + rmsk])**3
+        r0 = r0_wing[tb - 1]
+        amp = amp_wing[tb - 1]
+        rmsk = tmsk * (r > r0)  # + (beam_model < amp))
+        beam_model[twmsk + rmsk] = amp * (r0 / r[twmsk + rmsk]) ** 3
 
     beam_model += off
 

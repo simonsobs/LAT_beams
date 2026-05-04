@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy import constants as const
 from astropy import units as u
+from healpy.sphtfunc import beam2bl
 from pixell import enmap
 from scipy.interpolate import PchipInterpolator
 from sotodlib.core import AxisManager
-from healpy.sphtfunc import beam2bl
 
 import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile
@@ -64,10 +64,13 @@ twcs = enmap.wcsutils.build(
 )
 posmap_highres = enmap.posmap((pix_extent, pix_extent), twcs)
 
-# Get det splits 
+# Get det splits
 det_split_names = [""]
 if cfg.det_split_dir != "":
-    det_split_names += [os.path.splitext(os.path.basename(fname))[0] for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))]
+    det_split_names += [
+        os.path.splitext(os.path.basename(fname))[0]
+        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
+    ]
 
 # Loop through splits
 # TODO: Have make_stacked_map save paths in jobdb
@@ -153,7 +156,8 @@ for split in cfg.split_by:
                 r = np.linspace(0, len(rprof), len(rprof)) * pixsize
                 rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
                 data_fwhm = (
-                    get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
+                    get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True)
+                    * u.arcsec
                 )
                 aman.wrap("data_fwhm", data_fwhm)
                 aman.wrap("r", r * u.arcsec)
@@ -171,7 +175,7 @@ for split in cfg.split_by:
                     cfg.aperature,
                     const.c / (float(band[1:]) * u.GHz),
                     band_mask_size,
-                    cfg.bessel_wing_n_sigma
+                    cfg.bessel_wing_n_sigma,
                 )
                 if bessel_beam_params is None or model is None:
                     print("\t\tBessel fit failed")
@@ -181,9 +185,14 @@ for split in cfg.split_by:
 
                 # Make and save a higher resolution profile
                 # We want to remove the offset here so the beam goes to 0 and inf
-                model_highres = bm.bessel_beam_from_aman(posmap_highres, aman) - aman.bessel.off.value
+                model_highres = (
+                    bm.bessel_beam_from_aman(posmap_highres, aman)
+                    - aman.bessel.off.value
+                )
                 cent = np.unravel_index(
-                    np.argmin(posmap_highres[0] ** 2 + posmap_highres[1] ** 2, axis=None),
+                    np.argmin(
+                        posmap_highres[0] ** 2 + posmap_highres[1] ** 2, axis=None
+                    ),
                     posmap_highres.shape,
                 )
                 mprof = radial_profile(model_highres, cent[::-1])
@@ -197,26 +206,38 @@ for split in cfg.split_by:
                 os.makedirs(prof_dir, exist_ok=True)
                 np.savetxt(
                     os.path.join(
-                        prof_dir, f"model_profile_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"
+                        prof_dir,
+                        f"model_profile_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt",
                     ),
                     mprofile,
                 )
                 np.savetxt(
-                    os.path.join(prof_dir, f"profile_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"),
+                    os.path.join(
+                        prof_dir, f"profile_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"
+                    ),
                     rprofile,
                 )
                 # Compute and save b_ell
-                bl = beam2bl(rprofile[:, 1], np.deg2rad(rprofile[:, 0] / 3600), cfg.lmax)
+                bl = beam2bl(
+                    rprofile[:, 1], np.deg2rad(rprofile[:, 0] / 3600), cfg.lmax
+                )
                 ells = np.arange(cfg.lmax + 1)
                 window = np.column_stack((ells, bl))
                 np.savetxt(
-                    os.path.join(prof_dir, f"window_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"),
+                    os.path.join(
+                        prof_dir, f"window_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"
+                    ),
                     window,
                 )
-                mbl = beam2bl(mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), cfg.lmax)
+                mbl = beam2bl(
+                    mprofile[:, 1], np.deg2rad(mprofile[:, 0] / 3600), cfg.lmax
+                )
                 mwindow = np.column_stack((ells, mbl))
                 np.savetxt(
-                    os.path.join(prof_dir, f"model_window_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt"),
+                    os.path.join(
+                        prof_dir,
+                        f"model_window_{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}.txt",
+                    ),
                     mwindow,
                 )
 
@@ -226,7 +247,6 @@ for split in cfg.split_by:
                 mprofiles += [mprofile]
                 windows += [window]
                 mwindows += [mwindow]
-
 
                 # Save and plot maps
                 aman.save(
@@ -243,7 +263,8 @@ for split in cfg.split_by:
                 ]:
                     enmap.write_map(
                         os.path.join(
-                            spl_dir, f"{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}_stack_{name}.fits"
+                            spl_dir,
+                            f"{spl_rel}_{epoch[0]}_{epoch[1]}{dstr}_stack_{name}.fits",
                         ),
                         omap,
                         "fits",
@@ -267,7 +288,7 @@ for split in cfg.split_by:
         # Plot profiles and windows
         plt.close()
         for label, rprofile, mprofile in zip(labels, rprofiles, mprofiles):
-            label=label.replace("_", " ")
+            label = label.replace("_", " ")
             plt.plot(
                 rprofile[:, 0],
                 rprofile[:, 1],
@@ -283,47 +304,57 @@ for split in cfg.split_by:
                 color=plt.gca().lines[-1].get_color(),
                 alpha=0.4,
             )
-        plt.xlim(0, 3600*np.rad2deg(band_mask_size))
+        plt.xlim(0, 3600 * np.rad2deg(band_mask_size))
         plt.ylim((1e-5, 1))
-        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         plt.title(f"{spl_rel} Profile")
         plt.xlabel('r (")')
         plt.ylabel("Profile")
-        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}.png"), bbox_inches="tight")
+        plt.savefig(
+            os.path.join(prof_plot_dir, f"profile_{spl_rel}.png"), bbox_inches="tight"
+        )
 
         plt.yscale("log")
         plt.title(f"{spl_rel} Log Profile")
         plt.xlabel('r (")')
         plt.ylabel("Log Profile")
-        plt.savefig(os.path.join(prof_plot_dir, f"profile_{spl_rel}_log.png"), bbox_inches="tight")
+        plt.savefig(
+            os.path.join(prof_plot_dir, f"profile_{spl_rel}_log.png"),
+            bbox_inches="tight",
+        )
         plt.close()
 
         for label, window in zip(labels, windows):
-            label=label.replace("_", " ")
+            label = label.replace("_", " ")
             plt.loglog(
                 window[:, 0],
                 window[:, 1],
                 label=label,
                 alpha=0.5,
             )
-        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         plt.title(f"{spl_rel} Window Function")
         plt.xlabel("l")
         plt.ylabel("b_l")
-        plt.savefig(os.path.join(prof_plot_dir, f"window_{spl_rel}.png"), bbox_inches="tight")
+        plt.savefig(
+            os.path.join(prof_plot_dir, f"window_{spl_rel}.png"), bbox_inches="tight"
+        )
         plt.close()
 
         for label, window in zip(labels, mwindows):
-            label=label.replace("_", " ")
+            label = label.replace("_", " ")
             plt.loglog(
                 window[:, 0],
                 window[:, 1],
                 label=label,
                 alpha=0.5,
             )
-        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         plt.title(f"{spl_rel} Model Window Function")
         plt.xlabel("l")
         plt.ylabel("b_l")
-        plt.savefig(os.path.join(prof_plot_dir, f"model_window_{spl_rel}.png"), bbox_inches="tight")
+        plt.savefig(
+            os.path.join(prof_plot_dir, f"model_window_{spl_rel}.png"),
+            bbox_inches="tight",
+        )
         plt.close()
