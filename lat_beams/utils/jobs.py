@@ -17,14 +17,15 @@ def set_tag(job, key, new_val):
         raise ValueError(f'No tag called "{key}"')
 
 
-def make_jobdb(comm, data_dir):
+def make_jobdb(comm, data_dir, append=""):
+    path = os.path.join(data_dir, f"jobdb{append}.db")
     myrank = 0
     if comm is not None:
         myrank = comm.Get_rank()
     # Let rank 0 make jobdb first to avoid race conditions
     if myrank == 0:
         engine = sqy.create_engine(
-            f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
+            f'sqlite:///{path}',
             connect_args={"timeout": 10},
             poolclass=NullPool,
         )
@@ -35,7 +36,7 @@ def make_jobdb(comm, data_dir):
     comm.barrier()
     if myrank != 0:
         engine = sqy.create_engine(
-            f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
+            f'sqlite:///{path}',
             connect_args={"timeout": 10},
             poolclass=NullPool,
         )
@@ -139,8 +140,7 @@ def setup_jobs(
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
             # with jdb.session_scope() as session:
-            #     for job in jobs_to_open:
-            #         session.merge(job)
+            #     session.add_all(jobs_to_open)
             #     session.commit()
         comm.barrier()
     t1 = time.time()
