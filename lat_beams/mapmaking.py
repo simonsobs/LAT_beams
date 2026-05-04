@@ -111,6 +111,7 @@ def make_map(
     map_str: str,
     logger: Logger,
     cfg: Namespace,
+    det_splits: dict[str, RangesMatrix] = {},
 ) -> tuple[Optional[dict], Optional[tuple[int, int]]]:
     """
     Make a filter-bin map of a source and estimate the center.
@@ -158,6 +159,8 @@ def make_map(
     cfg : Namespace
         The loaded configuration.
         See `lat_beams.utils.config` for details.
+    det_splits : dict[str, RangesMatrix], default: {}
+        The detector splits to produce in addition to the full map.
 
     Returns
     -------
@@ -183,20 +186,41 @@ def make_map(
         job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         return None, None
 
-    # Initial map
     with log_lvl(logger, logging.WARNING):
-        out = cp.make_map(
-            aman.copy(),
-            thread_algo="domdir",  # type: ignore
-            center_on=src_to_map,
-            res=res,
-            cuts=cuts,
-            source_flags=source_flags,
-            comps=comps,
-            filename=filename,
-            n_modes=n_modes,
-            info=info,
-        )
+        try:
+            # Full map
+            out = cp.make_map(
+                aman.copy(),
+                thread_algo="domdir",
+                center_on=src_to_map,
+                res=res,
+                cuts=cuts,
+                source_flags=source_flags,
+                comps=comps,
+                filename=filename,
+                n_modes=n_modes,
+                info=info,
+            )
+
+            # Splits, being a litte inefficient by fitering again here
+            if len(det_splits):
+                _ = cp.make_map(
+                    aman.copy(),
+                    thread_algo="domdir",
+                    center_on=src_to_map,
+                    res=res,
+                    cuts=cuts,
+                    source_flags=source_flags,
+                    comps=comps,
+                    filename=filename,
+                    n_modes=n_modes,
+                    info=info,
+                    data_splits=det_splits,
+                )
+        except Exception as e:
+            msg = f"Failed to load metadata with error {e}"
+            logger.error("\t%s", msg)
+            return None, None
 
     # Smooth and find the center
     cent = estimate_cent(out["solved"][0], cfg.smooth_kern / pixsize, cfg.buf)
@@ -397,7 +421,7 @@ def make_ml_map(
     mapmaker_prev = None
     for ipass, passinfo in enumerate(passes):
         if comm.Get_rank() == 0:
-            logger.debug(
+            logger.info(
                 "Starting pass %d/%d maxit %d down %d interp %s"
                 % (
                     ipass + 1,
@@ -407,6 +431,7 @@ def make_ml_map(
                     passinfo.interpol,
                 )
             )
+            logger.flush()
         pass_prefix = os.path.join(out_dir, f"{prefix}pass{ipass+1}_")
         noise_model = mapmaking.NmatDetvecs(verbose=False)
         signal_cut = mapmaking.SignalCut(comm, dtype=np.float32)
@@ -421,23 +446,31 @@ def make_ml_map(
         )
         signals = [signal_cut, signal_map]
         mapmaker = mapmaking.MLMapmaker(
-            signals, noise_model=None, dtype=np.float32, verbose=True
+            signals, noise_model=noise_model, dtype=np.float32, verbose=True
         )
 
+        logger.info("Adding obs to mapmaker")
+        logger.flush()
         for sub_id, (aman, P) in amans.items():
             P.interpol = passinfo.interpol
-            add_obs_to_mapmaker(
-                aman.copy(),
-                sub_id,
-                mapmaker,
-                ipass,
-                passinfo,
-                P,
-                guess,
-                eval_prev,
-                mapmaker_prev,
-                logger,
-            )
+            try:
+                add_obs_to_mapmaker(
+                    aman.copy(),
+                    sub_id,
+                    mapmaker,
+                    ipass,
+                    passinfo,
+                    P,
+                    guess,
+                    eval_prev,
+                    mapmaker_prev,
+                    logger,
+                )
+            except Exception as e:
+                logger.error("Failed to add %s with errer %s", sub_id, str(e))
+        comm.barrier()
+        logger.info("Done adding obs to mapmaker")
+        logger.flush()
 
         # Write the starting maps
         mapmaker.prepare()
@@ -466,10 +499,11 @@ def make_ml_map(
             t2 = time.time()
             dump = step.i % 10 == 0
             if comm.Get_rank() == 0:
-                (logger.debug if dump else logger.debug)(
+                (logger.info if dump else logger.debug)(
                     "\tCG step %4d %15.7e %8.3f %s"
                     % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
                 )
+                logger.flush()
             if dump:
                 for signal, val in zip(signals, step.x):
                     if signal.output:
@@ -486,6 +520,7 @@ def make_ml_map(
 
         mapmaker_prev = mapmaker
         eval_prev = mapmaker.evaluator(step.x_zip)
+        logger.flush()
 
     mlmap_path = "" if mlmap_path is None else mlmap_path
     rhs_path = "" if rhs_path is None else rhs_path

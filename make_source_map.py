@@ -1,13 +1,15 @@
 import logging
 import os
 import sys
-from functools import partial
+from functools import cache, partial
+from glob import glob
 
 import numpy as np
 import yaml
 from mpi4py import MPI
 from pixell import enmap
 from pshmem.locking import MPILock
+from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
@@ -145,6 +147,37 @@ def get_tags(info):
         "preprocess": "",
     }
     return tags
+
+
+@cache
+def load_det_splits(split_dir):
+    det_splits = []
+    for fname in glob(os.path.join(split_dir, "*.txt")):
+        name = os.path.splitext(os.path.basename(fname))[0]
+        dets = np.genfromtxt(
+            fname,
+            dtype=str,
+            usecols=[
+                0,
+            ],
+        )
+        det_splits += [(name, dets)]
+    return det_splits
+
+
+def make_det_splits(aman, split_dir, min_dets):
+    det_splits = {}
+    if "det_id" not in aman.det_info:
+        return det_splits
+    for name, dets in load_det_splits(split_dir):
+        msk = np.isin(aman.det_info.det_id, dets)
+        if np.sum(msk) < min_dets / 2:
+            continue
+        rmat = RangesMatrix.from_mask(
+            np.broadcast_to(~msk[..., None], aman.signal.shape)
+        )
+        det_splits[name] = rmat
+    return det_splits
 
 
 # Setup logger
@@ -333,7 +366,14 @@ for i, j in enumerate(joblist):
 
     # Get metadata
     with log_lvl(logger, logging.ERROR):
-        meta = ctx.get_meta(obs_id)
+        try:
+            meta = ctx.get_meta(obs_id)
+        except Exception as e:
+            msg = f"Failed to load metadata with error {e}"
+            logger.error("\t%s", msg)
+            set_tag(job, "message", msg)
+            job.jstate = "failed"
+            continue
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
         logger.error("\t%s", msg)
@@ -462,6 +502,9 @@ for i, j in enumerate(joblist):
             wrap=None,
         )
 
+    # Make splits
+    det_splits = make_det_splits(aman, cfg.det_split_dir, cfg.min_dets)
+
     # Make final map
     out, cent = lbm.make_map(
         aman,
@@ -479,6 +522,7 @@ for i, j in enumerate(joblist):
         "final",
         logger,
         cfg,
+        det_splits,
     )
     if out is None or cent is None:
         continue
@@ -519,7 +563,7 @@ for i, j in enumerate(joblist):
         logger.warning("Plotting failed with error: %s", e)
 
     # In case we don't want to make ML maps
-    if cfg.mlpass < 1:
+    if cfg.mlpass < 1 or cfg.cgiters < 1:
         set_tag(job, "message", "Success")
         job.jstate = "done"
         continue

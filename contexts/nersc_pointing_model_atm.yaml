@@ -7,7 +7,7 @@ imports:
   - sotodlib.io.metadata
 
 obsfiledb: '{basedir}/lat_obsfiledb_local.sqlite'
-obsdb: '{basedir}/lat_obsdb_240911m_local.sqlite'
+obsdb: '/global/cfs/cdirs/sobs/users/mhasse/work/250514/enhanced_obsdbs/lat_obsdb_251114m.sqlite' #'{basedir}/lat_obsdb_240911m_local.sqlite'
 
 obs_loader_type: 'obs-book'
 obs_colon_tags: [wafer.bandpass, wafer_slot]
@@ -25,7 +25,7 @@ metadata:
     label: wafer_info
     det_info: true
     on_missing: fail
-  - db: '{manifestdir}/det_cal/lat_det_cal_250516m/det_cal_local.sqlite'
+  - db: '{manifestdir}/det_cal/lat_det_cal_260216m/det_cal_local.sqlite'
     label: det_cal
     unpack: det_cal
     # on_missing: fail  ## work-around for variable mask

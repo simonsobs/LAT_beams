@@ -17,14 +17,15 @@ def set_tag(job, key, new_val):
         raise ValueError(f'No tag called "{key}"')
 
 
-def make_jobdb(comm, data_dir):
+def make_jobdb(comm, data_dir, append=""):
+    path = os.path.join(data_dir, f"jobdb{append}.db")
     myrank = 0
     if comm is not None:
         myrank = comm.Get_rank()
     # Let rank 0 make jobdb first to avoid race conditions
     if myrank == 0:
         engine = sqy.create_engine(
-            f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
+            f"sqlite:///{path}",
             connect_args={"timeout": 10},
             poolclass=NullPool,
         )
@@ -35,7 +36,7 @@ def make_jobdb(comm, data_dir):
     comm.barrier()
     if myrank != 0:
         engine = sqy.create_engine(
-            f'sqlite:///{os.path.join(data_dir, "jobdb.db")}',
+            f"sqlite:///{path}",
             connect_args={"timeout": 10},
             poolclass=NullPool,
         )
@@ -68,6 +69,7 @@ def setup_jobs(
     jdb = make_jobdb(comm, data_dir)
     joblist = []
     jobs_to_make = []
+    jobs_to_open = []
     logger.info("Getting jobdict")
     logger.flush()
     jobdict = None
@@ -114,6 +116,9 @@ def setup_jobs(
             or job.jstate.name == "open"
             or (job.jstate.name == "failed" and retry_failed)
         ):
+            if job.jstate.name != "open":
+                job.jstate = "open"
+                jobs_to_open += [job]
             joblist += [job]
         elif replot and job.jstate.name == "done":
             joblist += [job]
@@ -124,6 +129,9 @@ def setup_jobs(
     tot_missing = 0
     tot_missing = comm.reduce(len(jobs_to_make), root=0)
     logger.info("Adding %s new jobs", tot_missing)
+    tot_opening = 0
+    tot_opening = comm.reduce(len(jobs_to_open), root=0)
+    logger.info("Opening %s old jobs", tot_opening)
     logger.flush()
     t0 = time.time()
     for i in range(nproc):
@@ -131,6 +139,9 @@ def setup_jobs(
             logger.debug("\tRank %s writing", i)
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
+            # with jdb.session_scope() as session:
+            #     session.add_all(jobs_to_open)
+            #     session.commit()
         comm.barrier()
     t1 = time.time()
     logger.flush()

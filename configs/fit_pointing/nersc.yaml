@@ -3,7 +3,8 @@ fit_source_list:
   - "saturn"
   - "uranus"
   - "neptune"
-min_samps: 20000
+  - "jupiter"
+min_samps: 2000
 ctx_path: '/global/cfs/cdirs/sobs/metadata/lat/contexts/smurf_detcal_local.yaml'
 preprocess_cfg: "preproc/preproc_fit_point.yaml"
 nominal_path: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/ID9/focal_plane.h5'
@@ -25,12 +26,12 @@ nominal_fwhm: # arcmin LAT; change per platform
   f220: 0.95
   f280: 0.83
     
-try_all: False 
+try_all: True 
 
-hp_fc: 1
+hp_fc: 10
 lp_fc: 100
 
-min_hits: 0
+min_hits: 3
 
 src_msk: False
 blind_search: False
@@ -40,3 +41,6 @@ pointing_mask:
     - 0.
     - 0.
     - 1.5 
+
+fit_pars:
+  bin_priors: True 

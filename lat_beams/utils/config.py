@@ -79,7 +79,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["tel"] = cfg.get("tel", "lat")
     cfg["forced_ws"] = args.forced_ws if args.forced_ws is not None else []
     if cfg.get("try_all", False):
-        cfg["forced_ws"] = ["ws0", "ws1", "ws2"]
+        cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws."]
     cfg["fit_source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
     cfg["map_source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
     cfg["start_time"] = cfg.get("start_time", 0)
@@ -99,6 +99,8 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     )
     cfg["root_dir"] = os.path.expanduser(cfg.get("root_dir", "~"))
     cfg["append"] = cfg.get("append", "")
+    cfg["det_split_dir"] = cfg.get("det_split_dir", "")
+    cfg["fit_append"] = cfg.get("fit_append", "")
 
     # Source masking and projection settings
     cfg["res"] = cfg.get("res", (10 / 3600.0) * np.pi / 180.0)
@@ -153,8 +155,9 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["n_multipoles"] = cfg.get("n_multipoles", 3)
     cfg["n_bessel"] = cfg.get("n_bessel", 10)
     cfg["force_bessel_cent"] = cfg.get("force_bessel_cent", False)
-    cfg["bessel_wing"] = cfg.get("bessel_wing", False)
+    cfg["bessel_wing_n_sigma"] = cfg.get("bessel_wing_n_sigma", 5)
     cfg["sym_gauss"] = cfg.get("sym_gauss", True)
+    cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(

@@ -12,7 +12,7 @@ requires-python = ">=3.12"
 keywords = ["Simons Observatory", "LAT", "beams", "planet", "fitting"]
 license = {text = "GPLv3"}
 classifiers = [ "Programming Language :: Python" ]
-dependencies = ["numpy", "scipy", "sotodlib", "jaxtyping"]
+dependencies = ["numpy", "scipy", "sotodlib", "jaxtyping", "astropy", "h5py", "joblib", "mpi4py", "pshmem", "tqdm", "pixell", "so3g", "astral", "matplotlib", "pyinstrument", "SQLAlchemy", "PyYAML"]
 
 [project.optional-dependencies]
 docs = [
