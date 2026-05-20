@@ -3,11 +3,12 @@ import numpy as np
 from astropy.nddata import block_reduce, block_replicate
 from joblib import Memory
 from scipy.special import factorial, jv, spherical_jn
+from numba import njit
 
 location = "/tmp/lat_beams"
 memory = Memory(location, verbose=0)
 
-
+@njit
 def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     """
     Stolen from analyze_bright_ptsrc
@@ -32,16 +33,26 @@ def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
         Time stream at sampling points given by xieta
     """
     eta, xi = posmap
-    xi_sft = xi - xi0
-    eta_sft = eta - eta0
-    xi_rot = xi_sft * np.cos(phi) - eta_sft * np.sin(phi)
-    eta_rot = xi_sft * np.sin(phi) + eta_sft * np.cos(phi)
-    factor = 2 * np.sqrt(2 * np.log(2))
-    xi_coef = -0.5 * (xi_rot) ** 2 / (fwhm_xi / factor) ** 2
-    eta_coef = -0.5 * (eta_rot) ** 2 / (fwhm_eta / factor) ** 2
-    sim_data = a * np.exp(xi_coef + eta_coef)
-    return sim_data + off
+    model = np.empty_like(eta)
 
+    sigma_xi = fwhm_xi / np.sqrt(8*np.log(2))
+    sigma_eta = fwhm_eta / np.sqrt(8*np.log(2))
+
+    cos_phi = np.cos(phi)
+    sin_phi = np.sin(phi)
+    cos2 = cos_phi**2
+    sin2 = sin_phi**2
+    sin2phi = np.sin(2*phi)
+
+    a_coef = cos2/(2*sigma_eta**2) + sin2/(2*sigma_xi**2)
+    b_coef = -sin2phi/(4*sigma_eta**2) + sin2phi/(4*sigma_xi*2)
+    c_coef = sin2/(2*sigma_eta**2) + cos2/(2*sigma_xi**2)
+
+    deta = eta - eta0
+    dxi = xi - xi0
+
+    model = a * np.exp(-(a_coef*deta*deta + 2*b_coef*deta*dxi + c_coef*dxi*dxi)) + off
+    return model
 
 def gaussian2d_wing(
     posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off, wing_r0, wing_amp
