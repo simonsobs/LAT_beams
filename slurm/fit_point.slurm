@@ -8,8 +8,7 @@
 #SBATCH --account=mp107b
 
 export OMP_NUM_THREADS=4
+export OMP_PROC_BIND=master
+export OMP_PLACES=sockets
 
-srun -n 64 python fit_pointing.py configs/fit_pointing/neptune_nersc.yaml -f 8 -r -o
-srun -n 64 python fit_pointing.py configs/fit_pointing/uranus_nersc.yaml -f 8 -r -o
-srun -n 64 python fit_pointing.py configs/fit_pointing/mars_nersc.yaml -f 8 -r -o
-srun -n 64 python fit_pointing.py configs/fit_pointing/saturn_nersc.yaml -f 8 -r -o
+srun -n 128 -c 4 --cpu-bind=sockets --distribution=block:block python fit_pointing.py configs/fit_pointing/nersc.yaml -f 16 -o
