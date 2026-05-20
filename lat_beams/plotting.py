@@ -6,7 +6,10 @@ they should be refactored to rely on more generic units.
 
 import os
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 import numpy as np
 from jaxtyping import Float
 from matplotlib.colors import SymLogNorm
@@ -259,21 +262,24 @@ def plot_tod(
         detectors are plotted.
     """
     plt.close()
+    for data, append, ylabel in [(np.array(aman.signal)[:max_dets], "tod", "Signal (pW)"), (sig_filt[:max_dets], "tod_filt", "Filtered Signal (pW)")]:
+        fig, ax = plt.subplots()
+        nsamp = data.shape[1]
+        x = np.arange(nsamp)
+        segments = [np.column_stack([x, y]) for y in data]
 
-    plt.plot(np.array(aman.signal)[:max_dets].T, alpha=0.3)
-    plt.xlabel("Samples")
-    plt.ylabel("Signal (pW)")
-    plt.savefig(os.path.join(tod_plot_dir, f"{file_label}_tod.png"))
-    plt.close()
+        lc = LineCollection(segments, alpha=0.3)
+        ax.add_collection(lc)
+        ax.autoscale(enable=True, axis='y')
+        ax.set_xlabel("Samples")
+        ax.set_ylabel(ylabel)
+        ax.set_title(file_label.replace("_", " "))
 
-    plt.plot(sig_filt[:max_dets].T, alpha=0.3)
-    plt.xlabel("Samples")
-    plt.ylabel("Filtered Signal (pW)")
-    plt.savefig(os.path.join(tod_plot_dir, f"{file_label}_tod_filt.png"))
-    plt.close()
+        fig.savefig(os.path.join(tod_plot_dir, f"{file_label}_{append}.png"))
+        plt.close(fig)
 
 
-def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str):
+def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_id: str):
     """
     Plot the results of a the focal plane fit.
     We assume here that all angular values are in radians
@@ -303,44 +309,29 @@ def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str):
     """
     plt.close()
 
-    plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
-    plt.xlabel("Xi (rad)")
-    plt.ylabel("Eta (rad)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
-    plt.close()
+    # Convert to np arrays to make pyright happy
+    fp_data = {attr: np.array(getattr(focal_plane, attr)) for attr in 
+               ['xi', 'eta', 'az', 'el', 'amp', 'fwhm', 'hits', 'reduced_chisq', 'R2']}
 
-    plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
-    plt.xlabel("Az (rad)")
-    plt.ylabel("El (rad)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
-    plt.close()
+    # Define plots with tuples (data, xlabel, ylabel, filename, plot_type)
+    plots = [
+        ((fp_data['xi'], fp_data['eta']), "Xi (rad)", "Eta (rad)", f"{ufm}_fp.png", "scatter"),
+        ((fp_data['az'], fp_data['el']), "Az (rad)", "El (rad)", f"{ufm}_enc.png", "scatter"),
+        (fp_data['amp'], "Amp (pW)", "Dets (#)", f"{ufm}_fp_amp.png", "hist"),
+        (fp_data['fwhm'], "FWHM (rad)", "Dets (#)", f"{ufm}_fp_fwhm.png", "hist"),
+        (fp_data['hits'], "Hits (#)", "Dets (#)", f"{ufm}_fp_hits.png", "hist"),
+        (fp_data['reduced_chisq'], "Reduced Chi Squared", "Dets (#)", f"{ufm}_fp_red_chisq.png", "hist"),
+        (fp_data['R2'], "R2", "Dets (#)", f"{ufm}_fp_r2.png", "hist"),
+    ]
 
-    plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
-    plt.xlabel("Amp (pW)")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
-    plt.close()
-
-    plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
-    plt.xlabel("FWHM (rad)")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
-    plt.close()
-
-    plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
-    plt.xlabel("Hits (#)")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
-    plt.close()
-
-    plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
-    plt.xlabel("Reduced Chi Squared")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
-    plt.close()
-
-    plt.hist(np.array(focal_plane.R2), bins=30, alpha=0.25)
-    plt.xlabel("R2")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_r2.png"))
+    for data, xlabel, ylabel, filename, plot_type in plots:
+        plt.clf() 
+        if plot_type == "scatter":
+            plt.scatter(*data, alpha=0.25)
+        elif plot_type == "hist":
+            plt.hist(data, bins=30, alpha=0.25)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(f"{obs_id} {ufm}")
+        plt.savefig(os.path.join(fit_plot_dir, filename))
     plt.close()
