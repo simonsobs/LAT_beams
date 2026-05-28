@@ -375,8 +375,8 @@ def auto_relplot(data: dict[str, Sequence], x: str, y: str, ignore: list[str]=[]
         The plot output by `relplot`.
     """
     cats = ["hue", "col", "row", "style"]
-    in_kwargs = [kwargs[cat] for cat in cats if cat in kwargs]
-    can_add = [cat for cat in cats if cat not in kwargs]
+    in_kwargs = [kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)]
+    can_add = [cat for cat in cats if (cat not in kwargs or kwargs[cat] is None)]
     fields = [
         k for k in data
         if (k not in (x, y) and k not in in_kwargs and k not in ignore)
