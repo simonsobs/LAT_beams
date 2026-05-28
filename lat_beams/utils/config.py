@@ -164,7 +164,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(
-        "nominal_fwhm", {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}
+            "nominal_fwhm", {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83, "f030": 5.1, "f040": 7.4}
     )
     cfg["aperature"] = cfg.get("aperature", 6)
     cfg["corr_primary"] = cfg.get("corr_primary", 280)
