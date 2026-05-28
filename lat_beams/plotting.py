@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
+import seaborn as sns
 import numpy as np
 from jaxtyping import Float
 from matplotlib.colors import SymLogNorm
@@ -335,3 +336,39 @@ def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_
         plt.title(f"{obs_id} {ufm}")
         plt.savefig(os.path.join(fit_plot_dir, filename))
     plt.close()
+
+def auto_relplot(data, x, y, ignore=[], **kwargs):
+    cats = ["hue", "col", "row", "style"]
+    in_kwargs = [kwargs[cat] for cat in cats if cat in kwargs]
+    can_add = [cat for cat in cats if cat not in kwargs]
+    fields = [
+        k for k in data
+        if (k not in (x, y) and k not in in_kwargs and k not in ignore)
+    ]
+
+    fields.sort(key=lambda c: len(set(data[c])))
+    for field, cat in zip(fields, can_add):
+        kwargs[cat] = field
+
+    if len(fields) > len(can_add):
+        to_combine = [kwargs["hue"]] + fields[4:]
+        n = len(data[x])
+
+        combined = [
+            "+".join(str(data[c][i]) for c in to_combine)
+            for i in range(n)
+        ]
+
+        kwargs["hue"] = "+".join(to_combine)
+        data[kwargs["hue"]] = combined
+
+    plot = sns.relplot(
+        data=data,
+        x=x,
+        y=y,
+        **kwargs,
+    )
+    
+    for ax in plot.axes.flat:
+        ax.label_outer()
+    return plot
