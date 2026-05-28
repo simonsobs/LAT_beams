@@ -5,10 +5,16 @@ they should be refactored to rely on more generic units.
 """
 
 import os
+from typing import Sequence
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 from jaxtyping import Float
+from matplotlib.collections import LineCollection
 from matplotlib.colors import SymLogNorm
 from pixell import enmap
 from sotodlib.core import AxisManager
@@ -259,21 +265,29 @@ def plot_tod(
         detectors are plotted.
     """
     plt.close()
+    for data, append, ylabel in [
+        (np.array(aman.signal)[:max_dets], "tod", "Signal (pW)"),
+        (sig_filt[:max_dets], "tod_filt", "Filtered Signal (pW)"),
+    ]:
+        fig, ax = plt.subplots()
+        nsamp = data.shape[1]
+        x = np.arange(nsamp)
+        segments = [np.column_stack([x, y]) for y in data]
 
-    plt.plot(np.array(aman.signal)[:max_dets].T, alpha=0.3)
-    plt.xlabel("Samples")
-    plt.ylabel("Signal (pW)")
-    plt.savefig(os.path.join(tod_plot_dir, f"{file_label}_tod.png"))
-    plt.close()
+        lc = LineCollection(segments, alpha=0.3)
+        ax.add_collection(lc)
+        ax.autoscale(enable=True, axis="y")
+        ax.set_xlabel("Samples")
+        ax.set_ylabel(ylabel)
+        ax.set_title(file_label.replace("_", " "))
 
-    plt.plot(sig_filt[:max_dets].T, alpha=0.3)
-    plt.xlabel("Samples")
-    plt.ylabel("Filtered Signal (pW)")
-    plt.savefig(os.path.join(tod_plot_dir, f"{file_label}_tod_filt.png"))
-    plt.close()
+        fig.savefig(os.path.join(tod_plot_dir, f"{file_label}_{append}.png"))
+        plt.close(fig)
 
 
-def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str):
+def plot_focal_plane(
+    focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_id: str
+):
     """
     Plot the results of a the focal plane fit.
     We assume here that all angular values are in radians
@@ -303,44 +317,131 @@ def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str):
     """
     plt.close()
 
-    plt.scatter(np.array(focal_plane.xi), np.array(focal_plane.eta), alpha=0.25)
-    plt.xlabel("Xi (rad)")
-    plt.ylabel("Eta (rad)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp.png"))
+    # Convert to np arrays to make pyright happy
+    fp_data = {
+        attr: np.array(getattr(focal_plane, attr))
+        for attr in [
+            "xi",
+            "eta",
+            "az",
+            "el",
+            "amp",
+            "fwhm",
+            "hits",
+            "reduced_chisq",
+            "R2",
+        ]
+    }
+
+    # Define plots with tuples (data, xlabel, ylabel, filename, plot_type)
+    plots = [
+        (
+            (fp_data["xi"], fp_data["eta"]),
+            "Xi (rad)",
+            "Eta (rad)",
+            f"{ufm}_fp.png",
+            "scatter",
+        ),
+        (
+            (fp_data["az"], fp_data["el"]),
+            "Az (rad)",
+            "El (rad)",
+            f"{ufm}_enc.png",
+            "scatter",
+        ),
+        (fp_data["amp"], "Amp (pW)", "Dets (#)", f"{ufm}_fp_amp.png", "hist"),
+        (fp_data["fwhm"], "FWHM (rad)", "Dets (#)", f"{ufm}_fp_fwhm.png", "hist"),
+        (fp_data["hits"], "Hits (#)", "Dets (#)", f"{ufm}_fp_hits.png", "hist"),
+        (
+            fp_data["reduced_chisq"],
+            "Reduced Chi Squared",
+            "Dets (#)",
+            f"{ufm}_fp_red_chisq.png",
+            "hist",
+        ),
+        (fp_data["R2"], "R2", "Dets (#)", f"{ufm}_fp_r2.png", "hist"),
+    ]
+
+    for data, xlabel, ylabel, filename, plot_type in plots:
+        plt.clf()
+        if plot_type == "scatter":
+            plt.scatter(*data, alpha=0.25)
+        elif plot_type == "hist":
+            plt.hist(data, bins=30, alpha=0.25)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(f"{obs_id} {ufm}")
+        plt.savefig(os.path.join(fit_plot_dir, filename))
     plt.close()
 
-    plt.scatter(np.array(focal_plane.az), np.array(focal_plane.el), alpha=0.25)
-    plt.xlabel("Az (rad)")
-    plt.ylabel("El (rad)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_enc.png"))
-    plt.close()
 
-    plt.hist(np.array(focal_plane.amp), bins=30, alpha=0.25)
-    plt.xlabel("Amp (pW)")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_amp.png"))
-    plt.close()
+def auto_relplot(
+    data: dict[str, Sequence], x: str, y: str, ignore: list[str] = [], **kwargs
+) -> sns.FacetGrid:
+    """
+    Make a relplot.
+    This function tries to be semi-clever about automatically selecting
+    which terms to use for `hue`, `col`, `row`, and `style`.
 
-    plt.hist(np.array(focal_plane.fwhm), bins=30, alpha=0.25)
-    plt.xlabel("FWHM (rad)")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_fwhm.png"))
-    plt.close()
+    First it determines the catagories of `data` as any fields other than
+    the ones specified in `x` and `y` or in `ignore`.
+    We then assign the catagory with the most unique entries to `hue`,
+    the second most the `col`, then `row`, and then `style`.
+    Any catagories beyond that are combined with whatever the `hue`
+    catagory is.
+    Note that you can still manually specify thing with `**kwargs`.
 
-    plt.hist(np.array(focal_plane.hits), bins=30, alpha=0.25)
-    plt.xlabel("Hits (#)")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_hits.png"))
-    plt.close()
+    Parameters
+    ----------
+    data : dict[str, Sequence]
+        The data to plot.
+        Should be a dict that `seaborn` understands as a
+        long form dataset.
+    x : str
+        The field to plot as x.
+    y : str
+        The field to plot as y.
+    ignore : list[str]
+        List of fields to ignore.
+    **kwargs
+        Key word arguments to pass to `relplot`.
+        Note that you can pass catagorical varaibles like `hue` here
+        if you want to specify them manually.
 
-    plt.hist(np.array(focal_plane.reduced_chisq), bins=30, alpha=0.25)
-    plt.xlabel("Reduced Chi Squared")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_red_chisq.png"))
-    plt.close()
+    Returns
+    -------
+    plot : sns.FacetGrid
+        The plot output by `relplot`.
+    """
+    cats = ["hue", "col", "row", "style"]
+    in_kwargs = [
+        kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)
+    ]
+    can_add = [cat for cat in cats if (cat not in kwargs or kwargs[cat] is None)]
+    fields = [
+        k for k in data if (k not in (x, y) and k not in in_kwargs and k not in ignore)
+    ]
 
-    plt.hist(np.array(focal_plane.R2), bins=30, alpha=0.25)
-    plt.xlabel("R2")
-    plt.ylabel("Dets (#)")
-    plt.savefig(os.path.join(fit_plot_dir, f"{ufm}_fp_r2.png"))
-    plt.close()
+    fields.sort(key=lambda c: len(set(data[c])))
+    for field, cat in zip(fields, can_add):
+        kwargs[cat] = field
+
+    if len(fields) > len(can_add):
+        to_combine = [kwargs["hue"]] + fields[4:]
+        n = len(data[x])
+
+        combined = ["+".join(str(data[c][i]) for c in to_combine) for i in range(n)]
+
+        kwargs["hue"] = "+".join(to_combine)
+        data[kwargs["hue"]] = combined
+
+    plot = sns.relplot(
+        data=data,
+        x=x,
+        y=y,
+        **kwargs,
+    )
+
+    for ax in plot.axes.flat:
+        ax.label_outer()
+    return plot

@@ -36,6 +36,7 @@ mlpass: 3
 sym_gauss: False
 n_bessel: 25
 n_multipoles: 8
-bessel_wing_n_sigma: 5
+bessel_wing_n_sigma: 3
 extent: 720
 det_split_dir: "det_lists"
+gauss_multipole: False

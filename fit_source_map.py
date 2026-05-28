@@ -277,7 +277,7 @@ for i, j in enumerate(joblist):
         posmap,
         guess,
         "pW",
-        False,  # cfg.sym_gauss,
+        cfg.sym_gauss,
         1000,
     )
     if gauss_params is None or model is None:

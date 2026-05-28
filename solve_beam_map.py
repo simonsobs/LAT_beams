@@ -414,7 +414,7 @@ for epoch in cfg.epochs:
                     set_tag(job, m, d)
                 job.jstate = "done"
                 with jdb.session_scope() as session:
-                    session.add(job)
+                    session.merge(job)
                     session.commit()
 
             logger.normal("Cleaning up memory")

@@ -122,15 +122,18 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["min_dets"] = cfg.get("min_dets", 30)
     cfg["trim_samps"] = cfg.get("time_samps", 200) // ds
     cfg["min_hits"] = cfg.get("min_hits", 1)
+    cfg["high_hits"] = cfg.get("min_hits", 5)
     cfg["fwhm_tol_pointing"] = cfg.get("fwhm_tol_pointing", 0.2)
     cfg["fwhm_tol_map"] = cfg.get("fwhm_tol_map", 3)
     cfg["max_chisq"] = cfg.get("max_chisq", 2.5)
     cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
     cfg["min_snr"] = cfg.get("min_snr", 5)
+    cfg["min_R2"] = cfg.get("min_R2", 0.01)
     cfg["relcal_range"] = cfg.get("relcal_range", [0.3, 2])
     cfg["min_sigma"] = cfg.get("min_sigma", 3)
     cfg["ufm_rad"] = cfg.get("ufm_rad", 0.01)
     cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
+    cfg["svd_modes"] = cfg.get("svd_modes", 10)
 
     # Geometry
     cfg["extent"] = cfg.get("extent", 600)
@@ -161,7 +164,15 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(
-        "nominal_fwhm", {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}
+        "nominal_fwhm",
+        {
+            "f090": 2.0,
+            "f150": 1.3,
+            "f220": 0.95,
+            "f280": 0.83,
+            "f030": 5.1,
+            "f040": 7.4,
+        },
     )
     cfg["aperature"] = cfg.get("aperature", 6)
     cfg["corr_primary"] = cfg.get("corr_primary", 280)

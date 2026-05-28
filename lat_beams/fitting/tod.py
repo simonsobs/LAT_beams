@@ -145,8 +145,8 @@ def _bin_priors_2d(
     binned = convolve_fft(
         binned,
         Gaussian2DKernel(
-            (fwhm / 2.3548) / np.mean(np.diff(x_edges)),
-            (fwhm / 2.3548) / np.mean(np.diff(y_edges)),
+            1 * (fwhm / 2.3548) / np.mean(np.diff(x_edges)),
+            1 * (fwhm / 2.3548) / np.mean(np.diff(y_edges)),
         ),
     )
     xi_cents = 0.5 * (x_edges[:-1] + x_edges[1:])
@@ -162,7 +162,7 @@ def filter_tod(am, filt, signal_name="resid", rfft=None):
     sig_filt_name = f"{signal_name}_filt"
     am[sig_filt_name] = am[signal_name].copy()
     filt_kw = dict(
-        detrend="linear",
+        detrend=None,
         resize=None,
         axis_name="samps",
         signal_name=sig_filt_name,
@@ -263,8 +263,13 @@ def fit_tod_pointing(
 
     az_d = detrend(aman.boresight.az)
     d_az = np.sign(np.diff(az_d, prepend=az_d[0]))
+    scan_samps = (np.ptp(az_d) / (np.median(np.abs(d_az)))) / (
+        np.mean(np.diff(aman.timestamps))
+    )
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
-    turnarounds = ~Ranges.from_mask(turnarounds)  # Invert for convenience
+    turnarounds = ~(
+        Ranges.from_mask(turnarounds).buffer(int(0.1 * scan_samps))
+    )  # Invert for convenience
 
     # 0 is the highpass part, 1 lowpass part.
     filt = identity_filter()
@@ -363,7 +368,7 @@ def fit_tod_pointing(
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
             (-ptp, np.inf),
-            (fwhm * 0.9, 1.1 * fwhm),
+            (fwhm * 0.5, 1.5 * fwhm),
             (-ptp, ptp),
         ]
 

@@ -1,12 +1,9 @@
 """
-More generic fitting script.
+rore generic fitting script.
 Still somewhat LAT specific but could be genralized if desired.
 """
 
 #### TODO ####
-# More functions
-# Switch to logger
-# Time domain fitting of single source [just jup notebook is ok]
 # more plots:
 # - fit for each detector [on demand]
 # - input priors
@@ -25,6 +22,7 @@ import mpi4py.rc
 import numpy as np
 import yaml
 from pshmem.locking import MPILock
+from scipy.sparse.linalg import svds
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
@@ -57,6 +55,7 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 band_names = {"l": ["f030", "f040"], "m": ["f090", "f150"], "u": ["f220", "f280"]}
+ufm_rad_cache = {}
 
 
 def get_jobdict(jdb):
@@ -72,11 +71,15 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, lo
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
-            src_str = "==1 or ".join(source_list) + "==1"
-            obslist = ctx.obsdb.query(
-                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and duration < {max_dur * 3600} and ({src_str})",
-                tags=source_list,
-            )
+            # src_str = "==1 or ".join(source_list) + "==1"
+            obslists = [
+                ctx.obsdb.query(
+                    f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and duration < {max_dur * 3600}",
+                    tags=source_list[:i] + [f"{source}=1"] + source_list[(i + 1) :],
+                )
+                for i, source in enumerate(source_list)
+            ]
+            obslist = reduce(lambda q, p: p + q, obslists)
 
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
@@ -121,6 +124,18 @@ def get_tags(info):
         "preprocess": "",
     }
     return tags
+
+
+def get_ufm_rad(nominal, ufm):
+    if ufm in ufm_rad_cache:
+        return ufm_rad_cache[ufm]
+    xi0 = np.nanmean(np.array(nominal[ufm]["xi"][:]))
+    eta0 = np.nanmean(np.array(nominal[ufm]["eta"][:]))
+    r = np.sqrt(
+        (np.array(nominal[ufm]["xi"][:]) - xi0) ** 2
+        + (np.array(nominal[ufm]["eta"][:]) - eta0) ** 2
+    )
+    return np.nanmax(r)
 
 
 def src_flag_cut(source_name, aman, nominal, ufm, res, mask, logger):
@@ -187,7 +202,6 @@ def main():
     if args.profile:
         from pyinstrument import Profiler
 
-        profiler = Profiler()
         logger.info("Running in profiler mode! Only a few dets will be kept")
 
     if cfg.preprocess_cfg is None:
@@ -312,7 +326,8 @@ def main():
         joblist = []
 
     # Get settings for source mask
-    if args.profile and ismaster and profiler is not None:
+    if args.profile and ismaster:
+        profiler = Profiler()
         profiler.start()
         logger.info("Restricting joblist to just 1 entry per process for profiling!")
         joblist = [joblist[0]]
@@ -324,6 +339,7 @@ def main():
     mpilock = MPILock(master_comm)
     with MPICommExecutor(local_comm, 0) as executor:
         if executor is not None:
+            joblist += [None]
             for i, j in enumerate(joblist):
                 sys.stdout.flush()
                 master_comm.barrier()
@@ -357,7 +373,6 @@ def main():
                 master_comm.barrier()
                 # To avoid multiproc issues where the database is locked we lock and unlock serially
                 to_save = (None, None, None)
-                logger.flush()
                 mpilock.lock()
                 if job is not None:
                     with jdb.session_scope() as session:
@@ -376,7 +391,13 @@ def main():
                 obs_id = job.tags["obs_id"]
                 ufm = job.tags["stream_id"]
                 ws = job.tags["wafer_slot"]
-                logger.normal("Fitting %s %s (%s/%s)", obs_id, ufm, i + 1, len(joblist))
+                fit_str = f"{obs_id} {ufm}"
+                logger.normal(
+                    "Loading and processing %s (%s/%s)",
+                    fit_str,
+                    i + 1,
+                    len(joblist) - 1,
+                )
                 sys.stdout.flush()
 
                 # Save metadata and config info
@@ -387,10 +408,15 @@ def main():
                 # Get metadata
                 with log_lvl(logger, logging.ERROR):
                     obs = ctx.obsdb.get(obs_id, tags=True)
-                    meta = ctx.get_meta(obs_id)
-                if meta.dets.count == 0:
-                    msg = "Looks like we don't have real metadata for this observation!"
-                    logger.error("\t%s", msg)
+                    try:
+                        meta = ctx.get_meta(obs_id)
+                    except:
+                        meta = None
+                if meta is None or meta.dets.count == 0:
+                    msg = (
+                        f"Looks like we don't have real metadata for this observation!"
+                    )
+                    logger.error("(%s) %s", fit_str, msg)
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
                     continue
@@ -399,14 +425,15 @@ def main():
                 src_names = list(source_list & set(obs["tags"]))
                 if len(src_names) > 1:
                     logger.warning(
-                        "\tObservation tagged for multiple sources! Only fitting the first"
+                        "(%s) Observation tagged for multiple sources! Only fitting the first",
+                        fit_str,
                     )
                 elif len(src_names) == 0:
                     msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-                    logger.error("\t%s", msg)
+                    logger.error("(%s) %s", fit_str, msg)
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
-                    logger.debug("\t\tTags were: %s", obs["tags"])
+                    logger.debug("(%s) Tags were: %s", fit_str, obs["tags"])
                     continue
                 source = src_names[0]
                 set_tag(job, "source", source)
@@ -418,10 +445,9 @@ def main():
                 )
 
                 # Generally want to force because you dont know if youre actually scanning the wafer slot you think you are
-                # Less relevant for SATs but true for LAT. Will need to play around to see when this is truly necessary for SATs.
                 if ws not in wafers:
                     msg = "Wafer not targetting or forced to be fit!"
-                    logger.error("\t%s", msg)
+                    logger.error("(%s) %s", fit_str, msg)
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
                     continue
@@ -453,9 +479,13 @@ def main():
                 # TODO: Add it to sotodlib...
                 if source == "rcw38":
                     source_name = "J134.78-47.509"
+                elif source == "taua":
+                    source_name = ("tauA", 83.6272579, 22.02159891)
+                elif source == "3c279":
+                    source_name = "J194.0409868m5.79174024"
 
                 if cfg.src_msk:
-                    logger.debug("\tRunning source flags")
+                    to_skip = False
                     start, stop = src_flag_cut(
                         source_name,
                         aman,
@@ -472,26 +502,30 @@ def main():
                             to_skip = True
                         else:
                             logger.warning(
-                                "\t\tNo samples flagged! But running in plot_only mode so will continue with all samples"
+                                "(%s) No samples flagged! But running in plot_only mode so will continue with all samples",
+                                fit_str,
                             )
                             start = 0
                             stop = int(cast(int, aman.samps.count))
                     if stop - start < cfg.min_samps:
                         if not args.plot_only:
-                            msg = "Too few samples flagged in source flags!"
+                            msg = f"Too few samples flagged in source flags! {start} to {stop}"
                             to_skip = True
                         else:
                             logger.debug(
-                                "\t\tOnly %s flagged samples! But running in plot_only mode so will continue",
+                                "(%s) Only %s flagged samples! But running in plot_only mode so will continue",
+                                fit_str,
                                 stop - start,
                             )
                     if to_skip:
-                        logger.error("\t\t%s", msg)
+                        logger.error("(%s) %s", fit_str, msg)
                         set_tag(job, "message", msg)
                         job.jstate = "failed"
                         continue
                     logger.debug(
-                        "\t\t%s samps flagged in the source range", stop - start
+                        "(%s) %s samps flagged in the source range",
+                        fit_str,
+                        stop - start,
                     )
                     aman = aman.restrict(
                         "samps",
@@ -526,11 +560,14 @@ def main():
                     if msg != "":
                         msg += " "
                     band_name = band_names[tube_band][band]
-                    logger.normal("\tFitting %s", band_name)
+                    bf_str = f"{fit_str} {band_name}"
+                    logger.normal("Fitting %s", bf_str)
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
-                    filt = tod_ops.filters.high_pass_butter4(cfg.hp_fc)
+                    filt = tod_ops.filters.high_pass_sine2(
+                        cfg.hp_fc
+                    ) * tod_ops.filters.low_pass_sine2(cfg.lp_fc)
                     sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
                     # Trim edges in case of FFT ringing
@@ -543,17 +580,22 @@ def main():
                     # Kill dets with really high noise
                     std = np.std(sig_filt, axis=-1)
                     # Threshold determined from config file n_med
-                    # These numbers are true for LAT; unclear for SAT.
-                    # TODO: Make histograms of std and how much is getting cut as a part of diagnostic outputs [from talking to Matthew]. Otherwise this is a good way to cut outliers.
                     # Since boxy instead of gaussians, so quantiles are cool. Pseudo sigma is e.g. ~33%-50% [median based thing so that outliers are not included]. Then can do e.g. a 4sigma cut or whatever (but shouldnt have a high percentage of outliers).
                     thresh = cfg.n_med * np.median(std[std > 0])
                     aman.restrict("dets", std < thresh)
                     sig_filt = sig_filt[std < thresh]
                     if aman.dets.count < cfg.min_dets:
                         _msg = f"{band_name} Noise too high."
-                        logger.error(_msg)
+                        logger.error("%s, %s", bf_str, _msg)
                         msg += _msg
                         continue
+
+                    # SVD filter
+                    if cfg.svd_modes > 0:
+                        U, S, V = svds(aman.signal, k=cfg.svd_modes)
+                        # Scipy does ascending order for some reason...
+                        S, U, V = S[::-1], U[:, ::-1], V[::-1, :]
+                        aman.signal -= (U * S) @ V
 
                     # Get median std of all dets after cuts
                     std_all = np.median(std[(std < thresh) * (std > 0)])
@@ -576,7 +618,8 @@ def main():
                             max_idx = (idx[1::2] - idx[::2]).argmax()
                             samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
                             logger.debug(
-                                "\t\tFound %s continously flagged samples",
+                                "%s Found %s continously flagged samples",
+                                bf_str,
                                 len(samp_idx),
                             )
 
@@ -584,11 +627,12 @@ def main():
                         if len(samp_idx) < min(cfg.block_size, cfg.min_samps / 2):
                             if args.plot_only:
                                 logger.warning(
-                                    "\t\tLooks like you didn't see the source at all! But running in plot_only mode so will continue"
+                                    "(%s) Looks like you didn't see the source at all! But running in plot_only mode so will continue",
+                                    bf_str,
                                 )
                             else:
                                 _msg = f"{band_name} Failed to find source blind."
-                                logger.error(_msg)
+                                logger.error("(%s) %s", bf_str, _msg)
                                 msg += msg
                                 continue
                         start = int(
@@ -603,14 +647,17 @@ def main():
                         if stop - start < cfg.min_samps:
                             if not args.plot_only:
                                 _msg = f"{band_name} Too few samples found in blind flagging."
-                                logger.error(_msg)
+                                logger.error("(%s) %s", bf_str, _msg)
                                 msg += _msg
                                 continue
                             logger.warning(
-                                "\t\tOnly %s flagged samples! But running in plot_only mode so will continue",
+                                "(%s) Only %s flagged samples! But running in plot_only mode so will continue",
+                                bf_str,
                                 stop - start,
                             )
-                        logger.debug("\t\t%s samps flagged blind", stop - start)
+                        logger.debug(
+                            "(%s) %s samps flagged blind", bf_str, stop - start
+                        )
                         # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
                         aman = aman.restrict(
                             "samps",
@@ -634,11 +681,13 @@ def main():
                         _msg = (
                             f"{band_name} Too few detectors after final sanity check."
                         )
-                        logger.error("\t%s", _msg)
+                        logger.error("(%s) %s", bf_str, _msg)
                         msg += _msg
                         continue
 
-                    logger.normal("\t\tAttempting to fit %s detectors", aman.dets.count)
+                    logger.normal(
+                        "(%s) Attempting to fit %s detectors", bf_str, aman.dets.count
+                    )
 
                     # Plot the TOD
                     plot_tod(
@@ -646,14 +695,14 @@ def main():
                     )
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
-                        logger.normal(_msg)
+                        logger.normal("(%s) %s", bf_str, _msg)
                         msg += _msg
                         continue
 
                     # Make the fft a fast length (ie like a prime number)
                     _ = tod_ops.filters.fft_trim(aman, prefer="center")
                     if aman.dets.count > 10 and args.profile:
-                        logger.normal("\tRestricting to 10 dets for profile")
+                        logger.normal("(%s) Restricting to 10 dets for profile", bf_str)
                         aman.restrict("dets", aman.dets.vals[:10])
 
                     # Before sending via MPI lets remove anything we don't need from the aman
@@ -687,7 +736,7 @@ def main():
                     wait(fp_futures)
                     fps = [fp0] + [fp_future.result() for fp_future in fp_futures]
                     t1 = time.time()
-                    logger.normal("\t\tTook %s seconds to fit", t1 - t0)
+                    logger.normal("(%s) Took %s seconds to fit", bf_str, t1 - t0)
                     for focal_plane in fps:
                         # Do a quick cut based on FWHM tol
                         focal_plane.restrict(
@@ -722,7 +771,7 @@ def main():
                         )
                         rsets += [metadata.ResultSet.from_friend(sarray)]
                     _msg = f"{band_name} Success!"
-                    logger.normal("\t%s", _msg)
+                    logger.normal("(%s) %s", bf_str, _msg)
                     msg += msg
 
                 # Get ready to save
@@ -742,7 +791,7 @@ def main():
                     if msg != "":
                         msg += " "
                     _msg = "ResultSet empty somehow!"
-                    logger.error(_msg)
+                    logger.error("(%s) %s", fit_str, _msg)
                     msg += _msg
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
@@ -753,61 +802,52 @@ def main():
                 # Source should be positive in pW
                 msk = np.array(focal_plane.amp) > 0
                 # Kill fits that are statistically bad
-                print(np.sum(msk))
-                sys.stdout.flush()
                 msk *= np.array(focal_plane.reduced_chisq < cfg.max_chisq)
-                print(np.sum(msk))
-                sys.stdout.flush()
-                med_xi = np.median(np.array(focal_plane.xi[msk]))
-                med_eta = np.median(np.array(focal_plane.eta[msk]))
-                msk *= (
-                    np.sqrt(
-                        (np.array(focal_plane.xi) - med_xi) ** 2
-                        + np.abs(np.array(focal_plane.eta) - med_eta) ** 2
-                    )
-                    < cfg.ufm_rad
-                )
-                print(np.sum(msk))
-                sys.stdout.flush()
                 msk *= np.array(focal_plane.amp) < cfg.n_med * np.median(
                     np.array(focal_plane.amp[msk])
                 )
-                print(np.sum(msk))
-                sys.stdout.flush()
                 msk *= (
                     np.array(focal_plane.amp)
                     > np.median(np.array(focal_plane.amp[msk])) / cfg.n_med**2
                 )
-                print(np.sum(msk))
-                sys.stdout.flush()
                 # How many times it saw the source (ie. hits).
                 msk *= np.array(focal_plane.hits) >= cfg.min_hits
-                print(np.sum(msk))
-                sys.stdout.flush()
+                high_hits = np.array(focal_plane.hits) >= cfg.high_hits
+                if np.sum(msk * high_hits) >= cfg.min_dets:
+                    med_xi = np.median(np.array(focal_plane.xi[msk * high_hits]))
+                    med_eta = np.median(np.array(focal_plane.eta[msk * high_hits]))
+                    msk *= np.sqrt(
+                        (np.array(focal_plane.xi) - med_xi) ** 2
+                        + np.abs(np.array(focal_plane.eta) - med_eta) ** 2
+                    ) < 1.5 * get_ufm_rad(nominal, ufm)
 
                 # Instead of cutting the rset we set R2 to 0
                 # This is because det match does not like missing dets
                 rset = rset.asarray()
                 rset[~msk]["R2"] = 0.0
                 rset = metadata.ResultSet.from_friend(rset)
-                focal_plane.restrict("dets", msk)  # Only used for plotting
+                focal_plane.restrict(
+                    "dets", msk * (rset["R2"] > cfg.min_R2)
+                )  # Only used for plotting
 
                 if len(rset) == 0 or np.sum(msk) < cfg.min_dets:
                     to_save = (None, None, None)
                     if msg != "":
                         msg += " "
                     _msg = "Too many bad fits!"
-                    logger.error(_msg)
+                    logger.error("(%s) %s", fit_str, _msg)
                     msg += _msg
                     set_tag(job, "message", msg)
                     job.jstate = "failed"
                     continue
                 # Plot focal plane, encoders, and a histrogram of fhwp, amp, hits
                 # TODO: Split by band?
-                plot_focal_plane(focal_plane, fit_plot_dir, ufm)
+                plot_focal_plane(focal_plane, fit_plot_dir, ufm, obs_id)
 
                 # Ready to save
-                logger.normal("\tSaving %s fits (%s good).", len(rset), np.sum(msk))
+                logger.normal(
+                    "(%s) Saving %s fits (%s good).", fit_str, len(rset), np.sum(msk)
+                )
                 if cfg.pad:
                     with log_lvl(logger, logging.ERROR):
                         all_dets = ctx.get_det_info(
@@ -827,7 +867,7 @@ def main():
                 if args.profile:
                     to_save = (None, None, None)
                     msg = "Ran profile"
-                    logger.info(msg)
+                    logger.info("(%s) %s", fit_str, _msg)
                     set_tag(job, "message", msg)
                     job.jstate = "open"
                     continue
@@ -837,10 +877,9 @@ def main():
         h5_file.close()
     nominal.close()
 
-    if args.profile and ismaster and profiler is None:
+    if args.profile and ismaster and profiler is not None:
         profiler.stop()
         profiler.write_html(f"profile_{myrank}.html")
-    logger.flush()
 
 
 if __name__ == "__main__":

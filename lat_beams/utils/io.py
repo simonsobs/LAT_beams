@@ -17,6 +17,7 @@ def load_aman(
                 preprocess_cfg,
                 dets=dets,
                 save_archive=save,
+                save_proc_aman=save,
                 overwrite=True,
                 logger=logger,
             )
