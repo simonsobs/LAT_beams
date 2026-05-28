@@ -5,6 +5,7 @@ they should be refactored to rely on more generic units.
 """
 
 import os
+from typing import Sequence
 
 import matplotlib
 matplotlib.use("Agg")
@@ -337,7 +338,42 @@ def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_
         plt.savefig(os.path.join(fit_plot_dir, filename))
     plt.close()
 
-def auto_relplot(data, x, y, ignore=[], **kwargs):
+def auto_relplot(data: dict[str, Sequence], x: str, y: str, ignore: list[str]=[], **kwargs) -> sns.FacetGrid:
+    """
+    Make a relplot.
+    This function tries to be semi-clever about automatically selecting
+    which terms to use for `hue`, `col`, `row`, and `style`.
+
+    First it determines the catagories of `data` as any fields other than
+    the ones specified in `x` and `y` or in `ignore`.
+    We then assign the catagory with the most unique entries to `hue`,
+    the second most the `col`, then `row`, and then `style`.
+    Any catagories beyond that are combined with whatever the `hue`
+    catagory is.
+    Note that you can still manually specify thing with `**kwargs`.
+
+    Parameters
+    ----------
+    data : dict[str, Sequence]
+        The data to plot.
+        Should be a dict that `seaborn` understands as a
+        long form dataset.
+    x : str
+        The field to plot as x.
+    y : str
+        The field to plot as y.
+    ignore : list[str]
+        List of fields to ignore.
+    **kwargs
+        Key word arguments to pass to `relplot`.
+        Note that you can pass catagorical varaibles like `hue` here
+        if you want to specify them manually.
+
+    Returns
+    -------
+    plot : sns.FacetGrid
+        The plot output by `relplot`.
+    """
     cats = ["hue", "col", "row", "style"]
     in_kwargs = [kwargs[cat] for cat in cats if cat in kwargs]
     can_add = [cat for cat in cats if cat not in kwargs]
