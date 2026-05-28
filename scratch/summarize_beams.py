@@ -64,6 +64,7 @@ to_plot = [("Bessel Solid Angle (str)", "bessel.model_solid_angle_true", u.stera
 dset = {name : bu.get_fit_vec(all_fits, vec).to(unit).value for name, vec, unit in to_plot}
 dset["Time of Day (hr)"] = all_fits["hour"] 
 dset["Time (ctime)"] = all_fits["time"] 
+dset["band"] = all_fits["band"]
 
 # Add epoch info
 epoch_strs = ["unknown"]
@@ -101,6 +102,11 @@ for split in cfg.split_by:
         # Violin with epoch hue
         sns.violinplot(data=dset_filt, x=split, y=name, hue="Epoch", split=True, inner="quart", cut=0)
         plt.title(f"{' '.join(name.split(' ')[:-1])} Distrubution")
+        # Add nominal FWHM if we are plotting FWHM
+        if "FWHM" in name:
+            for b in np.unique(dset_filt["band"]):
+                plt.axhline(cfg.nominal_fwhm[b] * 60.0, linestyle="--")
+
         plt.savefig(os.path.join(plot_dir_spl, f"{prefix}_dist.png"))
         plt.close()
 
