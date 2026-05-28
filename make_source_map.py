@@ -556,6 +556,7 @@ for i, j in enumerate(joblist):
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
+            comps=cfg.comps,
             log_thresh=cfg.log_thresh,
             lognorm=1.0 / out["solved"][0][cent],
         )
