@@ -2,9 +2,9 @@ import os
 import sys
 
 import astropy.units as u
-import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 from astropy import constants as const
 from pixell import enmap
 from sotodlib.core import Context
@@ -12,8 +12,8 @@ from sotodlib.io import hkdb
 from tqdm import tqdm
 
 from lat_beams import beam_utils as bu
-from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 from lat_beams.plotting import auto_relplot
+from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -43,7 +43,7 @@ for split in cfg.split_by:
         print("\tNo splits found!")
         continue
     os.makedirs(plot_dir_spl, exist_ok=True)
-    to_plot = {s : [] for s in split.split("+")}
+    to_plot = {s: [] for s in split.split("+")}
     to_plot["r"] = []
     to_plot["profile"] = []
     to_plot["epoch"] = []
@@ -51,11 +51,13 @@ for split in cfg.split_by:
         spl_rel = os.path.relpath(spl_dir, data_dir_spl)
         prof_dir = os.path.join(data_dir, "stack_profiles", split, spl_rel)
         for epoch in cfg.epochs:
-            prof_path = os.path.join(prof_dir, f"profile_{spl_rel}_{epoch[0]}_{epoch[1]}.txt")
+            prof_path = os.path.join(
+                prof_dir, f"profile_{spl_rel}_{epoch[0]}_{epoch[1]}.txt"
+            )
             if not os.path.isfile(prof_path):
                 continue
             profile = np.genfromtxt(prof_path)
-            msk = profile[:, 0] < 1200*cfg.mask_size
+            msk = profile[:, 0] < 1200 * cfg.mask_size
 
             to_plot["epoch"] += [f"{epoch[0]}_{epoch[1]}"] * np.sum(msk)
             to_plot["r"] += profile[msk, 0].tolist()
@@ -63,9 +65,17 @@ for split in cfg.split_by:
             for sc, si in zip(split.split("+"), spl_rel.split("+")):
                 to_plot[sc] += [si] * np.sum(msk)
     plt.close()
-    plot = auto_relplot(to_plot, x="r", y="profile", kind="line", estimator=None, hue="source", col="band")
-    plot.set_axis_labels('r (")', 'Beam Profile')
-    plot.set(xlim=(0, 3600*cfg.mask_size/3), yscale="log")
+    plot = auto_relplot(
+        to_plot,
+        x="r",
+        y="profile",
+        kind="line",
+        estimator=None,
+        hue="source",
+        col="band",
+    )
+    plot.set_axis_labels('r (")', "Beam Profile")
+    plot.set(xlim=(0, 3600 * cfg.mask_size / 3), yscale="log")
     plt.suptitle(f"Beam Profile by {split}")
     plt.subplots_adjust(top=0.85)
     plt.savefig(

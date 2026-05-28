@@ -96,7 +96,9 @@ def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL, buffer
             handler.formatter.colors["NORMAL"] = "\033[1;34m"
     if buffer > 0 and comm is not None and comm.Get_size() > 1:
         logger.handlers = [
-            MPIMemHandler(int(buffer), flushLevel=flushLevel, target=h, flushOnClose=True)
+            MPIMemHandler(
+                int(buffer), flushLevel=flushLevel, target=h, flushOnClose=True
+            )
             for h in logger.handlers
         ]
 
