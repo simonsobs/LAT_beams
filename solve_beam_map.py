@@ -2,6 +2,7 @@ import gc
 import logging
 import os
 from functools import partial
+from typing import cast
 
 import astropy.units as u
 import numpy as np
@@ -88,6 +89,9 @@ def get_tags(info):
 # Setup logger
 logger = init_log()
 metadata.loader.logger = logger
+if logger.extra is None:
+    raise ValueError("Logger doesn't have adapter set up!")
+logger.extra = cast(dict, logger.extra)
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -263,8 +267,7 @@ for epoch in cfg.epochs:
             # Load and process TODs
             amans = {}
             msk = np.ones(len(sfits), bool)
-            logger.normal(f"Adding {len(sfits)} TODs")
-            logger.flush()
+            logger.log(25, f"Adding {len(sfits)} TODs")
             for i, (job, fit) in enumerate(zip(sfjobs, sfits)):
                 obs_id = job.tags["obs_id"]
                 ws = job.tags["wafer_slot"]
@@ -313,19 +316,16 @@ for epoch in cfg.epochs:
                 P.geom = enmap.Geometry(shape=tmap.shape, wcs=tmap.wcs)
 
                 logger.debug("Added %s (%d/%d)", sub_id, i + 1, len(sfits))
-                logger.flush()
                 amans[sub_id] = (aman, P)
             all_ids = list(amans.keys())
             sfits = sfits[msk]
-            logger.normal(f"Loaded {len(sfits)} TODs")
-            logger.flush()
+            logger.log(25, f"Loaded {len(sfits)} TODs")
 
             all_sids = comm.reduce(all_ids)
             if all_sids is None:
                 all_sids = []
             comm.barrier()
             logger.info(f"Ready to map %s", spl)
-            logger.flush()
 
             # # Have rank 0 handle the jobdb
             job = None
@@ -347,7 +347,6 @@ for epoch in cfg.epochs:
             # # This is somewhat innefecient, in an ideal world I can provide an optimal TOD splitting scheme
             run_comm = comm.Split(len(all_ids) > 0, myrank)
             jobdat = ("", "", "", "", "")
-            logger.flush()
             if len(all_ids) > 0:
                 # TODO: Load stack as the initial guess
                 outmap, (mlmap_path, rhs_path, div_path, bin_path) = lbm.make_ml_map(
@@ -405,8 +404,7 @@ for epoch in cfg.epochs:
             )
 
             if run_comm.Get_rank() == 0 and len(all_ids) > 0:
-                logger.normal("Done with map!")
-                logger.flush()
+                logger.log(25, "Done with map!")
             if myrank == 0 and job is not None:
                 for m, d in zip(
                     ("message", "ml_map", "ml_div", "ml_rhs", "ml_bin"), jobdat
@@ -417,12 +415,10 @@ for epoch in cfg.epochs:
                     session.merge(job)
                     session.commit()
 
-            logger.normal("Cleaning up memory")
-            logger.flush()
+            logger.log(25, "Cleaning up memory")
             del amans
             gc.collect()
-            logger.normal("Done cleaning up memory")
-            logger.flush()
+            logger.log(25, "Done cleaning up memory")
             if args.profile:
                 break
         if args.profile:
@@ -434,5 +430,4 @@ for epoch in cfg.epochs:
 if args.profile and profiler is not None:
     profiler.stop()
     profiler.write_html(f"solve_beam_map_profile_{myrank}.html")
-logger.flush()
 comm.barrier()

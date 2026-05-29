@@ -7,7 +7,6 @@ import logging
 import os
 import time
 from argparse import Namespace
-from logging import Logger
 from typing import Optional, cast
 
 import numpy as np
@@ -23,7 +22,7 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 
 from .beam_utils import estimate_cent
-from .utils import log_lvl, set_tag
+from .utils import LoggerLike, log_lvl, set_tag
 
 
 def make_cuts(
@@ -31,7 +30,7 @@ def make_cuts(
     source_flags: RangesMatrix,
     n_modes: int,
     job: jobdb.Job,
-    logger: Logger,
+    logger: LoggerLike,
     cfg: Namespace,
 ) -> Optional[RangesMatrix]:
     """
@@ -50,7 +49,7 @@ def make_cuts(
         The number of modes to use when filtering.
     job : jobdb.Job
         The job associated with making this map.
-    logger : Logger
+    logger : LoggerLike
         The logger to log to.
     cfg : Namespace
         The loaded configuration.
@@ -84,10 +83,10 @@ def make_cuts(
     to_cut = peak_snr < cfg.min_snr  # + ~np.isfinite(peak_snr)
     to_cut[~sdets] = False
     cuts = RangesMatrix.from_mask(np.zeros_like(aman.signal, bool) + to_cut[..., None])
-    logger.debug("\tCutting %s detectors from map", np.sum(to_cut))
+    logger.debug("Cutting %s detectors from map", np.sum(to_cut))
     if np.sum(~to_cut) < cfg.min_dets:
         msg = f"Not enough detectors after source flag cuts!"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
         job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
 
@@ -104,12 +103,12 @@ def make_map(
     comps: str,
     n_modes: int,
     pixsize: float,  # TODO: This doesn't need to exist
-    filename: str,
+    filename: Optional[str],
     min_det_secs: float,
     info: dict[str, str],
     job: jobdb.Job,
     map_str: str,
-    logger: Logger,
+    logger: LoggerLike,
     cfg: Namespace,
     det_splits: dict[str, RangesMatrix] = {},
 ) -> tuple[Optional[dict], Optional[tuple[int, int]]]:
@@ -141,7 +140,7 @@ def make_map(
         The number of modes to use when filtering.
     pixsize : float
         `res` in arcseconds
-    filename : str
+    filename : Optional[str]
         The pattern for the output map filename.
         See `sotodlib.coords.planets.make_map` for details.
     min_det_secs : float
@@ -154,7 +153,7 @@ def make_map(
         The job associated with making this map.
     map_str : str
         A short string to describe the map in the logs and job (ie. "initial").
-    logger : Logger
+    logger : LoggerLike
         The logger to log to.
     cfg : Namespace
         The loaded configuration.
@@ -178,10 +177,10 @@ def make_map(
     det_secs = np.sum(sf_uncut.get_stats()["samples"]) * np.mean(
         np.diff(np.array(aman.timestamps))
     )
-    logger.debug("\t%s detector seconds on source in %s mask", det_secs, map_str)
+    logger.debug("%s detector seconds on source in %s mask", det_secs, map_str)
     if det_secs < min_det_secs:
-        msg = f"\tNot enough time on source in {map_str} mask."
-        logger.error("\t%s", msg)
+        msg = f"Not enough time on source in {map_str} mask."
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
         job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         return None, None
@@ -219,7 +218,7 @@ def make_map(
                 )
         except Exception as e:
             msg = f"Failed to load metadata with error {e}"
-            logger.error("\t%s", msg)
+            logger.error("%s", msg)
             return None, None
 
     # Smooth and find the center
@@ -229,14 +228,14 @@ def make_map(
     peak = out["solved"][0][cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
-    logger.debug("\t%s map SNR approximately %s", map_str.title(), snr)
+    logger.debug("%s map SNR approximately %s", map_str.title(), snr)
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
         job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         if cfg.del_map and filename is not None:
-            logger.debug("\tDeleting map files")
+            logger.debug("Deleting map files")
             glob_path = os.path.splitext(filename)[0] + "*.*"
             flist = glob.glob(glob_path)
             for fname in flist:
@@ -293,7 +292,7 @@ def add_obs_to_mapmaker(
     guess: Optional[enmap.ndmap],
     eval_prev: Optional[mapmaking.MLEvaluator],
     mapmaker_prev: Optional[mapmaking.MLMapmaker],
-    logger: Logger,
+    logger: LoggerLike,
 ):
     """
     Add an observation to the MLMapmaker.
@@ -329,7 +328,7 @@ def add_obs_to_mapmaker(
         Mapmaker instance for the previous pass of the mapmaker.
         If `ipass > 0` and both this and `eval_prev` are not `None`
         then they ary used to estimate the signal when building the noise model.
-    logger : Logger
+    logger : LoggerLike
         The logger to log to.
     """
     if passinfo.downsample != 1:
@@ -366,7 +365,7 @@ def make_ml_map(
     prefix: str,
     out_dir: str,
     comm: MPI.Comm,
-    logger: Logger,
+    logger: LoggerLike,
     cfg: Namespace,
     guess: Optional[enmap.ndmap] = None,
 ) -> tuple[Optional[enmap.ndmap], tuple[str, str, str, str]]:
@@ -394,7 +393,7 @@ def make_ml_map(
     comm : MPI.Comm
         The MPI communicator to use when mapmaking.
         All processes must have a non-zero sized `amans`.
-    logger : Logger
+    logger : LoggerLike
         The logger to log to.
     cfg : Namespace
         The loaded configuration.
@@ -431,7 +430,6 @@ def make_ml_map(
                     passinfo.interpol,
                 )
             )
-            logger.flush()
         pass_prefix = os.path.join(out_dir, f"{prefix}pass{ipass+1}_")
         noise_model = mapmaking.NmatDetvecs(verbose=False)
         signal_cut = mapmaking.SignalCut(comm, dtype=np.float32)
@@ -450,7 +448,6 @@ def make_ml_map(
         )
 
         logger.info("Adding obs to mapmaker")
-        logger.flush()
         for sub_id, (aman, P) in amans.items():
             P.interpol = passinfo.interpol
             try:
@@ -470,7 +467,6 @@ def make_ml_map(
                 logger.error("Failed to add %s with errer %s", sub_id, str(e))
         comm.barrier()
         logger.info("Done adding obs to mapmaker")
-        logger.flush()
 
         # Write the starting maps
         mapmaker.prepare()
@@ -483,7 +479,7 @@ def make_ml_map(
             unit="pW",
         )
         if comm.Get_rank() == 0:
-            logger.debug("\tWrote rhs, div, bin")
+            logger.debug("Wrote rhs, div, bin")
 
         # Set up initial condition
         x0 = (
@@ -503,7 +499,6 @@ def make_ml_map(
                     "\tCG step %4d %15.7e %8.3f %s"
                     % (step.i, step.err, t2 - t1, "" if not dump else "(write)")
                 )
-                logger.flush()
             if dump:
                 for signal, val in zip(signals, step.x):
                     if signal.output:
@@ -520,7 +515,6 @@ def make_ml_map(
 
         mapmaker_prev = mapmaker
         eval_prev = mapmaker.evaluator(step.x_zip)
-        logger.flush()
 
     mlmap_path = "" if mlmap_path is None else mlmap_path
     rhs_path = "" if rhs_path is None else rhs_path

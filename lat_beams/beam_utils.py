@@ -12,12 +12,14 @@ from typing import Optional, cast
 import astropy.units as u
 import h5py
 import numpy as np
+import sqlalchemy as sqy
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from jaxtyping import Float, Shaped
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
+from .utils import LoggerLike
 from .utils.jobs import set_tag
 
 
@@ -298,7 +300,7 @@ def process_model(
     data_fwhm: float,
     min_sigma: float,
     job: Optional[jobdb.Job],
-    logger: Optional[Logger],
+    logger: Optional[LoggerLke],
 ) -> Optional[AxisManager]:
     """
     Convenience function to postproccess a map and it's fit model.
@@ -333,7 +335,7 @@ def process_model(
     job : Optional[jobdb.Job]
         The job associated with the fit.
         Pass `None` if running without a job.
-    logger : Optional[Logger]
+    logger : Optional[LoggerLike]
         The logger to log with.
         Pass `None` if running without a logger.
 
@@ -349,12 +351,12 @@ def process_model(
     if np.nanmax(model) / noise < min_snr:
         msg = "Model SNR too low"
         if logger is None:
-            print(f"\t{msg}")
+            print(f"{msg}")
         else:
-            logger.error("\t%s", msg)
+            logger.error("%s", msg)
         if job is not None:
             set_tag(job, "message", msg)
-            job.jstate = "failed"
+            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         return None
 
     # Get model profile

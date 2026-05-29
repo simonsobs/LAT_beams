@@ -65,22 +65,18 @@ def setup_jobs(
     # Get the jobs, make them if we need to
     now = time.time()
     logger.info("Setting up jobdb")
-    logger.flush()
     jdb = make_jobdb(comm, data_dir)
     joblist = []
     jobs_to_make = []
     jobs_to_open = []
     logger.info("Getting jobdict")
-    logger.flush()
     jobdict = None
     if myrank == 0:
         jobdict = get_jobdict(jdb)
     jobdict = comm.bcast(jobdict)
     logger.info("Getting potential jobs")
-    logger.flush()
     it = get_jobit(jdb)
     logger.info("Processing possible jobs")
-    logger.flush()
     for info in it:
         sys.stdout.flush()
         jobstr = get_jobstr(info)
@@ -132,7 +128,6 @@ def setup_jobs(
     tot_opening = 0
     tot_opening = comm.reduce(len(jobs_to_open), root=0)
     logger.info("Opening %s old jobs", tot_opening)
-    logger.flush()
     t0 = time.time()
     for i in range(nproc):
         if myrank == i:
@@ -144,13 +139,11 @@ def setup_jobs(
             #     session.commit()
         comm.barrier()
     t1 = time.time()
-    logger.flush()
     logger.info("Took %s seconds to add", t1 - t0)
 
     # Get the final job list
     all_jobs = comm.allgather(joblist)
     all_jobs = [job for jobs in all_jobs for job in jobs]
     logger.info("%s jobs to run!", len(all_jobs))
-    logger.flush()
 
     return jdb, all_jobs

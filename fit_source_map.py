@@ -1,15 +1,18 @@
 import os
 import sys
 from functools import partial
+from typing import cast
 
 import h5py
 import numpy as np
+import sqlalchemy as sqy
 from astropy import constants as const
 from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from pshmem.locking import MPILock
 from sotodlib.core import AxisManager, Context
+from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
 import lat_beams.fitting.models as bm
@@ -85,6 +88,9 @@ def get_tags(mjob):
 
 # Setup logger
 logger = init_log()
+if logger.extra is None:
+    raise ValueError("Logger doesn't have adapter set up!")
+logger.extra = cast(dict, logger.extra)
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -161,7 +167,6 @@ for i, j in enumerate(joblist):
     comm.barrier()
 
     # To avoid multiproc issues where the database is locked we lock and unlock serially
-    logger.flush()
     mpilock.lock()
     if job is not None:
         with jdb.session_scope() as session:
@@ -183,15 +188,16 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
-    logger.normal("Fitting %s %s %s(%s/%s)", obs_id, ufm, band, i + 1, n_maps[myrank])
+    logger.extra["extra"] = f" [{obs_id} {ufm} {band} ({i+1}/{len(loblist)})]"
+    logger.log(25, "Fitting")
 
     # Get map job
     job_str = f"{obs_id}-{ws}-{ufm}-{band}"
     if job_str not in map_jobdict:
         msg = "No map job"
-        logger.debug("\t%s", msg)
+        logger.debug("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
     map_job = map_jobdict[job_str]
@@ -204,22 +210,26 @@ for i, j in enumerate(joblist):
     # Load the maps
     try:
         solved = enmap.read_map(os.path.join(data_dir, map_job.tags["solved"]))[0]
+        solved = cast(enmap.ndmap, solved)
         weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
+        weights = cast(enmap.ndmap, weights)
     except FileNotFoundError:
         msg = "Missing map files"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
+    if solved.wcs is None:
+        raise ValueError("WCS is None")
     pixsize = 3600 * solved.wcs.wcs.cdelt[1]  # type: ignore
 
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
         msg = "Weights all 0"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
 
@@ -238,9 +248,9 @@ for i, j in enumerate(joblist):
 
     if snr < cfg.min_snr:
         msg = "Data SNR too low"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
 
@@ -282,9 +292,9 @@ for i, j in enumerate(joblist):
     )
     if gauss_params is None or model is None:
         msg = "Fit failed"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
 
@@ -296,9 +306,9 @@ for i, j in enumerate(joblist):
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
     if min_c_dist < 120 * cfg.nominal_fwhm[band]:
         msg = "Source too close to edge of map"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
 
@@ -314,9 +324,9 @@ for i, j in enumerate(joblist):
     # FWHM check
     if abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol:
         msg = "Data FWHM out of tolerance"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         to_save = (None, None)
         continue
 
@@ -390,9 +400,9 @@ for i, j in enumerate(joblist):
         )
         if bessel_beam_params is None or model is None:
             msg = "Fit failed"
-            logger.error("\t%s", msg)
+            logger.error("%s", msg)
             set_tag(job, "message", msg)
-            job.jstate = "failed"
+            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
             to_save = (None, None)
             continue
 
@@ -457,7 +467,7 @@ for i, j in enumerate(joblist):
         solved.corners(corner=False)
     )
     plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
-    norm = 1.0 / aman.amp.value
+    norm = float(1.0 / aman.amp.value)
     posmap = np.rad2deg(posmap) * 3600
     for dat, label in [(model, "model"), (resid, "resid")]:
         plot_map_complete(
@@ -481,11 +491,10 @@ for i, j in enumerate(joblist):
     to_save = (aman, aman_path)
 
     set_tag(job, "message", "Success")
-    job.jstate = "done"
+    job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
 comm.barrier()
 if outfile is not None:
     outfile.close()
 sys.stdout.flush()
 logger.info("Done with all fits")
-logger.flush()

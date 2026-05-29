@@ -20,6 +20,7 @@ from functools import partial, reduce
 import h5py
 import mpi4py.rc
 import numpy as np
+import sqlalchemy as sqy
 import yaml
 from pshmem.locking import MPILock
 from scipy.sparse.linalg import svds
@@ -28,6 +29,7 @@ from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
+from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 from typing_extensions import cast
 
@@ -181,6 +183,9 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask, logger):
 def main():
     # Setup logger
     logger = init_log()
+    if logger.extra is None:
+        raise ValueError("Logger doesn't have adapter set up!")
+    logger.extra = cast(dict, logger.extra)
     metadata.loader.logger = logger
     cp.logger = logger
 
@@ -200,7 +205,6 @@ def main():
 
     profiler = None
     if args.profile:
-        from pyinstrument import Profiler
 
         logger.info("Running in profiler mode! Only a few dets will be kept")
 
@@ -327,6 +331,8 @@ def main():
 
     # Get settings for source mask
     if args.profile and ismaster:
+        from pyinstrument import Profiler
+
         profiler = Profiler()
         profiler.start()
         logger.info("Restricting joblist to just 1 entry per process for profiling!")
@@ -341,6 +347,7 @@ def main():
         if executor is not None:
             joblist += [None]
             for i, j in enumerate(joblist):
+                logger.extra["extra"] = ""
                 sys.stdout.flush()
                 master_comm.barrier()
                 to_save = master_comm.gather(to_save, root=0)
@@ -391,13 +398,8 @@ def main():
                 obs_id = job.tags["obs_id"]
                 ufm = job.tags["stream_id"]
                 ws = job.tags["wafer_slot"]
-                fit_str = f"{obs_id} {ufm}"
-                logger.normal(
-                    "Loading and processing %s (%s/%s)",
-                    fit_str,
-                    i + 1,
-                    len(joblist) - 1,
-                )
+                logger.extra["extra"] = f" [{obs_id} {ufm} ({i+1}/{len(joblist) - 1})]"
+                logger.log(25, "Loading and processing")
                 sys.stdout.flush()
 
                 # Save metadata and config info
@@ -416,24 +418,23 @@ def main():
                     msg = (
                         f"Looks like we don't have real metadata for this observation!"
                     )
-                    logger.error("(%s) %s", fit_str, msg)
+                    logger.error("%s", msg)
                     set_tag(job, "message", msg)
-                    job.jstate = "failed"
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                     continue
 
                 # Check source
                 src_names = list(source_list & set(obs["tags"]))
                 if len(src_names) > 1:
                     logger.warning(
-                        "(%s) Observation tagged for multiple sources! Only fitting the first",
-                        fit_str,
+                        "Observation tagged for multiple sources! Only fitting the first"
                     )
                 elif len(src_names) == 0:
                     msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-                    logger.error("(%s) %s", fit_str, msg)
+                    logger.error("%s", msg)
                     set_tag(job, "message", msg)
-                    job.jstate = "failed"
-                    logger.debug("(%s) Tags were: %s", fit_str, obs["tags"])
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+                    logger.debug("Tags were: %s", obs["tags"])
                     continue
                 source = src_names[0]
                 set_tag(job, "source", source)
@@ -447,9 +448,9 @@ def main():
                 # Generally want to force because you dont know if youre actually scanning the wafer slot you think you are
                 if ws not in wafers:
                     msg = "Wafer not targetting or forced to be fit!"
-                    logger.error("(%s) %s", fit_str, msg)
+                    logger.error("%s", msg)
                     set_tag(job, "message", msg)
-                    job.jstate = "failed"
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                     continue
 
                 if h5_file is not None and myrank == 0 and obs["obs_id"] not in h5_file:
@@ -502,8 +503,7 @@ def main():
                             to_skip = True
                         else:
                             logger.warning(
-                                "(%s) No samples flagged! But running in plot_only mode so will continue with all samples",
-                                fit_str,
+                                "No samples flagged! But running in plot_only mode so will continue with all samples"
                             )
                             start = 0
                             stop = int(cast(int, aman.samps.count))
@@ -513,20 +513,15 @@ def main():
                             to_skip = True
                         else:
                             logger.debug(
-                                "(%s) Only %s flagged samples! But running in plot_only mode so will continue",
-                                fit_str,
+                                "Only %s flagged samples! But running in plot_only mode so will continue",
                                 stop - start,
                             )
                     if to_skip:
-                        logger.error("(%s) %s", fit_str, msg)
+                        logger.error("%s", msg)
                         set_tag(job, "message", msg)
-                        job.jstate = "failed"
+                        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                         continue
-                    logger.debug(
-                        "(%s) %s samps flagged in the source range",
-                        fit_str,
-                        stop - start,
-                    )
+                    logger.debug("%s samps flagged in the source range", stop - start)
                     aman = aman.restrict(
                         "samps",
                         slice(
@@ -547,7 +542,6 @@ def main():
 
                 # Now loop by band
                 # We do this because noise properties and source responce will be band dependant
-                rsets = []
                 aman_full = aman
                 bp = (aman_full.det_cal.bg % 4) // 2
                 # TODO: This variable name needs to be updated to something more global. Also should check if there is better way than grabbing a hard coded character in string.
@@ -560,8 +554,10 @@ def main():
                     if msg != "":
                         msg += " "
                     band_name = band_names[tube_band][band]
-                    bf_str = f"{fit_str} {band_name}"
-                    logger.normal("Fitting %s", bf_str)
+                    logger.extra["extra"] = (
+                        f" [{obs_id} {ufm} {band_name} ({i+1}/{len(joblist) - 1})]"
+                    )
+                    logger.log(25, "Fitting")
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
@@ -586,13 +582,15 @@ def main():
                     sig_filt = sig_filt[std < thresh]
                     if aman.dets.count < cfg.min_dets:
                         _msg = f"{band_name} Noise too high."
-                        logger.error("%s, %s", bf_str, _msg)
+                        logger.error("%s", _msg)
                         msg += _msg
                         continue
 
                     # SVD filter
                     if cfg.svd_modes > 0:
                         U, S, V = svds(aman.signal, k=cfg.svd_modes)
+                        if U is None or V is None:
+                            raise ValueError("SVD didn't compute U or V")
                         # Scipy does ascending order for some reason...
                         S, U, V = S[::-1], U[:, ::-1], V[::-1, :]
                         aman.signal -= (U * S) @ V
@@ -618,8 +616,7 @@ def main():
                             max_idx = (idx[1::2] - idx[::2]).argmax()
                             samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
                             logger.debug(
-                                "%s Found %s continously flagged samples",
-                                bf_str,
+                                "Found %s continously flagged samples",
                                 len(samp_idx),
                             )
 
@@ -627,12 +624,11 @@ def main():
                         if len(samp_idx) < min(cfg.block_size, cfg.min_samps / 2):
                             if args.plot_only:
                                 logger.warning(
-                                    "(%s) Looks like you didn't see the source at all! But running in plot_only mode so will continue",
-                                    bf_str,
+                                    "Looks like you didn't see the source at all! But running in plot_only mode so will continue"
                                 )
                             else:
                                 _msg = f"{band_name} Failed to find source blind."
-                                logger.error("(%s) %s", bf_str, _msg)
+                                logger.error("%s", _msg)
                                 msg += msg
                                 continue
                         start = int(
@@ -647,17 +643,14 @@ def main():
                         if stop - start < cfg.min_samps:
                             if not args.plot_only:
                                 _msg = f"{band_name} Too few samples found in blind flagging."
-                                logger.error("(%s) %s", bf_str, _msg)
+                                logger.error("%s", _msg)
                                 msg += _msg
                                 continue
                             logger.warning(
-                                "(%s) Only %s flagged samples! But running in plot_only mode so will continue",
-                                bf_str,
+                                "Only %s flagged samples! But running in plot_only mode so will continue",
                                 stop - start,
                             )
-                        logger.debug(
-                            "(%s) %s samps flagged blind", bf_str, stop - start
-                        )
+                        logger.debug("%s samps flagged blind", stop - start)
                         # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
                         aman = aman.restrict(
                             "samps",
@@ -681,13 +674,11 @@ def main():
                         _msg = (
                             f"{band_name} Too few detectors after final sanity check."
                         )
-                        logger.error("(%s) %s", bf_str, _msg)
+                        logger.error("%s", _msg)
                         msg += _msg
                         continue
 
-                    logger.normal(
-                        "(%s) Attempting to fit %s detectors", bf_str, aman.dets.count
-                    )
+                    logger.log(25, "Attempting to fit %s detectors", aman.dets.count)
 
                     # Plot the TOD
                     plot_tod(
@@ -695,14 +686,14 @@ def main():
                     )
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
-                        logger.normal("(%s) %s", bf_str, _msg)
+                        logger.log(25, "%s", _msg)
                         msg += _msg
                         continue
 
                     # Make the fft a fast length (ie like a prime number)
                     _ = tod_ops.filters.fft_trim(aman, prefer="center")
                     if aman.dets.count > 10 and args.profile:
-                        logger.normal("(%s) Restricting to 10 dets for profile", bf_str)
+                        logger.log(25, "Restricting to 10 dets for profile")
                         aman.restrict("dets", aman.dets.vals[:10])
 
                     # Before sending via MPI lets remove anything we don't need from the aman
@@ -736,7 +727,7 @@ def main():
                     wait(fp_futures)
                     fps = [fp0] + [fp_future.result() for fp_future in fp_futures]
                     t1 = time.time()
-                    logger.normal("(%s) Took %s seconds to fit", bf_str, t1 - t0)
+                    logger.log(25, "Took %s seconds to fit", t1 - t0)
                     for focal_plane in fps:
                         # Do a quick cut based on FWHM tol
                         focal_plane.restrict(
@@ -767,13 +758,14 @@ def main():
                                 np.array(focal_plane.R2, dtype=np.float32),
                             ),
                             dtype=outdt,
-                            count=focal_plane.dets.count,
+                            count=cast(int, focal_plane.dets.count),
                         )
                         rsets += [metadata.ResultSet.from_friend(sarray)]
                     _msg = f"{band_name} Success!"
-                    logger.normal("(%s) %s", bf_str, _msg)
+                    logger.log(25, "%s", _msg)
                     msg += msg
 
+                logger.extra["extra"] = f" [{obs_id} {ufm} ({i+1}/{len(joblist) - 1})]"
                 # Get ready to save
                 if args.plot_only:
                     to_save = (None, None, None)
@@ -781,7 +773,7 @@ def main():
                 if len(rsets) == 0:
                     to_save = (None, None, None)
                     set_tag(job, "message", msg)
-                    job.jstate = "failed"
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                     continue
 
                 # Combine rsets
@@ -791,10 +783,10 @@ def main():
                     if msg != "":
                         msg += " "
                     _msg = "ResultSet empty somehow!"
-                    logger.error("(%s) %s", fit_str, _msg)
+                    logger.error("%s", _msg)
                     msg += _msg
                     set_tag(job, "message", msg)
-                    job.jstate = "failed"
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                     continue
 
                 # Kill bad fits
@@ -835,19 +827,17 @@ def main():
                     if msg != "":
                         msg += " "
                     _msg = "Too many bad fits!"
-                    logger.error("(%s) %s", fit_str, _msg)
+                    logger.error("%s", _msg)
                     msg += _msg
                     set_tag(job, "message", msg)
-                    job.jstate = "failed"
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                     continue
                 # Plot focal plane, encoders, and a histrogram of fhwp, amp, hits
                 # TODO: Split by band?
                 plot_focal_plane(focal_plane, fit_plot_dir, ufm, obs_id)
 
                 # Ready to save
-                logger.normal(
-                    "(%s) Saving %s fits (%s good).", fit_str, len(rset), np.sum(msk)
-                )
+                logger.log(25, "Saving %s fits (%s good).", len(rset), np.sum(msk))
                 if cfg.pad:
                     with log_lvl(logger, logging.ERROR):
                         all_dets = ctx.get_det_info(
@@ -867,11 +857,11 @@ def main():
                 if args.profile:
                     to_save = (None, None, None)
                     msg = "Ran profile"
-                    logger.info("(%s) %s", fit_str, _msg)
+                    logger.info("%s", msg)
                     set_tag(job, "message", msg)
-                    job.jstate = "open"
+                    job.jstate = cast(sqy.Column[str], jobdb.JState.open)
                     continue
-                job.jstate = "done"
+                job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
     if h5_file is not None:
         h5_file.close()
