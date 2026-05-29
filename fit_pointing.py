@@ -20,9 +20,8 @@ from functools import partial, reduce
 import h5py
 import mpi4py.rc
 import numpy as np
-import yaml
 import sqlalchemy as sqy
-from sotodlib.site_pipeline import jobdb
+import yaml
 from pshmem.locking import MPILock
 from scipy.sparse.linalg import svds
 from sotodlib import tod_ops
@@ -30,6 +29,7 @@ from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
+from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 from typing_extensions import cast
 
@@ -332,6 +332,7 @@ def main():
     # Get settings for source mask
     if args.profile and ismaster:
         from pyinstrument import Profiler
+
         profiler = Profiler()
         profiler.start()
         logger.info("Restricting joblist to just 1 entry per process for profiling!")
@@ -414,7 +415,9 @@ def main():
                     except:
                         meta = None
                 if meta is None or meta.dets.count == 0:
-                    msg = f"Looks like we don't have real metadata for this observation!"
+                    msg = (
+                        f"Looks like we don't have real metadata for this observation!"
+                    )
                     logger.error("%s", msg)
                     set_tag(job, "message", msg)
                     job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
@@ -518,9 +521,7 @@ def main():
                         set_tag(job, "message", msg)
                         job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
                         continue
-                    logger.debug(
-                        "%s samps flagged in the source range", stop - start
-                    )
+                    logger.debug("%s samps flagged in the source range", stop - start)
                     aman = aman.restrict(
                         "samps",
                         slice(
@@ -553,7 +554,9 @@ def main():
                     if msg != "":
                         msg += " "
                     band_name = band_names[tube_band][band]
-                    logger.extra["extra"] = f" [{obs_id} {ufm} {band_name} ({i+1}/{len(joblist) - 1})]"
+                    logger.extra["extra"] = (
+                        f" [{obs_id} {ufm} {band_name} ({i+1}/{len(joblist) - 1})]"
+                    )
                     logger.log(25, "Fitting")
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
@@ -824,7 +827,7 @@ def main():
                     if msg != "":
                         msg += " "
                     _msg = "Too many bad fits!"
-                    logger.error("%s",  _msg)
+                    logger.error("%s", _msg)
                     msg += _msg
                     set_tag(job, "message", msg)
                     job.jstate = cast(sqy.Column[str], jobdb.JState.failed)

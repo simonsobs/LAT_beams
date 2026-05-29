@@ -1,19 +1,19 @@
 import os
-from typing import cast
 import sys
 from functools import partial
+from typing import cast
 
-import sqlalchemy as sqy
 import h5py
 import numpy as np
+import sqlalchemy as sqy
 from astropy import constants as const
 from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
 from pshmem.locking import MPILock
 from sotodlib.core import AxisManager, Context
-from sotodlib.site_pipeline.jobdb import Job
 from sotodlib.site_pipeline import jobdb
+from sotodlib.site_pipeline.jobdb import Job
 
 import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import (

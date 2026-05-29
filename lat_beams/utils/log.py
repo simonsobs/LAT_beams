@@ -1,20 +1,23 @@
 import logging
-from typing import Optional
 from contextlib import contextmanager
-from mpi4py import MPI
+from typing import Optional
 
+from mpi4py import MPI
 from sotodlib.mapmaking import ColoredFormatter, init
 
 comm = MPI.COMM_WORLD
 LoggerLike = logging.Logger | logging.LoggerAdapter[logging.Logger]
 
-def init_log(level: int = logging.DEBUG, comm: Optional[MPI.Comm] = None) -> logging.LoggerAdapter:
+
+def init_log(
+    level: int = logging.DEBUG, comm: Optional[MPI.Comm] = None
+) -> logging.LoggerAdapter:
     """
     Initialize the sotodlib mapmaking logger with the following extra log levels:
-    
+
     * A `NORMAL` log level (25) that is formatted as blue
     * A `DDEBUG` log level (5)
-    
+
     This also uses `LoggerAdapter` to add a vairable called `extra`
     that is appended to the end of the the log message.
     It can be set with `logger.extra['extra'] = ...` and defaults to an
@@ -49,7 +52,9 @@ def init_log(level: int = logging.DEBUG, comm: Optional[MPI.Comm] = None) -> log
 
 
 @contextmanager
-def log_lvl(logger: logging.Logger | logging.LoggerAdapter, level : Optional[int]=None):
+def log_lvl(
+    logger: logging.Logger | logging.LoggerAdapter, level: Optional[int] = None
+):
     """
     Temporarily set a logger (or LoggerAdapter) and its handlers to a different log level.
     Based on solution from StackOverflow: https://stackoverflow.com/q/78035371/850781

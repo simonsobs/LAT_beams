@@ -12,15 +12,15 @@ from typing import Optional, cast
 import astropy.units as u
 import h5py
 import numpy as np
+import sqlalchemy as sqy
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from jaxtyping import Float, Shaped
-import sqlalchemy as sqy
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
-from .utils.jobs import set_tag
 from .utils import LoggerLike
+from .utils.jobs import set_tag
 
 
 def solid_angle(

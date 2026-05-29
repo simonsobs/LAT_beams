@@ -1,8 +1,8 @@
 import gc
-from typing import cast
 import logging
 import os
 from functools import partial
+from typing import cast
 
 import astropy.units as u
 import numpy as np

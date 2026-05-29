@@ -22,7 +22,7 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 
 from .beam_utils import estimate_cent
-from .utils import log_lvl, set_tag, LoggerLike
+from .utils import LoggerLike, log_lvl, set_tag
 
 
 def make_cuts(
