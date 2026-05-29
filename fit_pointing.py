@@ -24,6 +24,7 @@ import yaml
 import sqlalchemy as sqy
 from sotodlib.site_pipeline import jobdb
 from pshmem.locking import MPILock
+from scipy.sparse.linalg import svds
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
@@ -31,7 +32,6 @@ from sotodlib.io.metadata import write_dataset
 from sotodlib.mapmaking import downsample_obs
 from sotodlib.site_pipeline.jobdb import Job
 from typing_extensions import cast
-from scipy.sparse.linalg import svds
 
 from lat_beams.fitting.tod import fit_tod_pointing
 from lat_beams.plotting import plot_focal_plane, plot_tod
@@ -74,12 +74,14 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, lo
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
             # src_str = "==1 or ".join(source_list) + "==1"
-            obslists = [ctx.obsdb.query(
-                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and duration < {max_dur * 3600}",
-                tags=source_list[:i] + [f"{source}=1"] + source_list[(i+1):],
-            ) for i, source in enumerate(source_list)]
+            obslists = [
+                ctx.obsdb.query(
+                    f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and duration < {max_dur * 3600}",
+                    tags=source_list[:i] + [f"{source}=1"] + source_list[(i + 1) :],
+                )
+                for i, source in enumerate(source_list)
+            ]
             obslist = reduce(lambda q, p: p + q, obslists)
-            
 
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
@@ -131,7 +133,10 @@ def get_ufm_rad(nominal, ufm):
         return ufm_rad_cache[ufm]
     xi0 = np.nanmean(np.array(nominal[ufm]["xi"][:]))
     eta0 = np.nanmean(np.array(nominal[ufm]["eta"][:]))
-    r = np.sqrt((np.array(nominal[ufm]["xi"][:]) - xi0)**2 + (np.array(nominal[ufm]["eta"][:]) - eta0)**2)
+    r = np.sqrt(
+        (np.array(nominal[ufm]["xi"][:]) - xi0) ** 2
+        + (np.array(nominal[ufm]["eta"][:]) - eta0) ** 2
+    )
     return np.nanmax(r)
 
 
@@ -536,7 +541,6 @@ def main():
 
                 # Now loop by band
                 # We do this because noise properties and source responce will be band dependant
-                rsets = []
                 aman_full = aman
                 bp = (aman_full.det_cal.bg % 4) // 2
                 # TODO: This variable name needs to be updated to something more global. Also should check if there is better way than grabbing a hard coded character in string.
@@ -554,7 +558,9 @@ def main():
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
-                    filt = tod_ops.filters.high_pass_sine2(cfg.hp_fc) * tod_ops.filters.low_pass_sine2(cfg.lp_fc)
+                    filt = tod_ops.filters.high_pass_sine2(
+                        cfg.hp_fc
+                    ) * tod_ops.filters.low_pass_sine2(cfg.lp_fc)
                     sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
                     # Trim edges in case of FFT ringing
@@ -799,20 +805,19 @@ def main():
                 if np.sum(msk * high_hits) >= cfg.min_dets:
                     med_xi = np.median(np.array(focal_plane.xi[msk * high_hits]))
                     med_eta = np.median(np.array(focal_plane.eta[msk * high_hits]))
-                    msk *= (
-                        np.sqrt(
-                            (np.array(focal_plane.xi) - med_xi) ** 2
-                            + np.abs(np.array(focal_plane.eta) - med_eta) ** 2
-                        )
-                        < 1.5*get_ufm_rad(nominal, ufm)
-                    )
+                    msk *= np.sqrt(
+                        (np.array(focal_plane.xi) - med_xi) ** 2
+                        + np.abs(np.array(focal_plane.eta) - med_eta) ** 2
+                    ) < 1.5 * get_ufm_rad(nominal, ufm)
 
                 # Instead of cutting the rset we set R2 to 0
                 # This is because det match does not like missing dets
                 rset = rset.asarray()
                 rset[~msk]["R2"] = 0.0
                 rset = metadata.ResultSet.from_friend(rset)
-                focal_plane.restrict("dets", msk * (rset["R2"] > cfg.min_R2))  # Only used for plotting
+                focal_plane.restrict(
+                    "dets", msk * (rset["R2"] > cfg.min_R2)
+                )  # Only used for plotting
 
                 if len(rset) == 0 or np.sum(msk) < cfg.min_dets:
                     to_save = (None, None, None)

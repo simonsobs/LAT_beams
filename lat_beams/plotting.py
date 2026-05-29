@@ -8,12 +8,13 @@ import os
 from typing import Sequence
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-import seaborn as sns
 import numpy as np
+import seaborn as sns
 from jaxtyping import Float
+from matplotlib.collections import LineCollection
 from matplotlib.colors import SymLogNorm
 from pixell import enmap
 from sotodlib.core import AxisManager
@@ -264,7 +265,10 @@ def plot_tod(
         detectors are plotted.
     """
     plt.close()
-    for data, append, ylabel in [(np.array(aman.signal)[:max_dets], "tod", "Signal (pW)"), (sig_filt[:max_dets], "tod_filt", "Filtered Signal (pW)")]:
+    for data, append, ylabel in [
+        (np.array(aman.signal)[:max_dets], "tod", "Signal (pW)"),
+        (sig_filt[:max_dets], "tod_filt", "Filtered Signal (pW)"),
+    ]:
         fig, ax = plt.subplots()
         nsamp = data.shape[1]
         x = np.arange(nsamp)
@@ -272,7 +276,7 @@ def plot_tod(
 
         lc = LineCollection(segments, alpha=0.3)
         ax.add_collection(lc)
-        ax.autoscale(enable=True, axis='y')
+        ax.autoscale(enable=True, axis="y")
         ax.set_xlabel("Samples")
         ax.set_ylabel(ylabel)
         ax.set_title(file_label.replace("_", " "))
@@ -281,7 +285,9 @@ def plot_tod(
         plt.close(fig)
 
 
-def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_id: str):
+def plot_focal_plane(
+    focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_id: str
+):
     """
     Plot the results of a the focal plane fit.
     We assume here that all angular values are in radians
@@ -312,22 +318,52 @@ def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_
     plt.close()
 
     # Convert to np arrays to make pyright happy
-    fp_data = {attr: np.array(getattr(focal_plane, attr)) for attr in 
-               ['xi', 'eta', 'az', 'el', 'amp', 'fwhm', 'hits', 'reduced_chisq', 'R2']}
+    fp_data = {
+        attr: np.array(getattr(focal_plane, attr))
+        for attr in [
+            "xi",
+            "eta",
+            "az",
+            "el",
+            "amp",
+            "fwhm",
+            "hits",
+            "reduced_chisq",
+            "R2",
+        ]
+    }
 
     # Define plots with tuples (data, xlabel, ylabel, filename, plot_type)
     plots = [
-        ((fp_data['xi'], fp_data['eta']), "Xi (rad)", "Eta (rad)", f"{ufm}_fp.png", "scatter"),
-        ((fp_data['az'], fp_data['el']), "Az (rad)", "El (rad)", f"{ufm}_enc.png", "scatter"),
-        (fp_data['amp'], "Amp (pW)", "Dets (#)", f"{ufm}_fp_amp.png", "hist"),
-        (fp_data['fwhm'], "FWHM (rad)", "Dets (#)", f"{ufm}_fp_fwhm.png", "hist"),
-        (fp_data['hits'], "Hits (#)", "Dets (#)", f"{ufm}_fp_hits.png", "hist"),
-        (fp_data['reduced_chisq'], "Reduced Chi Squared", "Dets (#)", f"{ufm}_fp_red_chisq.png", "hist"),
-        (fp_data['R2'], "R2", "Dets (#)", f"{ufm}_fp_r2.png", "hist"),
+        (
+            (fp_data["xi"], fp_data["eta"]),
+            "Xi (rad)",
+            "Eta (rad)",
+            f"{ufm}_fp.png",
+            "scatter",
+        ),
+        (
+            (fp_data["az"], fp_data["el"]),
+            "Az (rad)",
+            "El (rad)",
+            f"{ufm}_enc.png",
+            "scatter",
+        ),
+        (fp_data["amp"], "Amp (pW)", "Dets (#)", f"{ufm}_fp_amp.png", "hist"),
+        (fp_data["fwhm"], "FWHM (rad)", "Dets (#)", f"{ufm}_fp_fwhm.png", "hist"),
+        (fp_data["hits"], "Hits (#)", "Dets (#)", f"{ufm}_fp_hits.png", "hist"),
+        (
+            fp_data["reduced_chisq"],
+            "Reduced Chi Squared",
+            "Dets (#)",
+            f"{ufm}_fp_red_chisq.png",
+            "hist",
+        ),
+        (fp_data["R2"], "R2", "Dets (#)", f"{ufm}_fp_r2.png", "hist"),
     ]
 
     for data, xlabel, ylabel, filename, plot_type in plots:
-        plt.clf() 
+        plt.clf()
         if plot_type == "scatter":
             plt.scatter(*data, alpha=0.25)
         elif plot_type == "hist":
@@ -338,7 +374,10 @@ def plot_focal_plane(focal_plane: AxisManager, fit_plot_dir: str, ufm: str, obs_
         plt.savefig(os.path.join(fit_plot_dir, filename))
     plt.close()
 
-def auto_relplot(data: dict[str, Sequence], x: str, y: str, ignore: list[str]=[], **kwargs) -> sns.FacetGrid:
+
+def auto_relplot(
+    data: dict[str, Sequence], x: str, y: str, ignore: list[str] = [], **kwargs
+) -> sns.FacetGrid:
     """
     Make a relplot.
     This function tries to be semi-clever about automatically selecting
@@ -375,11 +414,12 @@ def auto_relplot(data: dict[str, Sequence], x: str, y: str, ignore: list[str]=[]
         The plot output by `relplot`.
     """
     cats = ["hue", "col", "row", "style"]
-    in_kwargs = [kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)]
+    in_kwargs = [
+        kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)
+    ]
     can_add = [cat for cat in cats if (cat not in kwargs or kwargs[cat] is None)]
     fields = [
-        k for k in data
-        if (k not in (x, y) and k not in in_kwargs and k not in ignore)
+        k for k in data if (k not in (x, y) and k not in in_kwargs and k not in ignore)
     ]
 
     fields.sort(key=lambda c: len(set(data[c])))
@@ -390,10 +430,7 @@ def auto_relplot(data: dict[str, Sequence], x: str, y: str, ignore: list[str]=[]
         to_combine = [kwargs["hue"]] + fields[4:]
         n = len(data[x])
 
-        combined = [
-            "+".join(str(data[c][i]) for c in to_combine)
-            for i in range(n)
-        ]
+        combined = ["+".join(str(data[c][i]) for c in to_combine) for i in range(n)]
 
         kwargs["hue"] = "+".join(to_combine)
         data[kwargs["hue"]] = combined
@@ -404,7 +441,7 @@ def auto_relplot(data: dict[str, Sequence], x: str, y: str, ignore: list[str]=[]
         y=y,
         **kwargs,
     )
-    
+
     for ax in plot.axes.flat:
         ax.label_outer()
     return plot

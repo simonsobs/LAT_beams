@@ -2,9 +2,9 @@ import os
 import sys
 
 import astropy.units as u
-import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 from astropy import constants as const
 from pixell import enmap
 from sotodlib.core import Context
@@ -54,16 +54,19 @@ if len(fjobs) == 0:
     sys.exit(0)
 
 # Setup list of things to plot
-to_plot = [("Bessel Solid Angle (str)", "bessel.model_solid_angle_true", u.steradian),
-           ("Gassian Solid Angle Corrected (str)", "gauss.data_solid_angle_corr", u.steradian),
-           ('FWHM (")', "data_fwhm", u.arcsec)]
-
+to_plot = [
+    ("Bessel Solid Angle (str)", "bessel.model_solid_angle_true", u.steradian),
+    ("Gassian Solid Angle Corrected (str)", "gauss.data_solid_angle_corr", u.steradian),
+    ('FWHM (")', "data_fwhm", u.arcsec),
+]
 
 
 # Construct the dataset for seaborn
-dset = {name : bu.get_fit_vec(all_fits, vec).to(unit).value for name, vec, unit in to_plot}
-dset["Time of Day (hr)"] = all_fits["hour"] 
-dset["Time (ctime)"] = all_fits["time"] 
+dset = {
+    name: bu.get_fit_vec(all_fits, vec).to(unit).value for name, vec, unit in to_plot
+}
+dset["Time of Day (hr)"] = all_fits["hour"]
+dset["Time (ctime)"] = all_fits["time"]
 dset["band"] = all_fits["band"]
 
 # Add epoch info
@@ -96,11 +99,19 @@ for split in cfg.split_by:
             Q1 = np.percentile(ds, 25)
             Q3 = np.percentile(ds, 75)
             IQR = Q3 - Q1
-            msk[smsk] *= (ds > Q1 - 1.5*IQR) * (ds < Q3 + 1.5*IQR)
-        dset_filt = {key : val[msk] for key, val in dset.items()}
+            msk[smsk] *= (ds > Q1 - 1.5 * IQR) * (ds < Q3 + 1.5 * IQR)
+        dset_filt = {key: val[msk] for key, val in dset.items()}
 
         # Violin with epoch hue
-        sns.violinplot(data=dset_filt, x=split, y=name, hue="Epoch", split=True, inner="quart", cut=0)
+        sns.violinplot(
+            data=dset_filt,
+            x=split,
+            y=name,
+            hue="Epoch",
+            split=True,
+            inner="quart",
+            cut=0,
+        )
         plt.title(f"{' '.join(name.split(' ')[:-1])} Distrubution")
         # Add nominal FWHM if we are plotting FWHM
         if "FWHM" in name:
@@ -110,15 +121,30 @@ for split in cfg.split_by:
         plt.savefig(os.path.join(plot_dir_spl, f"{prefix}_dist.png"))
         plt.close()
 
-        # Scatter vs ctime with epoch cols 
-        sns.relplot(data=dset_filt, x="Time (ctime)", y=name, hue=split, col="Epoch", kind="scatter", facet_kws={'sharey': 'row', 'sharex': False})
+        # Scatter vs ctime with epoch cols
+        sns.relplot(
+            data=dset_filt,
+            x="Time (ctime)",
+            y=name,
+            hue=split,
+            col="Epoch",
+            kind="scatter",
+            facet_kws={"sharey": "row", "sharex": False},
+        )
         plt.suptitle(f"{' '.join(name.split(' ')[:-1])} Over Time")
         plt.subplots_adjust(top=0.85)
         plt.savefig(os.path.join(plot_dir_spl, f"{prefix}_time.png"))
         plt.close()
 
-        # Scatter vs time of day with epoch cols 
-        sns.relplot(data=dset_filt, x="Time of Day (hr)", y=name, hue=split, col="Epoch", kind="scatter")
+        # Scatter vs time of day with epoch cols
+        sns.relplot(
+            data=dset_filt,
+            x="Time of Day (hr)",
+            y=name,
+            hue=split,
+            col="Epoch",
+            kind="scatter",
+        )
         plt.suptitle(f"{' '.join(name.split(' ')[:-1])} By Time of Day")
         plt.subplots_adjust(top=0.85)
         plt.savefig(os.path.join(plot_dir_spl, f"{prefix}_hour.png"))

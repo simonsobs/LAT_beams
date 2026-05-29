@@ -1,3 +1,31 @@
+## 3.1.0 (2026-05-28)
+
+### Feat
+
+- switch to new leakage normalization and include tb
+- add a sript to compare planet profiles
+- add auto_relplot functions
+- much improved beam summary script and remove outdated pointing summary
+- first pass at T->E
+- many performance and accuracy improvements to tod fitting
+- new beam summary script
+- don't buffer logger by default
+
+### Fix
+
+- dont exclude catagory if its passed in as None
+- add LF bands
+- actually pass comps to plotter
+- dont hardcode gauss symmetry
+- merge into db
+- don't save proc aman if we arent saving
+
+### Perf
+
+- some tod fit streamlining
+- speedup plotting of TODs and fits
+- use numba for gaussian
+
 ## 3.0.0 (2026-05-04)
 
 ### Feat
