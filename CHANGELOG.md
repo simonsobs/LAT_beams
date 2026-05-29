@@ -1,3 +1,9 @@
+## 3.1.1 (2026-05-29)
+
+### Perf
+
+- switch to LoggerAdapter
+
 ## 3.1.0 (2026-05-28)
 
 ### Feat
