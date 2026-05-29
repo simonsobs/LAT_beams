@@ -3,9 +3,11 @@ import os
 import sys
 from functools import cache, partial
 from glob import glob
+from typing import cast
 
 import numpy as np
 import yaml
+import sqlalchemy as sqy
 from mpi4py import MPI
 from pixell import enmap
 from pshmem.locking import MPILock
@@ -14,6 +16,7 @@ from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import Context, metadata
 from sotodlib.site_pipeline.jobdb import Job
+from sotodlib.site_pipeline import jobdb
 
 import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
@@ -56,6 +59,7 @@ def get_jobit(
     logger,
     forced_ws,
 ):
+    _ = jdb
     with log_lvl(logger, 25):
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
@@ -184,6 +188,9 @@ def make_det_splits(aman, split_dir, min_dets):
 logger = init_log()
 metadata.loader.logger = logger
 cp.logger = logger
+if logger.extra is None:
+    raise ValueError("Logger doesn't have adapter set up!")
+logger.extra = cast(dict, logger.extra)
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -285,6 +292,7 @@ passes = lbm.get_passes(cfg)
 l_comm = comm.Split(myrank, myrank)
 
 # Profiler setup
+profiler = None
 if args.profile:
     from pyinstrument import Profiler
 
@@ -297,10 +305,8 @@ if args.profile:
 source_list = set(cfg.source_list)
 job = None
 mpilock = MPILock(comm)
-logger.flush()
 for i, j in enumerate(joblist):
     # To avoid multiproc issues where the database is locked we lock and unlock serially
-    logger.flush()
     mpilock.lock()
     if job is not None:
         with jdb.session_scope() as session:
@@ -323,18 +329,18 @@ for i, j in enumerate(joblist):
     band = job.tags["band"]
     sub_id = f"{obs_id}:{ws}:{band}"
     obs = ctx.obsdb.get(obs_id, tags=True)
+    logger.extra["extra"] = f" [{obs_id} {ufm} {band} ({i+1}/{n_maps[myrank]})]"
 
     if args.plot_only:
-        logger.normal(
-            "Replotting %s %s %s(%s/%s)", obs_id, ufm, band, i + 1, n_maps[myrank]
-        )
+        logger.log(25, "Replotting")
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
+            solved = cast(enmap.ndmap, solved)
         except FileNotFoundError:
             msg = "Missing map files in plot_only mode"
-            logger.error("\t%s", msg)
+            logger.error("%s", msg)
             set_tag(job, "message", msg)
-            job.jstate = "failed"
+            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
             continue
 
         obs_plot_dir = os.path.join(
@@ -343,6 +349,8 @@ for i, j in enumerate(joblist):
         cent = estimate_cent(solved[0], cfg.smooth_kern / pixsize, cfg.buf)
         posmap = solved.posmap()
         posmap = np.rad2deg(posmap) * 3600
+        if solved.wcs is None:
+            raise ValueError("WCS is None")
         plot_map_complete(
             solved,
             posmap,
@@ -351,12 +359,13 @@ for i, j in enumerate(joblist):
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
+            comps=job.tags["comps"],
             log_thresh=cfg.log_thresh,
-            lognorm=1.0 / solved[0][cent],
+            lognorm=float(1.0 / solved[0][cent]),
         )
         continue
 
-    logger.normal("Mapping %s %s %s(%s/%s)", obs_id, ufm, band, i + 1, n_maps[myrank])
+    logger.log(25, "Mapping")
 
     # Save metadata and config info
     set_tag(job, "config", cfg_str)
@@ -370,15 +379,15 @@ for i, j in enumerate(joblist):
             meta = ctx.get_meta(obs_id)
         except Exception as e:
             msg = f"Failed to load metadata with error {e}"
-            logger.error("\t%s", msg)
+            logger.error("%s", msg)
             set_tag(job, "message", msg)
-            job.jstate = "failed"
+            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
             continue
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
-        logger.error("\t%s", msg)
+        logger.error("%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         continue
     fscale_fac = 90.0 / float(band[1:])
 
@@ -387,21 +396,21 @@ for i, j in enumerate(joblist):
         logger.warning("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
         msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-        logger.error("\t%s", msg)
+        logger.error("t%s", msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
-        logger.debug("\t\tTags were: %s", obs["tags"])
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        logger.debug("Tags were: %s", obs["tags"])
         continue
     src_name = "_".join(src_names)
-    logger.debug("\tMapping %s", src_name)
+    logger.debug("Mapping %s", src_name)
 
     if "hits" in meta.focal_plane:
         meta.restrict("dets", meta.focal_plane.hits >= cfg.min_hits)
         if meta.dets.count < cfg.min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
-            logger.error("\t%s", msg)
+            logger.error("%s", msg)
             set_tag(job, "message", msg)
-            job.jstate = "failed"
+            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
             continue
 
     obs_plot_dir = os.path.join(
@@ -566,7 +575,7 @@ for i, j in enumerate(joblist):
     # In case we don't want to make ML maps
     if cfg.mlpass < 1 or cfg.cgiters < 1:
         set_tag(job, "message", "Success")
-        job.jstate = "done"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.done)
         continue
 
     # Now make the ML map
@@ -586,7 +595,7 @@ for i, j in enumerate(joblist):
         msg = "Failed to make ML map"
         logger.error(msg)
         set_tag(job, "message", msg)
-        job.jstate = "failed"
+        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         continue
 
     # Add paths to job
@@ -604,6 +613,8 @@ for i, j in enumerate(joblist):
 
     # Plot
     try:
+        if outmap.wcs is None:
+            raise ValueError("WCS is None")
         posmap = outmap.posmap()
         posmap = np.rad2deg(posmap) * 3600
         plot_map_complete(
@@ -615,22 +626,18 @@ for i, j in enumerate(joblist):
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band} MLmap",
             log_thresh=cfg.log_thresh,
-            lognorm=1.0 / outmap[0][cent],
+            lognorm=float(1.0 / outmap[0][cent]),
         )
     except Exception as e:
         logger.warning("Plotting failed with error: %s", e)
 
     set_tag(job, "message", "Success")
-    job.jstate = "done"
+    job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
-if args.profile:
+if args.profile and profiler is not None:
     profiler.stop()
     profiler.write_html(f"profile_{myrank}.html")
 
-logger.flush()
+logger.extra["extra"] = ""
 comm.barrier()
 mpilock.close()
-
-# Splits stuff to implement later
-# TODO: Bin in annuli
-# TODO: Per det maps?

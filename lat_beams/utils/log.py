@@ -1,121 +1,87 @@
 import logging
-import sys
+from typing import Optional
 from contextlib import contextmanager
-from logging.handlers import MemoryHandler
+from mpi4py import MPI
 
-from pshmem.locking import MPILock
 from sotodlib.mapmaking import ColoredFormatter, init
 
-try:
-    import mpi4py.rc
+comm = MPI.COMM_WORLD
+LoggerLike = logging.Logger | logging.LoggerAdapter[logging.Logger]
 
-    mpi4py.rc.threads = False
-    from mpi4py import MPI
+def init_log(level: int = logging.DEBUG, comm: Optional[MPI.Comm] = None) -> logging.LoggerAdapter:
+    """
+    Initialize the sotodlib mapmaking logger with the following extra log levels:
+    
+    * A `NORMAL` log level (25) that is formatted as blue
+    * A `DDEBUG` log level (5)
+    
+    This also uses `LoggerAdapter` to add a vairable called `extra`
+    that is appended to the end of the the log message.
+    It can be set with `logger.extra['extra'] = ...` and defaults to an
+    empty string.
 
-    comm = MPI.COMM_WORLD
-except:
-    comm = None
+    Parameters
+    ----------
+    level : int, default: logging.DEBUG
+        Logging level (e.g., logging.DEBUG, logging.INFO). Default is logging.DEBUG.
+    comm : Optional[MPI.Comm], default: None
+        An MPI communicator. If provided, the logger will include the rank in log messages.
+        Default is None.
 
-
-class MPIMemHandler(MemoryHandler):
-    def createLock(self):
-        """
-        Acquire a thread lock for serializing access to the underlying I/O.
-        """
-        if comm:
-            self.lock = MPILock(comm)
-
-    def acquire(self):
-        """
-        Acquire the I/O thread lock.
-        """
-        if self.lock:
-            self.lock.lock()
-
-    def release(self):
-        """
-        Release the I/O thread lock.
-        """
-        if self.lock:
-            self.lock.unlock()
-
-    def handle(self, record):
-        """
-        Conditionally emit the specified logging record.
-
-        Emission depends on filters which may have been added to the handler.
-        Wrap the actual emission of the record with acquisition/release of
-        the I/O thread lock.
-
-        Returns an instance of the log record that was emitted
-        if it passed all filters, otherwise a false value is returned.
-        """
-        rv = self.filter(record)
-        if isinstance(rv, logging.LogRecord):
-            record = rv
-        if rv:
-            self.emit(record)
-        return rv
-
-    def emit(self, record):
-        """
-        Emit a record.
-
-        Append the record. If shouldFlush() tells us to, call flush() to process
-        the buffer.
-        """
-        self.buffer.append(record)
-
-
-def init_log(level=logging.DEBUG, comm=comm, flushLevel=logging.CRITICAL, buffer=0):
-    # Uses a crappy version of https://stackoverflow.com/a/35804945
-    def lognormal(self, message, *args, **kwargs):
-        if self.isEnabledFor(25):
-            self._log(25, message, args, **kwargs)
-
-    def logddebug(self, message, *args, **kwargs):
-        if self.isEnabledFor(5):
-            self._log(5, message, args, **kwargs)
-
-    def flush_log(self):
-        for handler in self.handlers:
-            if hasattr(handler, "flush"):
-                handler.flush()
-
+    Returns
+    -------
+    logging.LoggerAdapter
+        The logger wrapped in a LoggerAdapter to add the `extra` formatting option.
+    """
     rank = 0
     if comm is not None:
         rank = comm.Get_rank()
     logging.addLevelName(25, "NORMAL")
     logging.addLevelName(5, "DDEBUG")
-    setattr(logging.getLoggerClass(), "normal", lognormal)
-    setattr(logging.getLoggerClass(), "ddebug", logddebug)
-    setattr(logging.getLoggerClass(), "flush", flush_log)
-    logger = init(level, rank=rank)
+    fmt = "%(rank)3d %(wmins)7.2f %(resmem)5.2f %(mem)5.2f %(memmax)5.2f %(message)s%(extra)s"
+    logger = init(level, rank=rank, fmt=fmt)
     for handler in logger.handlers:
         if isinstance(handler.formatter, ColoredFormatter):
             handler.formatter.colors["NORMAL"] = "\033[1;34m"
-    if buffer > 0 and comm is not None and comm.Get_size() > 1:
-        logger.handlers = [
-            MPIMemHandler(int(buffer), flushLevel=flushLevel, target=h, flushOnClose=True)
-            for h in logger.handlers
-        ]
+    logger = logging.LoggerAdapter(logger, {"extra": ""})
 
     return logger
 
 
 @contextmanager
-def log_lvl(logger, level=None):
-    "Run body with logger at a different level."
-    # https://stackoverflow.com/q/78035371/850781
-    saved_logger_level = logger.level
-    saved_handler_levels = [ha.level for ha in logger.handlers]
-    new_level = logger.getEffectiveLevel() + 10 if level is None else level
-    logger.setLevel(new_level)
-    for ha in logger.handlers:
+def log_lvl(logger: logging.Logger | logging.LoggerAdapter, level : Optional[int]=None):
+    """
+    Temporarily set a logger (or LoggerAdapter) and its handlers to a different log level.
+    Based on solution from StackOverflow: https://stackoverflow.com/q/78035371/850781
+
+    Parameters
+    ----------
+    logger : logging.Logger | logging.LoggerAdapter
+        The logger whose level should be temporarily changed.
+    level : Optional[int], default: None
+        The temporary log level to use. If None, increases the current effective
+        level by 10. Default is None.
+
+    Yields
+    ------
+    Tuple[int, List[int]]
+        A tuple containing:
+        * The original logger level.
+        * A list of the original levels of all handlers.
+    """
+    if isinstance(logger, logging.LoggerAdapter):
+        logger_use = logger.logger
+    else:
+        logger_use = logger
+    saved_logger_level = logger_use.level
+    saved_handler_levels = [ha.level for ha in logger_use.handlers]
+    new_level = logger_use.getEffectiveLevel() + 10 if level is None else level
+    logger_use.setLevel(new_level)
+    for ha in logger_use.handlers:
         ha.setLevel(new_level)
     try:
         yield saved_logger_level, saved_handler_levels
     finally:
-        logger.setLevel(saved_logger_level)
-        for ha, le in zip(logger.handlers, saved_handler_levels):
+        logger_use.setLevel(saved_logger_level)
+        for ha, le in zip(logger_use.handlers, saved_handler_levels):
             ha.setLevel(le)
