@@ -116,6 +116,7 @@ for split in cfg.split_by:
                 # TODO: Need to save and load ivar as well
                 imap = enmap.read_map(map_path)[0]  # Just T for now
                 ivar = enmap.read_map(ivar_path)[0]  # Just T for now
+                imap = enmap.unapply_window(imap, order=0)
                 posmap = imap.posmap()
 
                 # Setup aman for output
