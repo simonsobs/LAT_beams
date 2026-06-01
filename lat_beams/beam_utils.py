@@ -300,7 +300,7 @@ def process_model(
     data_fwhm: float,
     min_sigma: float,
     job: Optional[jobdb.Job],
-    logger: Optional[LoggerLke],
+    logger: Optional[LoggerLike],
 ) -> Optional[AxisManager]:
     """
     Convenience function to postproccess a map and it's fit model.

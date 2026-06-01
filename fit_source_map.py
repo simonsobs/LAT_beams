@@ -145,6 +145,15 @@ if n_maps[0] != max_maps:
     raise ValueError("Root doesn't have max maps!")
 joblist += [None] * (1 + max_maps - len(joblist))
 
+profiler = None
+if args.profile:
+    from pyinstrument import Profiler
+
+    profiler = Profiler()
+    profiler.start()
+    logger.info("Running in profiler mode! Only one map per proc will be kept")
+    joblist = [joblist[0], None]
+
 to_save = (None, None)
 map_jobs = jdb.get_jobs(jclass="beam_map", jstate="done")
 map_jobdict = {
@@ -188,7 +197,7 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
-    logger.extra["extra"] = f" [{obs_id} {ufm} {band} ({i+1}/{len(loblist)})]"
+    logger.extra["extra"] = f" [{obs_id} {ufm} {band} ({i+1}/{len(joblist) - 1})]"
     logger.log(25, "Fitting")
 
     # Get map job
@@ -494,6 +503,11 @@ for i, j in enumerate(joblist):
     job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
 comm.barrier()
+
+if args.profile and profiler is not None:
+    profiler.stop()
+    profiler.write_html(f"profile_{myrank}.html")
+
 if outfile is not None:
     outfile.close()
 sys.stdout.flush()
