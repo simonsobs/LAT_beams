@@ -205,7 +205,6 @@ def main():
 
     profiler = None
     if args.profile:
-
         logger.info("Running in profiler mode! Only a few dets will be kept")
 
     if cfg.preprocess_cfg is None:
