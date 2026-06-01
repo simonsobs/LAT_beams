@@ -437,7 +437,7 @@ def fit_bessel_map(
                     idx += [(n0, n1, m, i)]
     X += [np.ones_like(beam_model[core_msk])]
     X = np.column_stack(X) * np.sqrt(ivar[core_msk])[..., None]
-    lres = lstsq(X, imap[core_msk] * np.sqrt(ivar[core_msk]))
+    lres = lstsq(X, imap[core_msk] * np.sqrt(ivar[core_msk]), overwrite_a=True)
     if lres is None:
         return None, None
     als = lres[0]
