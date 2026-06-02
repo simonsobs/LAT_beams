@@ -10,7 +10,7 @@ LoggerLike = logging.Logger | logging.LoggerAdapter[logging.Logger]
 
 
 def init_log(
-    level: int = logging.DEBUG, comm: Optional[MPI.Comm] = None
+    level: int = logging.DEBUG, comm: Optional[MPI.Comm] = comm
 ) -> logging.LoggerAdapter:
     """
     Initialize the sotodlib mapmaking logger with the following extra log levels:
