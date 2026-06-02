@@ -191,6 +191,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["split_by"] = cfg.get(
         "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
     )
+    cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["r_step"] = cfg.get("r_step", 1)
 

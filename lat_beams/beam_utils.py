@@ -12,6 +12,7 @@ from typing import Optional, cast
 import astropy.units as u
 import h5py
 import numpy as np
+from numpy._core.numeric import ndarray
 import sqlalchemy as sqy
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from jaxtyping import Float, Shaped
@@ -501,9 +502,20 @@ def get_fit_vec(
         dat = dat.value * u.pW
     return dat
 
+def _get_vec(spl, fits, ctx, round_to):
+    if spl in fits.dtype.names:
+        return fits[spl].astype(str)
+    split_vec = []
+    for fit in fits:
+        obs = ctx.obsdb.get(fit["obs_id"])
+        split_vec += [obs[spl]]
+    split_vec = np.array(split_vec)
+    if np.issubdtype(split_vec.dtype, np.number):
+        split_vec = np.round(split_vec, round_to)
+    return split_vec
 
 def get_split_vec(
-    fits: Shaped[np.ndarray, "nfits"], split: str, ctx: Context, round_to: int = 2
+        fits: Shaped[np.ndarray, "nfits"], split: str, ctx: Context, round_to: int = 2, metasplits: dict[str, tuple[str, list[str]]] = {} 
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Get an array of metadata to split fits by.
@@ -520,25 +532,35 @@ def get_split_vec(
         Context used to lookup values from the obsdb.
     round_to : int
         How many decimal places to round numeric collumns to.
+    metasplits : dict[str, tuple[str, list[str]]]
+        A method of defining a collumn that matches against values
+        from a normal split collumn. Each entry should have some `name`
+        as the key, which then maps to a tuple. The first element of
+        the tuple should be the split we are matching against and the
+        second should be a list of values to match. In the output split_vec
+        anything that matches will have `name` in the split and anything
+        that does not match will have `NOMATCH!`.
 
     Returns
     -------
     split_vec : Shaped[np.ndarray, "nfits"]
-        Array of strings constaining the values from the stlip collumns.
+        Array of strings containing the values from the split collumns.
         Values are in the same order as `split` and are seperated by `+`s.
     """
+    if fits.dtype.names is None:
+        raise ValueError("Unknown fits format!")
+    if ctx.obsdb is None:
+        raise ValueError("obsdb is None!")
     split_vecs = []
     for spl in split.split("+"):
-        if spl in fits.dtype.names:
-            split_vecs += [fits[spl].astype(str)]
-            continue
-        split_vec = []
-        for fit in fits:
-            obs = ctx.obsdb.get(fit["obs_id"])
-            split_vec += [obs[spl]]
-        split_vec = np.array(split_vec)
-        if np.issubdtype(split_vec.dtype, np.number):
-            split_vec = np.round(split_vec, round_to)
+        if spl in metasplits:
+            # Structure of metasplits name -> (spl, (vals))
+            split_vec = _get_vec(metasplits[spl][0], fits, ctx, round_to)
+            msk = np.isin(split_vec, metasplits[spl][1])
+            split_vec[msk] = spl
+            split_vec[~msk] = "NOMATCH!"
+        else:
+            split_vec = _get_vec(spl, fits, ctx, round_to)
         split_vecs += [split_vec.astype(str)]
     split_vecs = np.column_stack(split_vecs)
 
