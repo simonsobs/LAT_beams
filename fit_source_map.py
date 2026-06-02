@@ -47,7 +47,7 @@ nproc = comm.Get_size()
 # Adding splits support here in a jank way until I rerun make_source_map with splits in the jobdb
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags.get('split', '')}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
         for job in jdb.get_jobs(jclass="fit_map")
     }
     return jobdict
@@ -460,7 +460,7 @@ for i, j in enumerate(joblist):
     # Save residual
     resid = solved.copy()
     resid -= model
-    fname = map_job.tags["solved"]
+    fname = map_path #map_job.tags["solved"]
     enmap.write_map(
         os.path.join(data_dir, f"{'_'.join(fname.split('_')[:-1])}_resid.fits"),
         resid,
@@ -508,7 +508,7 @@ for i, j in enumerate(joblist):
             cfg.extent,
             plt_cent,
             ufm_plot_dir,
-            f"{obs_id} {ufm} {band}",
+            f"{obs_id} {ufm} {band}{' '*bool(split)}{split}",
             comps="T",
             log_thresh=cfg.log_thresh,
             append=label,
@@ -518,7 +518,7 @@ for i, j in enumerate(joblist):
 
     # Save
     aman.wrap("data_solid_angle_corr", aman[aman.final_model].data_solid_angle_corr)
-    aman_path = os.path.join(obs_id, ufm, band)
+    aman_path = os.path.join(obs_id, ufm, band, split)
     to_save = (aman, aman_path)
 
     set_tag(job, "message", "Success")

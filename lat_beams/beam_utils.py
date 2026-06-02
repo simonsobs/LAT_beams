@@ -402,6 +402,7 @@ def load_beam_fits_from_jobs(
         * wafer_slot : str, the wafer slot of the fit data
         * stream_id : str, the stream id of the fit data
         * band : str, the band (ie. f090) of the fit data
+        * split: str, the split that was run for this map
         * source : str, the source that was fit
         * time : float, the time of the observation
         * hour : float, what hour of the day the observation was at
@@ -417,6 +418,7 @@ def load_beam_fits_from_jobs(
     times = np.array([float(o.split("_")[1]) for o in obs_ids])
     wafer_slots = np.array([job.tags["wafer_slot"] for job in joblist])
     stream_ids = np.array([job.tags["stream_id"] for job in joblist])
+    splits = np.array([job.tags["split"] for job in joblist])
     bands = np.array([job.tags["band"] for job in joblist])
     sources = np.array([job.tags["source"] for job in joblist])
     dates = np.array([dt.date.fromtimestamp(ct) for ct in times])
@@ -432,8 +434,8 @@ def load_beam_fits_from_jobs(
 
     amans = np.array(
         [
-            AxisManager.load(f[os.path.join(o, s, b)])
-            for o, s, b in zip(obs_ids, stream_ids, bands)
+            AxisManager.load(f[os.path.join(o, s, b, m)])
+            for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
         ]
     )
     # check that all fits have the same pars
@@ -448,6 +450,7 @@ def load_beam_fits_from_jobs(
         ("wafer_slot", wafer_slots.dtype),
         ("stream_id", stream_ids.dtype),
         ("band", bands.dtype),
+        ("split", splits.dtype),
         ("source", sources.dtype),
         ("time", float),
         ("hour", float),
