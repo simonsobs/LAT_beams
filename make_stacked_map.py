@@ -1,5 +1,4 @@
 # TODO: jobdb
-# TODO: logger
 # TODO: speed up: mpi? asyncio?
 import os
 import sys
@@ -14,7 +13,7 @@ from tqdm import tqdm
 
 from lat_beams import beam_utils as bu
 from lat_beams.plotting import plot_map_complete
-from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
+from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths, init_log
 
 
 def view_TQU(imap):
@@ -26,6 +25,9 @@ def view_TQU(imap):
 
 
 nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
+
+# Setup logger
+logger = init_log()
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -61,7 +63,7 @@ mjobdict = {
 }
 fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
 
-print(f"{len(fjobs)} maps to add")
+logger.info("%d maps to add", len(fjobs))
 if len(fjobs) == 0:
     sys.exit(0)
 
@@ -88,7 +90,7 @@ twcs = enmap.wcsutils.build(
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 
 if args.plot_only:
-    print("Running in plot only mode!")
+    logger.info("Running in plot only mode!")
 
 # Get det splits
 det_split_names = [""]
@@ -101,7 +103,7 @@ if cfg.det_split_dir != "":
 # Loop through splits
 map_types = ("", "resid")  # , "ml") # Skipping ML for now
 for split in cfg.split_by:
-    print(f"Splitting by {split}")
+    logger.info("Splitting by %s", split)
     split_vec = bu.get_split_vec(all_fits, split, ctx, metasplits=cfg.metasplits)
     for spl in np.unique(split_vec):
         if "NOMATCH!" in spl:
@@ -124,11 +126,11 @@ for split in cfg.split_by:
         for epoch in cfg.epochs:
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
-            print(f"\t{spl} {epoch}")
+            logger.info("Running %s %s", spl, str(epoch))
             times = sfits["time"]
             tmsk = (times >= epoch[0]) * (times < epoch[1])
             if np.sum(tmsk) == 0:
-                print(f"\t\tNo maps found! Skipping...")
+                logger.warning("No maps found! Skipping...")
                 continue
             # Structure here is split -> type (map/ML/resid)
             mcoadd = {
@@ -149,7 +151,7 @@ for split in cfg.split_by:
                 jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['band']}"
                 split = fjob.tags["split"]
                 if jobstr not in mjobdict:
-                    print(f"Map job not found for {jobstr}")
+                    logger.debug("Map job not found for %s", jobstr)
                     continue
                 mjob = mjobdict[jobstr]
                 if args.plot_only:
@@ -178,7 +180,7 @@ for split in cfg.split_by:
                             ivar = ivar[np.diag_indices(len(ivar))]
                         ivar = ivar.reshape(imap.shape)
                     except FileNotFoundError:
-                        print(f"Maps missing for job: {jobstr}-{split}")
+                        logger.debug("Maps missing for job: %s-%s", jobstr, split)
                         continue
                     # Make everything look like TQU
                     imap = view_TQU(imap)
@@ -216,8 +218,8 @@ for split in cfg.split_by:
                     cent_est = bu.estimate_cent(imap[0], sigma=10, buf=1)
                     dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
                     if dist > cfg.miscenter_thresh:
-                        print(
-                            f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} {split} ({mjob.tags['source']}) seems miscentered! Skipping!"
+                        logger.debug(
+                            "%s %s (%s) seems miscentered! Skipping!", jobstr, split, mjob.tags['source']
                         )
                         continue
 
@@ -243,7 +245,7 @@ for split in cfg.split_by:
                         )
                         if args.plot_only:
                             if not os.path.isfile(path):
-                                print("\t\tMaps do not exist!")
+                                logger.warning("Maps do not exist!")
                                 continue
                             omap = enmap.read_map(path)
                         else:
