@@ -2,6 +2,7 @@ import os
 import sys
 from functools import partial
 from typing import cast
+from glob import glob
 
 import h5py
 import numpy as np
@@ -43,23 +44,27 @@ comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
-
+# Adding splits support here in a jank way until I rerun make_source_map with splits in the jobdb
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags.get('split', '')}": job
         for job in jdb.get_jobs(jclass="fit_map")
     }
     return jobdict
 
 
-def get_jobit(jdb):
+def get_jobit(jdb, det_split_names):
     maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
     maplist = np.array_split(maplist, nproc)[myrank]
-    return maplist
+    to_ret = []
+    for info in maplist:
+        to_ret += [(info, ds) for ds in det_split_names]
+    return to_ret
 
 
 def get_jobstr(mjob, ctx, start_time, stop_time):
-    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}"
+    mjob, split = mjob
+    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
     obs = ctx.obsdb.get(mjob.tags["obs_id"])
     if args.obs_ids is None and (
         obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
@@ -71,6 +76,7 @@ def get_jobstr(mjob, ctx, start_time, stop_time):
 
 
 def get_tags(mjob):
+    mjob, split = mjob
     tags = {
         "obs_id": mjob.tags["obs_id"],
         "wafer_slot": mjob.tags["wafer_slot"],
@@ -82,6 +88,7 @@ def get_tags(mjob):
         "resid": "",
         "resid_weights": "",
         "config": "",
+        "split": split,
     }
     return tags
 
@@ -116,6 +123,14 @@ outfile = None
 if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, f"beam_pars{cfg.fit_append}.h5"), "a")
 
+# Get det splits
+det_split_names = [""]
+if cfg.det_split_dir != "":
+    det_split_names += [
+        os.path.splitext(os.path.basename(fname))[0]
+        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
+    ]
+
 # Get the jobs, make them if we need to
 ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
@@ -125,7 +140,7 @@ jdb, all_jobs = setup_jobs(
     data_dir,
     "fit_map",
     get_jobdict,
-    get_jobit,
+    partial(get_jobit, det_split_names=det_split_names),
     partial(get_jobstr, ctx=ctx, start_time=cfg.start_time, stop_time=cfg.stop_time),
     get_tags,
     cfg.source_list,
@@ -197,7 +212,8 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
-    logger.extra["extra"] = f" [{obs_id} {ufm} {band} ({i+1}/{len(joblist) - 1})]"
+    split = job.tags["split"]
+    logger.extra["extra"] = f" [{obs_id} {ufm} {band} {split} ({i+1}/{len(joblist) - 1})]"
     logger.log(25, "Fitting")
 
     # Get map job
@@ -216,11 +232,17 @@ for i, j in enumerate(joblist):
     set_tag(job, "config", cfg_str)
     set_tag(job, "comps", comps)
 
+    # Figure out paths, this won't need to happen once make_source_map is fixed
+    map_path = os.path.join(data_dir, map_job.tags["solved"])
+    ivar_path = os.path.join(data_dir, map_job.tags["weights"])
+    if split != "":
+        map_path = map_path.replace("solved.fits", f"{split}_map.fits")
+        ivar_path = map_path.replace("map.fits", "weights.fits")
     # Load the maps
     try:
-        solved = enmap.read_map(os.path.join(data_dir, map_job.tags["solved"]))[0]
+        solved = enmap.read_map(map_path)[0]
         solved = cast(enmap.ndmap, solved)
-        weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
+        weights = enmap.read_map(ivar_path)[0][0]
         weights = cast(enmap.ndmap, weights)
     except FileNotFoundError:
         msg = "Missing map files"
