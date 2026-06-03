@@ -154,6 +154,7 @@ for split in cfg.split_by:
                     np.argmin(posmap[0] ** 2 + posmap[1] ** 2, axis=None), posmap.shape
                 )
                 rprof = radial_profile(imap, cent[::-1])
+                rerr = radial_profile(ivar, cent[::-1], False)
                 r = np.linspace(0, len(rprof), len(rprof)) * pixsize
                 rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
                 data_fwhm = (
@@ -202,7 +203,7 @@ for split in cfg.split_by:
                 interp = PchipInterpolator(mr, mprof)
                 mr_highres = np.arange(0, cfg.extent_highres, cfg.pixsize_highres)
                 mprofile = np.column_stack((mr_highres, interp(mr_highres)))
-                rprofile = np.column_stack((r, rprof - aman.bessel.off.value))
+                rprofile = np.column_stack((r, (rprof - aman.bessel.off.value)/(rprof[0] - aman.bessel.off.value), rerr))
                 prof_dir = os.path.join(data_dir, "stack_profiles", split, spl_rel)
                 os.makedirs(prof_dir, exist_ok=True)
                 np.savetxt(
