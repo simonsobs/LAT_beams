@@ -215,13 +215,14 @@ for split in cfg.split_by:
                     )
 
                     # If the new center seems very far from the origin then lets skip
-                    cent_est = bu.estimate_cent(imap[0], sigma=10, buf=1)
-                    dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
-                    if dist > cfg.miscenter_thresh:
-                        logger.debug(
-                            "%s %s (%s) seems miscentered! Skipping!", jobstr, split, mjob.tags['source']
-                        )
-                        continue
+                    if map_type == "":
+                        cent_est = bu.estimate_cent(imap[0], sigma=10, buf=1)
+                        dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
+                        if dist > cfg.miscenter_thresh:
+                            logger.debug(
+                                "%s %s (%s) seems miscentered! Skipping!", jobstr, split, mjob.tags['source']
+                            )
+                            break
 
                     # Add
                     np.nan_to_num(imap, copy=False, nan=0, posinf=0, neginf=0)
@@ -238,7 +239,7 @@ for split in cfg.split_by:
                         mcoadd[split][map_type], copy=False, nan=0, posinf=0, neginf=0
                     )
                     # Save and plot
-                    for omap, name in [(mcoadd, "stack"), (wcoadd, "stack_ivar")]:
+                    for omap, name in [(mcoadd[split][map_type], "stack"), (wcoadd[split][map_type], "stack_ivar")]:
                         path = os.path.join(
                             data_dir_spl,
                             f"{spl}_{epoch[0]}_{epoch[1]}{'_'*bool(split)}{split}{'_'*bool(map_type)}{map_type}_{name}.fits",
