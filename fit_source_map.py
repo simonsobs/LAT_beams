@@ -525,6 +525,7 @@ for i, j in enumerate(joblist):
     job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
 comm.barrier()
+logger.extra["extra"] = ""
 
 if args.profile and profiler is not None:
     profiler.stop()
