@@ -6,13 +6,11 @@ TODO: Make everything radians
 
 import datetime as dt
 import os
-from logging import Logger
 from typing import Optional, cast
 
 import astropy.units as u
 import h5py
 import numpy as np
-from numpy._core.numeric import ndarray
 import sqlalchemy as sqy
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from jaxtyping import Float, Shaped
@@ -153,7 +151,7 @@ def estimate_solid_angle(
 
 
 def radial_profile(
-    data: Float[np.ndarray, "nx ny"], center: tuple[int, int]
+    data: Float[np.ndarray, "nx ny"], center: tuple[int, int], avg = True,
 ) -> Float[np.ndarray, "nr"]:
     """
     Compute the radial profile of a beam.
@@ -176,6 +174,8 @@ def radial_profile(
     r = r.astype(int)
 
     tbin = np.bincount(r.ravel()[msk], data.ravel()[msk])
+    if not avg:
+        return tbin
     nr = np.bincount(r.ravel()[msk])
     radialprofile = tbin / nr
     return radialprofile
@@ -380,7 +380,7 @@ def process_model(
 
 
 def load_beam_fits_from_jobs(
-    fpath: str, joblist: list[jobdb.Job]
+    fpath: str, joblist: list[jobdb.Job] #, jdb
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
@@ -439,6 +439,17 @@ def load_beam_fits_from_jobs(
             for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
         ]
     )
+    # amans = []
+    # for job, o, s, b, m in zip(joblist, obs_ids, stream_ids, bands, splits):
+    #     try:
+    #         aman = AxisManager.load(f[os.path.join(o, s, b, m)])
+    #         amans += [aman]
+    #     except:
+    #         with jdb.session_scope() as session:
+    #             job.jstate = "open"
+    #             session.merge(job)
+    #             session.commit()
+    #         print(os.path.join(o, s, b, m))
     # check that all fits have the same pars
     par_list = np.sort(list(amans[0]._fields.keys()))
     for aman in amans:
@@ -458,7 +469,7 @@ def load_beam_fits_from_jobs(
         ("aman", "O"),
     ]
     all_fits = np.fromiter(
-        zip(obs_ids, wafer_slots, stream_ids, bands, sources, times, tdelt, amans),
+        zip(obs_ids, wafer_slots, stream_ids, bands, splits, sources, times, tdelt, amans),
         dtype,
         count=len(amans),
     )
