@@ -2,15 +2,20 @@ import logging
 from contextlib import contextmanager
 from typing import Optional
 
-from mpi4py import MPI
 from sotodlib.mapmaking import ColoredFormatter, init
 
-comm = MPI.COMM_WORLD
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    Comm = MPI.Comm
+except:
+    from pixell.mpi import FakeCommunicator as Comm
+    comm = None
 LoggerLike = logging.Logger | logging.LoggerAdapter[logging.Logger]
 
 
 def init_log(
-    level: int = logging.DEBUG, comm: Optional[MPI.Comm] = comm
+    level: int = logging.DEBUG, comm: Optional[Comm] = comm
 ) -> logging.LoggerAdapter:
     """
     Initialize the sotodlib mapmaking logger with the following extra log levels:
