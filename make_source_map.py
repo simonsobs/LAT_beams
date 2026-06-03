@@ -426,6 +426,8 @@ for i, j in enumerate(joblist):
     set_tag(job, "source", src_to_map)
     if src_to_map == "taua":
         src_to_map = ("tauA", 83.6272579, 22.02159891)
+    elif src_to_map == "3c279":
+        src_to_map = "J194.0409868m5.79174024"
 
     # Load and process the TOD
     aman = load_aman(
