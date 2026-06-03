@@ -40,3 +40,14 @@ bessel_wing_n_sigma: 3
 extent: 720
 det_split_dir: "det_lists"
 gauss_multipole: False
+metasplits:
+  nosaturn:
+    - "source"
+    - ["mars", "uranus", "neptune"]
+split_by:
+  - "band"
+  - "tube_slot+band"
+  - "source+band"
+  - "source+tube_slot+band"
+  - "nosaturn+band"
+  - "nosaturn+tube_slot+band"
