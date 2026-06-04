@@ -106,7 +106,7 @@ for split in cfg.split_by:
     logger.info("Splitting by %s", split)
     split_vec = bu.get_split_vec(all_fits, split, ctx, metasplits=cfg.metasplits)
     for spl in np.unique(split_vec):
-        if "NOMATCH!" in spl:
+        if "NOMATCH" in spl:
             continue
         data_dir_spl = os.path.join(data_dir, "stacks", split, spl)
         plot_dir_spl = os.path.join(plot_dir, split, spl)
@@ -149,7 +149,7 @@ for split in cfg.split_by:
             }
             for fit, fjob in tqdm(zip(sfits[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)):
                 jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['band']}"
-                split = fjob.tags["split"]
+                msplit = fjob.tags["split"]
                 if jobstr not in mjobdict:
                     logger.debug("Map job not found for %s", jobstr)
                     continue
@@ -161,9 +161,9 @@ for split in cfg.split_by:
                     if map_type == "":
                         map_path = os.path.join(data_dir, mjob.tags["solved"])
                         ivar_path = os.path.join(data_dir, mjob.tags["weights"])
-                        if split != "":
+                        if msplit != "":
                             map_path = map_path.replace(
-                                "solved.fits", f"{split}_map.fits"
+                                "solved.fits", f"{msplit}_map.fits"
                             )
                             ivar_path = map_path.replace("map.fits", "weights.fits")
                     elif map_type == "resid":
@@ -180,7 +180,7 @@ for split in cfg.split_by:
                             ivar = ivar[np.diag_indices(len(ivar))]
                         ivar = ivar.reshape(imap.shape)
                     except FileNotFoundError:
-                        logger.debug("Maps missing for job: %s-%s", jobstr, split)
+                        logger.debug("Maps missing for job: %s-%s", jobstr, msplit)
                         continue
                     # Make everything look like TQU
                     imap = view_TQU(imap)
@@ -195,7 +195,7 @@ for split in cfg.split_by:
                     )
                     imap = (
                         reproject.thumbnails(
-                            imap,
+                            imap - fit["aman"].gauss.off.value*(map_type == ""),
                             r=ext_rad,
                             coords=cent,
                             oshape=(pix_extent, pix_extent),
@@ -220,29 +220,29 @@ for split in cfg.split_by:
                         dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
                         if dist > cfg.miscenter_thresh:
                             logger.debug(
-                                "%s %s (%s) seems miscentered! Skipping!", jobstr, split, mjob.tags['source']
+                                "%s %s (%s) seems miscentered! Skipping!", jobstr, msplit, mjob.tags['source']
                             )
                             break
 
                     # Add
                     np.nan_to_num(imap, copy=False, nan=0, posinf=0, neginf=0)
                     np.nan_to_num(ivar, copy=False, nan=0, posinf=0, neginf=0)
-                    mcoadd[split][map_type].insert(imap * ivar, op=op)
-                    wcoadd[split][map_type].insert(ivar, op=op)
+                    mcoadd[msplit][map_type].insert(imap * ivar, op=op)
+                    wcoadd[msplit][map_type].insert(ivar, op=op)
 
             # Divide weights
-            for split in mcoadd.keys():
+            for msplit in mcoadd.keys():
                 for map_type in map_types:
                     with np.errstate(divide="ignore", invalid="ignore"):
-                        mcoadd[split][map_type] /= wcoadd[split][map_type]  # type: ignore
+                        mcoadd[msplit][map_type] /= wcoadd[msplit][map_type]  # type: ignore
                     np.nan_to_num(
-                        mcoadd[split][map_type], copy=False, nan=0, posinf=0, neginf=0
+                        mcoadd[msplit][map_type], copy=False, nan=0, posinf=0, neginf=0
                     )
                     # Save and plot
-                    for omap, name in [(mcoadd[split][map_type], "stack"), (wcoadd[split][map_type], "stack_ivar")]:
+                    for omap, name in [(mcoadd[msplit][map_type], "stack"), (wcoadd[msplit][map_type], "stack_ivar")]:
                         path = os.path.join(
                             data_dir_spl,
-                            f"{spl}_{epoch[0]}_{epoch[1]}{'_'*bool(split)}{split}{'_'*bool(map_type)}{map_type}_{name}.fits",
+                            f"{spl}_{epoch[0]}_{epoch[1]}{'_'*bool(msplit)}{msplit}{'_'*bool(map_type)}{map_type}_{name}.fits",
                         )
                         if args.plot_only:
                             if not os.path.isfile(path):
@@ -273,7 +273,7 @@ for split in cfg.split_by:
                                 cfg.extent,
                                 (0, 0),
                                 plot_dir_epc,
-                                f"{spl} {epoch[0]} {epoch[1]}{' '*bool(split)}{split}{' '*bool(map_type)}{map_type}",
+                                f"{spl} {epoch[0]} {epoch[1]}{' '*bool(msplit)}{msplit}{' '*bool(map_type)}{map_type}",
                                 log_thresh=cfg.log_thresh,
                                 append=name + append,
                                 qrur=True,
