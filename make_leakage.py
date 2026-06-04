@@ -3,7 +3,6 @@ import os
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
 from pixell import curvedsky, enmap
