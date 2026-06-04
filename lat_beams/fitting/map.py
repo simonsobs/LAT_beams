@@ -468,8 +468,10 @@ def fit_bessel_map(
     def _objective(x):
         woff, n_sigma = x
         thresh = guess.amp.value * np.exp(-0.5 * (n_sigma**2))
-        wing_model = beam_model[wrmsk] - woff
+        wing_model = beam_model[wrmsk]
         wmsk = wing_model < thresh
+        wing_model = wing_model - woff
+        wmsk += wing_model < thresh
         for tb in tbu:
             tmsk = wtbins == tb
             twmsk = tmsk * wmsk
@@ -488,7 +490,7 @@ def fit_bessel_map(
             r0_wing[tb - 1] = r0
             amp_wing[tb - 1] = amp
             rmsk = tmsk * (wr > r0)  # + (wing_model < amp))
-            wing_model[twmsk + rmsk] = amp * (r0 / wr[twmsk + rmsk]) ** 3
+            wing_model[rmsk] = amp * (r0 / wr[rmsk]) ** 3
         wing_model += woff
         return np.sum(wvar * (wing_model - wmap) ** 2)
 
@@ -501,7 +503,6 @@ def fit_bessel_map(
     )  # , "maxiter":20000, "maxfev":20000})
     _objective(res.x)
     woff, n_sigma = res.x
-    thresh = guess.amp.value * np.exp(-0.5 * (n_sigma**2))
 
     # Apply a small amount of smoothing to the parametric curve that defines the wing
     spl, _ = make_splprep(
@@ -511,23 +512,26 @@ def fit_bessel_map(
     )
     r0_wing, amp_wing = spl(thetas)
 
+    # Sometimes the smoothing can drive points negetive, lets correct while we make the model
+    beam_model -= woff
+    for tb in np.unique(tbins):
+        tmsk = tbins == tb
+        amp = amp_wing[tb - 1]
+        r0 = r0_wing[tb - 1]
+        wtmsk = (beam_model[tmsk] <= 0) * (r[tmsk] <= r0)
+        if np.sum(wtmsk) > 0:
+            r0 = r0_wing[tb - 1] = np.min(r[tmsk][wtmsk])
+        rmsk = tmsk * (r > r0)
+        beam_model[rmsk] = amp * (r0 / r[rmsk]) ** 3
+
+    beam_model[beam_model < 0] = -1
+    beam_model += woff
+
     aman.wrap("r0_wing", r0_wing * u.radian, [(0, tax)])
     aman.wrap("amp_wing", amp_wing * map_unit, [(0, tax)])
     aman.wrap("off", woff * map_unit)
     aman.wrap("thresh", woff * map_unit)
     aman.bessel_off -= aman.off
 
-    beam_model -= woff
-    wmsk = beam_model < thresh
-
-    for tb in np.unique(tbins):
-        tmsk = tbins == tb
-        twmsk = tmsk * wmsk
-        r0 = r0_wing[tb - 1]
-        amp = amp_wing[tb - 1]
-        rmsk = tmsk * (r > r0)  # + (beam_model < amp))
-        beam_model[twmsk + rmsk] = amp * (r0 / r[twmsk + rmsk]) ** 3
-
-    beam_model += woff
 
     return aman, beam_model
