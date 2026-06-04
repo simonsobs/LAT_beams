@@ -45,9 +45,9 @@ metasplits:
     - "source"
     - ["mars", "uranus", "neptune"]
 split_by:
-  - "band"
-  - "tube_slot+band"
-  - "source+band"
+  # - "band"
+  # - "tube_slot+band"
+  # - "source+band"
   - "source+tube_slot+band"
   - "nosaturn+band"
   - "nosaturn+tube_slot+band"

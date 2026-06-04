@@ -17,7 +17,7 @@ start_time: 1739923200 # First light
 # start_time: 1748476800 # Autoschedular
 # start_time: 1756699200
 # start_time: 1767243600 
-stop_time: 20000000000
+stop_time: 1780340932 # 20000000000
 
 ds: 1
 
