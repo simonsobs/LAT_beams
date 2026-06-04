@@ -100,7 +100,6 @@ for split in cfg.split_by:
     os.makedirs(prof_plot_dir, exist_ok=True)
     for spl_dir in sorted([f.path for f in os.scandir(data_dir_spl) if f.is_dir()]):
         spl_rel = os.path.relpath(spl_dir, data_dir_spl)
-        if "mars" in spl_rel: continue
         plot_dir_spl = os.path.join(plot_dir, "stacks", split, spl_rel)
         os.makedirs(plot_dir_spl, exist_ok=True)
         band = spl_rel.split("+")[band_idx]
