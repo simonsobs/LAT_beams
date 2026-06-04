@@ -212,6 +212,8 @@ def get_fwhm_radial_bins(
         r, y = (r_interp, y_interp)
     d = y - half_point
     inds = np.where(d > 0)[0]
+    if len(inds) < .1*len(r):
+        return np.nan
     fwhm = 2 * (r[inds[-1]])
     return cast(float, fwhm)
 
@@ -550,7 +552,7 @@ def get_split_vec(
         the tuple should be the split we are matching against and the
         second should be a list of values to match. In the output split_vec
         anything that matches will have `name` in the split and anything
-        that does not match will have `NOMATCH!`.
+        that does not match will have `NOMATCH`.
 
     Returns
     -------
@@ -567,9 +569,10 @@ def get_split_vec(
         if spl in metasplits:
             # Structure of metasplits name -> (spl, (vals))
             split_vec = _get_vec(metasplits[spl][0], fits, ctx, round_to)
+            split_vec = split_vec.astype(f'U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}')
             msk = np.isin(split_vec, metasplits[spl][1])
             split_vec[msk] = spl
-            split_vec[~msk] = "NOMATCH!"
+            split_vec[~msk] = "NOMATCH"
         else:
             split_vec = _get_vec(spl, fits, ctx, round_to)
         split_vecs += [split_vec.astype(str)]
