@@ -414,7 +414,7 @@ def auto_relplot(
         The plot output by `relplot`.
     """
     ignore = ignore.copy()
-    cats = ["hue", "row", "col", "style"]
+    cats = ["hue", "col", "row", "style"]
     in_kwargs = [
         kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)
     ]
