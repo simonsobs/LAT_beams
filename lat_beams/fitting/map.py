@@ -16,8 +16,10 @@ from pixell.enmap import ndmap
 from scipy.interpolate import make_splprep
 from scipy.linalg import lstsq
 from scipy.optimize import minimize
+from scipy.stats import binned_statistic
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
+from sotodlib import tod_ops
 
 from .models import (
     bessel_beam,
@@ -418,7 +420,7 @@ def fit_bessel_map(
     # Compute initial model
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
     beam_model = np.zeros_like(xi)
-    core_msk = r < 2.0 * mask_size  # * (imap > g + guess.off.value)
+    core_msk = r < 2.0 * mask_size
     r_core = r[core_msk]
     X = []
     idx = []
@@ -458,7 +460,23 @@ def fit_bessel_map(
     r0_wing = np.zeros_like(thetas)
     amp_wing = np.zeros_like(thetas)
 
-    wrmsk = r < 0.8 * mask_size
+    # Get data profile
+    rthresh = mask_size
+    if imap.wcs is None:
+        raise ValueError("WCS is None!")
+    rbc = int(np.ptp(r)/np.deg2rad(imap.wcs.wcs.cdelt[1]))//2
+    csnr = 1
+    rthresh = .9*mask_size
+    if rbc > 10:
+        rprof, rbins, _ = binned_statistic(np.ravel(r), np.ravel(imap + guess.off.value), bins=rbc)
+        rstd, rbins, _ = binned_statistic(np.ravel(r), np.ravel(imap + guess.off.value), statistic="std", bins=rbc)
+        rbins = (rbins[1:] + rbins[:-1])/2
+        rsnr = rprof/rstd
+        csnr = rsnr.max()
+        rlow = rbins[(rsnr < 0) * np.isfinite(rsnr) * (rbins > (guess.fwhm_xi + guess.fwhm_eta).value)]
+        if len(rlow) > 0:
+            rthresh = min(np.min(rlow), rthresh)
+    wrmsk = r < rthresh
     wmap = imap[r < wrmsk]
     wvar = ivar[r < wrmsk]
     wtbins = tbins[r < wrmsk]
@@ -467,7 +485,7 @@ def fit_bessel_map(
 
     def _objective(x):
         woff, n_sigma = x
-        thresh = guess.amp.value * np.exp(-0.5 * (n_sigma**2))
+        thresh = guess.amp.value * 10**n_sigma # np.exp(-0.5 * (n_sigma**2))
         wing_model = beam_model[wrmsk]
         wmsk = wing_model < thresh
         wing_model = wing_model - woff
@@ -489,18 +507,26 @@ def fit_bessel_map(
                 amp = thresh
             r0_wing[tb - 1] = r0
             amp_wing[tb - 1] = amp
-            rmsk = tmsk * (wr > r0)  # + (wing_model < amp))
+            rmsk = tmsk * (wr > r0)
             wing_model[rmsk] = amp * (r0 / wr[rmsk]) ** 3
         wing_model += woff
         return np.sum(wvar * (wing_model - wmap) ** 2)
 
-    res = minimize(
-        _objective,
-        x0=(0, n_sigma),
-        bounds=[(-np.inf, np.inf), (n_sigma - 2, n_sigma + 2)],
-        method="Powell",
-        options={"ftol": 1e-8, "xtol": 1e-8},
-    )  # , "maxiter":20000, "maxfev":20000})
+    t0 = np.log10(np.exp(-.5 * (n_sigma**2)))
+    if csnr > 15:
+        res = minimize(
+            _objective,
+            x0=(0, t0),
+            bounds=[(-np.inf, np.inf),(5*t0, 0)], #(n_sigma-2, n_sigma + 2)],
+            method="Powell",
+            options={"ftol": 1e-8, "xtol": 1e-8},
+        )
+    else:
+        res = minimize(
+            _objective,
+            x0=(0, t0),
+            bounds=[(-np.inf, np.inf),(5*t0, 0)], #(n_sigma-2, n_sigma + 2)],
+        )
     _objective(res.x)
     woff, n_sigma = res.x
 
@@ -524,7 +550,6 @@ def fit_bessel_map(
         rmsk = tmsk * (r > r0)
         beam_model[rmsk] = amp * (r0 / r[rmsk]) ** 3
 
-    beam_model[beam_model < 0] = -1
     beam_model += woff
 
     aman.wrap("r0_wing", r0_wing * u.radian, [(0, tax)])

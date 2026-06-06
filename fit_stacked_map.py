@@ -73,6 +73,14 @@ if cfg.det_split_dir != "":
         for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
     ]
 
+# Profiler setup
+profiler = None
+if args.profile:
+    from pyinstrument import Profiler
+    profiler = Profiler()
+    print("Running in profiler mode! Only one job will be run!")
+    profiler.start()
+
 # Loop through splits
 # TODO: Have make_stacked_map save paths in jobdb
 for split in cfg.split_by:
@@ -100,15 +108,21 @@ for split in cfg.split_by:
     os.makedirs(prof_plot_dir, exist_ok=True)
     for spl_dir in sorted([f.path for f in os.scandir(data_dir_spl) if f.is_dir()]):
         spl_rel = os.path.relpath(spl_dir, data_dir_spl)
+        # if "f090" not in spl_rel: continue
+        # if "f280" not in spl_rel: continue
+        # if "uranus" not in spl_rel: continue
+        # if "c1" not in spl_rel: continue
         plot_dir_spl = os.path.join(plot_dir, "stacks", split, spl_rel)
         os.makedirs(plot_dir_spl, exist_ok=True)
         band = spl_rel.split("+")[band_idx]
         fscale_fac = 90.0 / float(band[1:])
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
         for epoch in cfg.epochs:
+            # if epoch[1] != 20000000000: continue 
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
             for det_split in det_split_names:
+                if det_split != "": continue
                 dstr = f"{'_'*bool(det_split)}{det_split}"
                 print(f"\t{spl_rel} {epoch}{dstr.replace('_', ' ')}")
                 map_path = os.path.join(
@@ -212,6 +226,7 @@ for split in cfg.split_by:
                     ),
                     posmap_highres.shape,
                 )
+                # model_highres = model - aman.bessel.off.value
                 mprof = radial_profile(model_highres, cent[::-1])
                 mprof /= mprof[0]
                 mr = np.linspace(0, len(mprof), len(mprof)) * pixsize
@@ -309,6 +324,8 @@ for split in cfg.split_by:
                         units='"',
                         lognorm=1,
                     )
+        if args.profile:
+            break
 
     # Plot profiles and windows
     plt.close()
@@ -325,9 +342,8 @@ for split in cfg.split_by:
     )
     plot.set_axis_labels('r (")', r"Beam Profile")
     plot.set(yscale="log")
-    plt.suptitle(f"Beam Profile by {split}")
-    plt.subplots_adjust(top=0.85)
-    plot.figure.tight_layout()
+    plot.figure.suptitle(f"Beam Profile by {split}", wrap=True)
+    plt.subplots_adjust(top=(1 - .15/len(plot.axes)))
     plt.savefig(
         os.path.join(prof_plot_dir, f"profile_{split}.png"), bbox_inches="tight"
     )
@@ -346,9 +362,12 @@ for split in cfg.split_by:
     )
     plot.set_axis_labels(r"$\ell$", r"Beam Window Function ($B_{\ell}^{T}$)")
     plot.set(ylim=(0, None))
-    plt.suptitle(f"Beam Profile by {split}")
-    plt.subplots_adjust(top=0.85)
-    plot.figure.tight_layout()
+    plot.figure.suptitle(f"Beam Profile by {split}", wrap=True)
+    plt.subplots_adjust(top=(1 - .15/len(plot.axes)))
     plt.savefig(
         os.path.join(prof_plot_dir, f"window_{split}.png"), bbox_inches="tight"
     )
+
+if args.profile and profiler is not None:
+    profiler.stop()
+    profiler.write_html(f"profile.html")
