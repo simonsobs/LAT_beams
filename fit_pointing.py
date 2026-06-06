@@ -222,6 +222,13 @@ def main():
         os.makedirs(plot_dir, exist_ok=True)
         os.makedirs(data_dir, exist_ok=True)
 
+    # Get context
+    with open(cfg.ctx_path) as f:
+        ctx_str = yaml.dump(yaml.safe_load(f))
+    ctx = Context(cfg.ctx_path)
+    if ctx.obsdb is None:
+        raise ValueError("No obsdb in context!")
+
     # Modify preproc with our paths
     preprocess_cfg["archive"]["index"] = os.path.join(
         data_dir, preprocess_cfg["archive"]["index"]
@@ -229,15 +236,9 @@ def main():
     preprocess_cfg["archive"]["policy"]["filename"] = os.path.join(
         data_dir, preprocess_cfg["archive"]["policy"]["filename"]
     )
+    preprocess_cfg["context_file"] = cfg.ctx_path
     os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
     os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
-
-    # Get context
-    with open(cfg.ctx_path) as f:
-        ctx_str = yaml.dump(yaml.safe_load(f))
-    ctx = Context(cfg.ctx_path)
-    if ctx.obsdb is None:
-        raise ValueError("No obsdb in context!")
 
     # Output metadata setup
     h5_path = os.path.join(data_dir, "tod_fits.h5")
