@@ -428,6 +428,7 @@ for i, j in enumerate(joblist):
             band_mask_size,
             cfg.bessel_wing_n_sigma,
             cfg.skip_multipoles,
+            band in cfg.bessel_powell_bands,
         )
         if bessel_beam_params is None or model is None:
             msg = "Fit failed"

@@ -341,6 +341,7 @@ def fit_bessel_map(
     mask_size: float = np.inf,
     n_sigma: float = 5,
     skip_multipoles: list[int] = [],
+    powell: bool = True
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -367,6 +368,9 @@ def fit_bessel_map(
         `guess` by in order to determine the initial wing amplitude.
     skip_multipoles : list[int], default
         Multipoles to exclude from the fit.
+    powell : bool, default: True
+        If True use powells method when fitting wing.
+        If False use L-BFGS-B.
 
     Returns
     -------
@@ -465,14 +469,12 @@ def fit_bessel_map(
     if imap.wcs is None:
         raise ValueError("WCS is None!")
     rbc = int(np.ptp(r)/np.deg2rad(imap.wcs.wcs.cdelt[1]))//2
-    csnr = 1
     rthresh = .9*mask_size
     if rbc > 10:
         rprof, rbins, _ = binned_statistic(np.ravel(r), np.ravel(imap + guess.off.value), bins=rbc)
         rstd, rbins, _ = binned_statistic(np.ravel(r), np.ravel(imap + guess.off.value), statistic="std", bins=rbc)
         rbins = (rbins[1:] + rbins[:-1])/2
         rsnr = rprof/rstd
-        csnr = rsnr.max()
         rlow = rbins[(rsnr < 0) * np.isfinite(rsnr) * (rbins > (guess.fwhm_xi + guess.fwhm_eta).value)]
         if len(rlow) > 0:
             rthresh = min(np.min(rlow), rthresh)
@@ -513,7 +515,7 @@ def fit_bessel_map(
         return np.sum(wvar * (wing_model - wmap) ** 2)
 
     t0 = np.log10(np.exp(-.5 * (n_sigma**2)))
-    if csnr > 15:
+    if powell:
         res = minimize(
             _objective,
             x0=(0, t0),

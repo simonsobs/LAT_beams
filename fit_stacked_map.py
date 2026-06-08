@@ -207,6 +207,7 @@ for split in cfg.split_by:
                     const.c / (float(band[1:]) * u.GHz),
                     band_mask_size,
                     cfg.bessel_wing_n_sigma,
+                    band in cfg.bessel_powell_bands,
                 )
                 if bessel_beam_params is None or model is None:
                     print("\t\tBessel fit failed")
