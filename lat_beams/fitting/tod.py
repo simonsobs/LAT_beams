@@ -262,8 +262,9 @@ def fit_tod_pointing(
     aman.wrap("eta", eta, [(0, "samps")])
 
     az_d = detrend(aman.boresight.az)
-    d_az = np.sign(np.diff(az_d, prepend=az_d[0]))
-    scan_samps = (np.ptp(az_d) / (np.median(np.abs(d_az)))) / (
+    az_v = np.diff(az_d, prepend=az_d[0])
+    d_az = np.sign(az_v)
+    scan_samps = (np.ptp(az_d) / (np.median(np.abs(az_v)))) / (
         np.mean(np.diff(aman.timestamps))
     )
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
@@ -361,14 +362,14 @@ def fit_tod_pointing(
         fit_am.restrict("samps", sl)
         rfft = RFFTObj.for_shape(1, cast(int, fit_am.samps.count), "BOTH")
 
-        ptp = np.ptp(np.array(fit_am.signal))
-        amp = ptp * 3
+        ptp = np.ptp(np.array(fit_am.resid_filt))
+        amp = ptp # * 3
         init_pars = [xi0, eta0, amp, fwhm, 0]
         bounds = [
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
-            (-ptp, np.inf),
-            (fwhm * 0.5, 1.5 * fwhm),
+            (0, np.inf),
+            (.1 * fwhm, 10 * fwhm),
             (-ptp, ptp),
         ]
 
