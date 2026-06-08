@@ -276,7 +276,7 @@ def plot_tod(
 
         lc = LineCollection(segments, alpha=0.3)
         ax.add_collection(lc)
-        ax.autoscale(enable=True, axis="y")
+        ax.autoscale(enable=True, axis="both")
         ax.set_xlabel("Samples")
         ax.set_ylabel(ylabel)
         ax.set_title(file_label.replace("_", " "))
@@ -371,7 +371,7 @@ def plot_focal_plane(
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
         plt.title(f"{obs_id} {ufm}")
-        plt.savefig(os.path.join(fit_plot_dir, filename))
+        plt.savefig(os.path.join(fit_plot_dir, filename), bbox_indes="tight")
     plt.close()
 
 
