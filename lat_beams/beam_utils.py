@@ -182,7 +182,7 @@ def radial_profile(
 
 
 def get_fwhm_radial_bins(
-    r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False
+    r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False, frac=.5
 ) -> float:
     """
     Estimate FWHM from a radial profile.
@@ -202,7 +202,7 @@ def get_fwhm_radial_bins(
     fwhm : float
         The estimated FWHM in the same units as `r`.
     """
-    half_point = np.max(y) * 0.5
+    half_point = np.max(y) * frac
 
     if interpolate:
         r_diff = r[1] - r[0]

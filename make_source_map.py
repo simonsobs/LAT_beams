@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from functools import cache, partial
+from functools import cache, partial, reduce
 from glob import glob
 from typing import cast
 
@@ -64,11 +64,15 @@ def get_jobit(
         if obs_ids is not None:
             obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
         else:
-            src_str = "==1 or ".join(source_list) + "==1"
-            obslist = ctx.obsdb.query(
-                f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time} and ({src_str})",
-                tags=source_list,
-            )
+            # src_str = "==1 or ".join(source_list) + "==1"
+            obslists = [
+                ctx.obsdb.query(
+                    f"type=='obs' and subtype=='cal' and start_time > {start_time} and stop_time < {stop_time}",
+                    tags=source_list[:i] + [f"{source}=1"] + source_list[(i + 1) :],
+                )
+                for i, source in enumerate(source_list)
+            ]
+            obslist = reduce(lambda q, p: p + q, obslists)
         if pointing_type != "pointing_model":
             dbs = [
                 md["db"]
@@ -225,8 +229,15 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}",
 )
+
+# Get context
+with open(cfg.ctx_path) as f:
+    ctx_str = yaml.dump(yaml.safe_load(f))
+ctx = Context(cfg.ctx_path)
+if ctx.obsdb is None:
+    raise ValueError("No obsdb in context!")
 
 # Modify preproc with our paths
 preprocess_cfg["archive"]["index"] = os.path.join(
@@ -235,15 +246,9 @@ preprocess_cfg["archive"]["index"] = os.path.join(
 preprocess_cfg["archive"]["policy"]["filename"] = os.path.join(
     data_dir, preprocess_cfg["archive"]["policy"]["filename"]
 )
+preprocess_cfg["context_file"] = cfg.ctx_path
 os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
 os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
-
-# Get context
-with open(cfg.ctx_path) as f:
-    ctx_str = yaml.dump(yaml.safe_load(f))
-ctx = Context(cfg.ctx_path)
-if ctx.obsdb is None:
-    raise ValueError("No obsdb in context!")
 
 # Setup jobs
 jdb, all_jobs = setup_jobs(
