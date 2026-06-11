@@ -97,8 +97,8 @@ def get_jobit(
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
         for obs in obslist:
-            if obs["tube_slot"] in ["i2", "o1", "o2", "o3", "o4", "o5", "o6"]:
-                continue
+            # if obs["tube_slot"] in ["o6"]:
+            #     continue
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
