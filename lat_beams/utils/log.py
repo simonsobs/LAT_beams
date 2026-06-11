@@ -6,10 +6,12 @@ from sotodlib.mapmaking import ColoredFormatter, init
 
 try:
     from mpi4py import MPI
+
     comm = MPI.COMM_WORLD
     Comm = MPI.Comm
 except:
     from pixell.mpi import FakeCommunicator as Comm
+
     comm = None
 LoggerLike = logging.Logger | logging.LoggerAdapter[logging.Logger]
 

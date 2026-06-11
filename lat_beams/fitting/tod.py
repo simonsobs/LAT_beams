@@ -264,7 +264,7 @@ def fit_tod_pointing(
     az_d = detrend(aman.boresight.az)
     az_v = np.diff(az_d, prepend=az_d[0])
     d_az = np.sign(az_v)
-    scan_samps = (np.ptp(az_d) / (np.median(np.abs(az_v))))
+    scan_samps = np.ptp(az_d) / (np.median(np.abs(az_v)))
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
     turnarounds = ~(
         Ranges.from_mask(turnarounds).buffer(int(0.05 * scan_samps))
@@ -278,7 +278,7 @@ def fit_tod_pointing(
         filt *= low_pass_sine2(cutoff=bandpass_range[1])
 
     def fit_func(x, fit_am, filt, rfft, scales):
-        xi0, eta0, amp, fwhm, offset = x*scales
+        xi0, eta0, amp, fwhm, offset = x * scales
         model = gaussian2d(
             (fit_am.eta, fit_am.xi), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
@@ -367,11 +367,11 @@ def fit_tod_pointing(
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
             (0, np.inf),
-            (.1 * fwhm, 10 * fwhm),
+            (0.1 * fwhm, 10 * fwhm),
             (-ptp, ptp),
         ]
-        init_pars = np.array(init_pars)/scales
-        bounds = np.array(bounds)/scales[..., None]
+        init_pars = np.array(init_pars) / scales
+        bounds = np.array(bounds) / scales[..., None]
 
         # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
         res = minimize(
@@ -388,7 +388,7 @@ def fit_tod_pointing(
                 bounds=bounds,
                 args=(fit_am, filt, rfft, scales),
                 method="Nelder-Mead",
-                options={'maxiter':50},
+                options={"maxiter": 50},
             )
             if res_nm.fun <= res.fun:
                 res_nm.success = res.success
@@ -418,9 +418,16 @@ def fit_tod_pointing(
 
         # Lets calculate hits
         model = gaussian2d(
-            (eta, xi), focal_plane.amp[i], focal_plane.xi[i], focal_plane.eta[i], focal_plane.fwhm[i], focal_plane.fwhm[i], 0, 0
+            (eta, xi),
+            focal_plane.amp[i],
+            focal_plane.xi[i],
+            focal_plane.eta[i],
+            focal_plane.fwhm[i],
+            focal_plane.fwhm[i],
+            0,
+            0,
         )
-        hits = Ranges.from_mask(model/std >= min_snr) * turnarounds
+        hits = Ranges.from_mask(model / std >= min_snr) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings

@@ -151,7 +151,9 @@ def estimate_solid_angle(
 
 
 def radial_profile(
-    data: Float[np.ndarray, "nx ny"], center: tuple[int, int], avg = True,
+    data: Float[np.ndarray, "nx ny"],
+    center: tuple[int, int],
+    avg=True,
 ) -> Float[np.ndarray, "nr"]:
     """
     Compute the radial profile of a beam.
@@ -182,7 +184,10 @@ def radial_profile(
 
 
 def get_fwhm_radial_bins(
-        r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False, frac: float =.5
+    r: Float[np.ndarray, "nr"],
+    y: Float[np.ndarray, "nr"],
+    interpolate: bool = False,
+    frac: float = 0.5,
 ) -> float:
     """
     Estimate FWHM from a radial profile.
@@ -216,7 +221,7 @@ def get_fwhm_radial_bins(
         r, y = (r_interp, y_interp)
     d = y - half_point
     inds = np.where(d > 0)[0]
-    if len(inds) < .1*len(r):
+    if len(inds) < 0.1 * len(r):
         return np.nan
     fwhm = 2 * (r[inds[-1]])
     return cast(float, fwhm)
@@ -386,7 +391,7 @@ def process_model(
 
 
 def load_beam_fits_from_jobs(
-    fpath: str, joblist: list[jobdb.Job] #, jdb
+    fpath: str, joblist: list[jobdb.Job]  # , jdb
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
@@ -475,7 +480,17 @@ def load_beam_fits_from_jobs(
         ("aman", "O"),
     ]
     all_fits = np.fromiter(
-        zip(obs_ids, wafer_slots, stream_ids, bands, splits, sources, times, tdelt, amans),
+        zip(
+            obs_ids,
+            wafer_slots,
+            stream_ids,
+            bands,
+            splits,
+            sources,
+            times,
+            tdelt,
+            amans,
+        ),
         dtype,
         count=len(amans),
     )
@@ -519,6 +534,7 @@ def get_fit_vec(
         dat = dat.value * u.pW
     return dat
 
+
 def _get_vec(spl, fits, ctx, round_to):
     if spl in fits.dtype.names:
         return fits[spl].astype(str)
@@ -531,8 +547,13 @@ def _get_vec(spl, fits, ctx, round_to):
         split_vec = np.round(split_vec, round_to)
     return split_vec
 
+
 def get_split_vec(
-        fits: Shaped[np.ndarray, "nfits"], split: str, ctx: Context, round_to: int = 2, metasplits: dict[str, tuple[str, list[str]]] = {} 
+    fits: Shaped[np.ndarray, "nfits"],
+    split: str,
+    ctx: Context,
+    round_to: int = 2,
+    metasplits: dict[str, tuple[str, list[str]]] = {},
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Get an array of metadata to split fits by.
@@ -573,7 +594,9 @@ def get_split_vec(
         if spl in metasplits:
             # Structure of metasplits name -> (spl, (vals))
             split_vec = _get_vec(metasplits[spl][0], fits, ctx, round_to)
-            split_vec = split_vec.astype(f'U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}')
+            split_vec = split_vec.astype(
+                f"U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}"
+            )
             msk = np.isin(split_vec, metasplits[spl][1])
             split_vec[msk] = spl
             split_vec[~msk] = "NOMATCH"

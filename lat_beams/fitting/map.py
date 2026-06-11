@@ -17,9 +17,9 @@ from scipy.interpolate import make_splprep
 from scipy.linalg import lstsq
 from scipy.optimize import minimize
 from scipy.stats import binned_statistic
+from sotodlib import tod_ops
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
-from sotodlib import tod_ops
 
 from .models import (
     bessel_beam,
@@ -341,7 +341,7 @@ def fit_bessel_map(
     mask_size: float = np.inf,
     n_sigma: float = 5,
     skip_multipoles: list[int] = [],
-    powell: bool = True
+    powell: bool = True,
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -468,14 +468,22 @@ def fit_bessel_map(
     rthresh = mask_size
     if imap.wcs is None:
         raise ValueError("WCS is None!")
-    rbc = int(np.ptp(r)/np.deg2rad(imap.wcs.wcs.cdelt[1]))//2
-    rthresh = .9*mask_size
+    rbc = int(np.ptp(r) / np.deg2rad(imap.wcs.wcs.cdelt[1])) // 2
+    rthresh = 0.9 * mask_size
     if rbc > 10:
-        rprof, rbins, _ = binned_statistic(np.ravel(r), np.ravel(imap + guess.off.value), bins=rbc)
-        rstd, rbins, _ = binned_statistic(np.ravel(r), np.ravel(imap + guess.off.value), statistic="std", bins=rbc)
-        rbins = (rbins[1:] + rbins[:-1])/2
-        rsnr = rprof/rstd
-        rlow = rbins[(rsnr < 0) * np.isfinite(rsnr) * (rbins > (guess.fwhm_xi + guess.fwhm_eta).value)]
+        rprof, rbins, _ = binned_statistic(
+            np.ravel(r), np.ravel(imap + guess.off.value), bins=rbc
+        )
+        rstd, rbins, _ = binned_statistic(
+            np.ravel(r), np.ravel(imap + guess.off.value), statistic="std", bins=rbc
+        )
+        rbins = (rbins[1:] + rbins[:-1]) / 2
+        rsnr = rprof / rstd
+        rlow = rbins[
+            (rsnr < 0)
+            * np.isfinite(rsnr)
+            * (rbins > (guess.fwhm_xi + guess.fwhm_eta).value)
+        ]
         if len(rlow) > 0:
             rthresh = min(np.min(rlow), rthresh)
     wrmsk = r < rthresh
@@ -487,7 +495,7 @@ def fit_bessel_map(
 
     def _objective(x):
         woff, n_sigma = x
-        thresh = guess.amp.value * 10**n_sigma # np.exp(-0.5 * (n_sigma**2))
+        thresh = guess.amp.value * 10**n_sigma  # np.exp(-0.5 * (n_sigma**2))
         wing_model = beam_model[wrmsk]
         wmsk = wing_model < thresh
         wing_model = wing_model - woff
@@ -514,12 +522,12 @@ def fit_bessel_map(
         wing_model += woff
         return np.sum(wvar * (wing_model - wmap) ** 2)
 
-    t0 = np.log10(np.exp(-.5 * (n_sigma**2)))
+    t0 = np.log10(np.exp(-0.5 * (n_sigma**2)))
     if powell:
         res = minimize(
             _objective,
             x0=(0, t0),
-            bounds=[(-np.inf, np.inf),(5*t0, 0)], #(n_sigma-2, n_sigma + 2)],
+            bounds=[(-np.inf, np.inf), (5 * t0, 0)],  # (n_sigma-2, n_sigma + 2)],
             method="Powell",
             options={"ftol": 1e-8, "xtol": 1e-8},
         )
@@ -527,7 +535,7 @@ def fit_bessel_map(
         res = minimize(
             _objective,
             x0=(0, t0),
-            bounds=[(-np.inf, np.inf),(5*t0, 0)], #(n_sigma-2, n_sigma + 2)],
+            bounds=[(-np.inf, np.inf), (5 * t0, 0)],  # (n_sigma-2, n_sigma + 2)],
         )
     _objective(res.x)
     woff, n_sigma = res.x
@@ -559,6 +567,5 @@ def fit_bessel_map(
     aman.wrap("off", woff * map_unit)
     aman.wrap("thresh", woff * map_unit)
     aman.bessel_off -= aman.off
-
 
     return aman, beam_model

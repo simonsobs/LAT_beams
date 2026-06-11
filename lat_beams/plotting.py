@@ -376,7 +376,13 @@ def plot_focal_plane(
 
 
 def auto_relplot(
-        data: dict[str, Sequence], x: str, y: str, ignore: list[str] = [], merge: list[list[str]] = [], auto : bool =True, **kwargs
+    data: dict[str, Sequence],
+    x: str,
+    y: str,
+    ignore: list[str] = [],
+    merge: list[list[str]] = [],
+    auto: bool = True,
+    **kwargs,
 ) -> sns.FacetGrid:
     """
     Make a relplot.
@@ -430,19 +436,24 @@ def auto_relplot(
     ]
     can_add = [cat for cat in cats if (cat not in kwargs or kwargs[cat] is None)]
     for mlist in merge:
-        if len(mlist) == 0: continue
+        if len(mlist) == 0:
+            continue
         for m in mlist:
             if m in ignore or m in in_kwargs:
-                raise ValueError(f"Can't perform merge with {m}, it already has a role speicfied!")
+                raise ValueError(
+                    f"Can't perform merge with {m}, it already has a role speicfied!"
+                )
             ignore += [m]
         n = len(data[mlist[0]])
         name = "+".join(mlist)
         combined = ["+".join(str(data[c][i]) for c in mlist) for i in range(n)]
         data[name] = combined
-                            
+
     if auto:
         fields = [
-            k for k in data if (k not in (x, y) and k not in in_kwargs and k not in ignore)
+            k
+            for k in data
+            if (k not in (x, y) and k not in in_kwargs and k not in ignore)
         ]
 
         fields.sort(key=lambda c: len(set(data[c])))

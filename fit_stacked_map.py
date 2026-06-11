@@ -1,6 +1,6 @@
 import os
-from typing import cast
 from glob import glob
+from typing import cast
 
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -15,7 +15,7 @@ from sotodlib.core import AxisManager
 import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile
 from lat_beams.fitting.map import fit_bessel_map, fit_gauss_map, make_guess
-from lat_beams.plotting import plot_map_complete, auto_relplot
+from lat_beams.plotting import auto_relplot, plot_map_complete
 from lat_beams.utils import get_args_cfg, setup_cfg, setup_paths
 
 
@@ -77,6 +77,7 @@ if cfg.det_split_dir != "":
 profiler = None
 if args.profile:
     from pyinstrument import Profiler
+
     profiler = Profiler()
     print("Running in profiler mode! Only one job will be run!")
     profiler.start()
@@ -118,11 +119,12 @@ for split in cfg.split_by:
         fscale_fac = 90.0 / float(band[1:])
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
         for epoch in cfg.epochs:
-            # if epoch[1] != 20000000000: continue 
+            # if epoch[1] != 20000000000: continue
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
             for det_split in det_split_names:
-                if det_split != "": continue
+                if det_split != "":
+                    continue
                 dstr = f"{'_'*bool(det_split)}{det_split}"
                 print(f"\t{spl_rel} {epoch}{dstr.replace('_', ' ')}")
                 map_path = os.path.join(
@@ -168,7 +170,7 @@ for split in cfg.split_by:
                 if gauss_params is None or model is None:
                     print("\t\tGauss fit failed")
                     continue
-                if abs(gauss_params.amp.value - 1) >= .2:
+                if abs(gauss_params.amp.value - 1) >= 0.2:
                     print("\t\tGauss fit looks bad!")
                     continue
                 aman.wrap("gauss", gauss_params)
@@ -234,7 +236,14 @@ for split in cfg.split_by:
                 interp = PchipInterpolator(mr, mprof)
                 mr_highres = np.arange(0, cfg.extent_highres, cfg.pixsize_highres)
                 mprofile = np.column_stack((mr_highres, interp(mr_highres)))
-                rprofile = np.column_stack((r, (rprof - aman.bessel.off.value)/(rprof[0] - aman.bessel.off.value), rerr))
+                rprofile = np.column_stack(
+                    (
+                        r,
+                        (rprof - aman.bessel.off.value)
+                        / (rprof[0] - aman.bessel.off.value),
+                        rerr,
+                    )
+                )
                 prof_dir = os.path.join(data_dir, "stack_profiles", split, spl_rel)
                 os.makedirs(prof_dir, exist_ok=True)
                 np.savetxt(
@@ -275,19 +284,25 @@ for split in cfg.split_by:
                 )
 
                 # Save for plots
-                mmsk = mr_highres < 1.2*3600 * np.rad2deg(band_mask_size)
+                mmsk = mr_highres < 1.2 * 3600 * np.rad2deg(band_mask_size)
                 dmsk = r < 3600 * np.rad2deg(band_mask_size)
                 to_plot_r["r"] += mr_highres[mmsk].tolist() + r[dmsk].tolist()
-                to_plot_r["rprof"] += mprofile[mmsk, 1].tolist() + rprofile[dmsk, 1].tolist()
-                to_plot_r["epoch"] += [f"{epoch[0]}_{epoch[1]}{dstr}"]*(np.sum(mmsk) + np.sum(dmsk))
-                to_plot_r["dataset"] += ["model"]*np.sum(mmsk) + ["data"]*np.sum(dmsk)
+                to_plot_r["rprof"] += (
+                    mprofile[mmsk, 1].tolist() + rprofile[dmsk, 1].tolist()
+                )
+                to_plot_r["epoch"] += [f"{epoch[0]}_{epoch[1]}{dstr}"] * (
+                    np.sum(mmsk) + np.sum(dmsk)
+                )
+                to_plot_r["dataset"] += ["model"] * np.sum(mmsk) + ["data"] * np.sum(
+                    dmsk
+                )
                 to_plot_l["ell"] += ells.tolist() + ells.tolist()
                 to_plot_l["window"] += mwindow[:, 1].tolist() + window[:, 1].tolist()
-                to_plot_l["epoch"] += [f"{epoch[0]}_{epoch[1]}{dstr}"]*(2*len(ells))
-                to_plot_l["dataset"] += ["model"]*len(ells) + ["data"]*len(ells)
+                to_plot_l["epoch"] += [f"{epoch[0]}_{epoch[1]}{dstr}"] * (2 * len(ells))
+                to_plot_l["dataset"] += ["model"] * len(ells) + ["data"] * len(ells)
                 for sc, si in zip(split.split("+"), spl_rel.split("+")):
                     to_plot_r[sc] += [si] * (np.sum(mmsk) + np.sum(dmsk))
-                    to_plot_l[sc] += [si] * (2*len(ells))
+                    to_plot_l[sc] += [si] * (2 * len(ells))
 
                 # Save and plot maps
                 aman.save(
@@ -338,13 +353,17 @@ for split in cfg.split_by:
         estimator=None,
         style="dataset",
         hue="epoch",
-        merge=([["band", "tube_slot"]] if ("tube_slot" in split and "band" in split) else []),
-        facet_kws={'sharey': True, 'sharex': False},
+        merge=(
+            [["band", "tube_slot"]]
+            if ("tube_slot" in split and "band" in split)
+            else []
+        ),
+        facet_kws={"sharey": True, "sharex": False},
     )
     plot.set_axis_labels('r (")', r"Beam Profile")
     plot.set(yscale="log")
     plot.figure.suptitle(f"Beam Profile by {split}", wrap=True)
-    plt.subplots_adjust(top=(1 - .15/len(plot.axes)))
+    plt.subplots_adjust(top=(1 - 0.15 / len(plot.axes)))
     plt.savefig(
         os.path.join(prof_plot_dir, f"profile_{split}.png"), bbox_inches="tight"
     )
@@ -358,16 +377,18 @@ for split in cfg.split_by:
         estimator=None,
         style="dataset",
         hue="epoch",
-        merge=([["band", "tube_slot"]] if ("tube_slot" in split and "band" in split) else []),
-        facet_kws={'sharey': False, 'sharex': True},
+        merge=(
+            [["band", "tube_slot"]]
+            if ("tube_slot" in split and "band" in split)
+            else []
+        ),
+        facet_kws={"sharey": False, "sharex": True},
     )
     plot.set_axis_labels(r"$\ell$", r"Beam Window Function ($B_{\ell}^{T}$)")
     plot.set(ylim=(0, None))
     plot.figure.suptitle(f"Beam Profile by {split}", wrap=True)
-    plt.subplots_adjust(top=(1 - .15/len(plot.axes)))
-    plt.savefig(
-        os.path.join(prof_plot_dir, f"window_{split}.png"), bbox_inches="tight"
-    )
+    plt.subplots_adjust(top=(1 - 0.15 / len(plot.axes)))
+    plt.savefig(os.path.join(prof_plot_dir, f"window_{split}.png"), bbox_inches="tight")
 
 if args.profile and profiler is not None:
     profiler.stop()

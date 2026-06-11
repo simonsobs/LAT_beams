@@ -351,7 +351,12 @@ def main():
                 sys.stdout.flush()
                 master_comm.barrier()
                 to_save = master_comm.gather(to_save, root=0)
-                if myrank == 0 and to_save is not None and h5_file is not None and db is not None:
+                if (
+                    myrank == 0
+                    and to_save is not None
+                    and h5_file is not None
+                    and db is not None
+                ):
                     for ts in to_save:
                         if ts is None:
                             continue
@@ -684,7 +689,11 @@ def main():
 
                     # Plot the TOD
                     plot_tod(
-                        aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", cfg.min_dets*10
+                        aman,
+                        sig_filt,
+                        tod_plot_dir,
+                        f"{ufm}_{band_name}",
+                        cfg.min_dets * 10,
                     )
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
@@ -732,7 +741,14 @@ def main():
                     logger.log(25, "Took %s seconds to fit", t1 - t0)
                     for focal_plane in fps:
                         # Do a quick cut based on FWHM tol
-                        msk = np.abs( 1 - focal_plane.fwhm / np.deg2rad(cfg.nominal_fwhm[band_name] / 60)) < cfg.fwhm_tol
+                        msk = (
+                            np.abs(
+                                1
+                                - focal_plane.fwhm
+                                / np.deg2rad(cfg.nominal_fwhm[band_name] / 60)
+                            )
+                            < cfg.fwhm_tol
+                        )
                         focal_plane = focal_plane.restrict("dets", msk)
 
                         # Convert to results set

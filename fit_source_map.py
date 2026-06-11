@@ -1,8 +1,8 @@
 import os
 import sys
 from functools import partial
-from typing import cast
 from glob import glob
+from typing import cast
 
 import h5py
 import numpy as np
@@ -43,6 +43,7 @@ from lat_beams.utils import (
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
+
 
 # Adding splits support here in a jank way until I rerun make_source_map with splits in the jobdb
 def get_jobdict(jdb):
@@ -213,7 +214,9 @@ for i, j in enumerate(joblist):
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
     split = job.tags["split"]
-    logger.extra["extra"] = f" [{obs_id} {ufm} {band} {split} ({i+1}/{len(joblist) - 1})]"
+    logger.extra["extra"] = (
+        f" [{obs_id} {ufm} {band} {split} ({i+1}/{len(joblist) - 1})]"
+    )
     logger.log(25, "Fitting")
 
     # Get map job
@@ -353,7 +356,10 @@ for i, j in enumerate(joblist):
     aman.wrap("rprof", rprof * u.pW)
 
     # FWHM check
-    if np.isnan(data_fwhm) or abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol:
+    if (
+        np.isnan(data_fwhm)
+        or abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol
+    ):
         msg = "Data FWHM out of tolerance"
         logger.error("%s", msg)
         set_tag(job, "message", msg)
@@ -461,7 +467,7 @@ for i, j in enumerate(joblist):
     # Save residual
     resid = solved.copy()
     resid -= model
-    fname = map_path #map_job.tags["solved"]
+    fname = map_path  # map_job.tags["solved"]
     enmap.write_map(
         os.path.join(data_dir, f"{'_'.join(fname.split('_')[:-1])}_resid.fits"),
         resid,
