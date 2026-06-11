@@ -344,7 +344,7 @@ for i, j in enumerate(joblist):
         continue
 
     # Get FWHM from data
-    rprof = radial_profile(solved, c[::-1])
+    rprof = radial_profile(solved - gauss_params.off.value, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
     data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
@@ -353,7 +353,7 @@ for i, j in enumerate(joblist):
     aman.wrap("rprof", rprof * u.pW)
 
     # FWHM check
-    if abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol:
+    if np.isnan(data_fwhm) or abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol:
         msg = "Data FWHM out of tolerance"
         logger.error("%s", msg)
         set_tag(job, "message", msg)
