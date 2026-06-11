@@ -371,7 +371,7 @@ def plot_focal_plane(
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
         plt.title(f"{obs_id} {ufm}")
-        plt.savefig(os.path.join(fit_plot_dir, filename), bbox_indes="tight")
+        plt.savefig(os.path.join(fit_plot_dir, filename), bbox_inches="tight")
     plt.close()
 
 
