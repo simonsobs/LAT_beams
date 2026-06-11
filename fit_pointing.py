@@ -684,7 +684,7 @@ def main():
 
                     # Plot the TOD
                     plot_tod(
-                        aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", len(aman.signal)
+                        aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", cfg.min_dets*10
                     )
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
