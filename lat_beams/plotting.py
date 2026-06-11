@@ -376,7 +376,7 @@ def plot_focal_plane(
 
 
 def auto_relplot(
-        data: dict[str, Sequence], x: str, y: str, ignore: list[str] = [], merge: list[list[str]] = [], auto=True, **kwargs
+        data: dict[str, Sequence], x: str, y: str, ignore: list[str] = [], merge: list[list[str]] = [], auto : bool =True, **kwargs
 ) -> sns.FacetGrid:
     """
     Make a relplot.
@@ -403,6 +403,16 @@ def auto_relplot(
         The field to plot as y.
     ignore : list[str]
         List of fields to ignore.
+    merge : list[list[str]]
+        Fields to forcibly merge.
+        Each element in this list should be a list of fields.
+        The merged field will have a name with formate `{field1}+{field2}+...`.
+        The fields speicfied here cannot overlap with each other,
+        `ignore`, or fields speicfied by `**kwargs`.
+    auto : bool, default: True
+        If False then all automatic features to pick catagories for the
+        relplot are turned off and this is simply a wrapper to `relplot`
+        with the ability to specify merged fields.
     **kwargs
         Key word arguments to pass to `relplot`.
         Note that you can pass catagorical varaibles like `hue` here

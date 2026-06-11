@@ -182,7 +182,7 @@ def radial_profile(
 
 
 def get_fwhm_radial_bins(
-    r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False, frac=.5
+        r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False, frac: float =.5
 ) -> float:
     """
     Estimate FWHM from a radial profile.
@@ -196,6 +196,10 @@ def get_fwhm_radial_bins(
     interpolate : bool, default: False
         If True then interpolate the input profile on an evenly spaced
         grid of 100 points before estimating the FWHM.
+    frac : float, default: 0.5
+        The fraction of the peak to get the width at.
+        By default this is 0.5 which is the FWHM,
+        but other values can be passed if needed.
 
     Returns
     -------
