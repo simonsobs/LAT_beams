@@ -264,12 +264,10 @@ def fit_tod_pointing(
     az_d = detrend(aman.boresight.az)
     az_v = np.diff(az_d, prepend=az_d[0])
     d_az = np.sign(az_v)
-    scan_samps = (np.ptp(az_d) / (np.median(np.abs(az_v)))) / (
-        np.mean(np.diff(aman.timestamps))
-    )
+    scan_samps = (np.ptp(az_d) / (np.median(np.abs(az_v))))
     turnarounds = np.diff(d_az, prepend=d_az[0]) != 0
     turnarounds = ~(
-        Ranges.from_mask(turnarounds).buffer(int(0.1 * scan_samps))
+        Ranges.from_mask(turnarounds).buffer(int(0.05 * scan_samps))
     )  # Invert for convenience
 
     # 0 is the highpass part, 1 lowpass part.
@@ -279,8 +277,8 @@ def fit_tod_pointing(
     if bandpass_range[1] is not None:
         filt *= low_pass_sine2(cutoff=bandpass_range[1])
 
-    def fit_func(x, fit_am, filt, rfft):
-        xi0, eta0, amp, fwhm, offset = x
+    def fit_func(x, fit_am, filt, rfft, scales):
+        xi0, eta0, amp, fwhm, offset = x*scales
         model = gaussian2d(
             (fit_am.eta, fit_am.xi), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
@@ -363,8 +361,8 @@ def fit_tod_pointing(
         rfft = RFFTObj.for_shape(1, cast(int, fit_am.samps.count), "BOTH")
 
         ptp = np.ptp(np.array(fit_am.resid_filt))
-        amp = ptp # * 3
-        init_pars = [xi0, eta0, amp, fwhm, 0]
+        init_pars = [xi0, eta0, ptp, fwhm, 0]
+        scales = np.array([fwhm, fwhm, ptp, fwhm, ptp])
         bounds = [
             (xi0 - max_rad, xi0 + max_rad),
             (eta0 - max_rad, eta0 + max_rad),
@@ -372,16 +370,30 @@ def fit_tod_pointing(
             (.1 * fwhm, 10 * fwhm),
             (-ptp, ptp),
         ]
+        init_pars = np.array(init_pars)/scales
+        bounds = np.array(bounds)/scales[..., None]
 
         # Nelder-Mead is only non-gradient method. The gradient ones get stuck on edges and find local minima. This find central global minima.
         res = minimize(
             fit_func,
             init_pars,
             bounds=bounds,
-            args=(fit_am, filt, rfft),
-            method="Nelder-Mead",
+            args=(fit_am, filt, rfft, scales),
+            # method="Nelder-Mead",
         )
-
+        if res.success:
+            res_nm = minimize(
+                fit_func,
+                res.x,
+                bounds=bounds,
+                args=(fit_am, filt, rfft, scales),
+                method="Nelder-Mead",
+                options={'maxiter':50},
+            )
+            if res_nm.fun <= res.fun:
+                res_nm.success = res.success
+                res = res_nm
+        res.x *= scales
         focal_plane.xi[i] = res.x[0]
         focal_plane.eta[i] = res.x[1]
         focal_plane.amp[i] = res.x[2]
@@ -405,19 +417,10 @@ def fit_tod_pointing(
         delta_eta = eta - np.array(focal_plane.eta[i])
 
         # Lets calculate hits
-        # solved for delta(x) in gaussian eqn ie
-        # f(x)/wnl = A/wnl * e^(-.5 * delta(x) ^ 2 / sigma ^ 2)
-        sigma = focal_plane.fwhm[i] / 2.3548
-        snr_peak = np.abs(focal_plane.amp[i]) / (min_snr * std)
-        if snr_peak >= 1:
-            snr_rad = sigma * np.sqrt(2) * np.sqrt(np.log(snr_peak))
-        else:
-            snr_rad = -1
-            focal_plane.R2[i] = 0
-        radius = np.sqrt(delta_xi**2 + delta_eta**2)
-
-        # We null out the mask where we turnaround so they count as seperate hits
-        hits = Ranges.from_mask(radius <= snr_rad) * turnarounds
+        model = gaussian2d(
+            (eta, xi), focal_plane.amp[i], focal_plane.xi[i], focal_plane.eta[i], focal_plane.fwhm[i], focal_plane.fwhm[i], 0, 0
+        )
+        hits = Ranges.from_mask(model/std >= min_snr) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
         # Azel crossings
