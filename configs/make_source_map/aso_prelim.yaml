@@ -1,0 +1,54 @@
+map_source_list:
+  - "mars"
+  - "saturn"
+  - "neptune"
+  - "uranus"
+  - "3c279"
+  - "taua"
+fit_source_list:
+  - "mars"
+  - "neptune"
+  - "uranus"
+  - "3c279"
+  - "saturn"
+pointing_type: "pointing_model" 
+preprocess_cfg: "preproc/preproc.yaml"
+min_det_secs: 300
+min_dets: 50
+min_hits: 1
+min_snr: 1
+ctx_path: 'contexts/nersc_aso_prelim.yaml'
+start_time: 1777213800 
+stop_time: 1780657200 
+n_med: 3
+map_mask_size: .2
+search_mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - .5
+epochs:
+    - [1777213800, 1780657200]
+append: "template_bs_relcal"
+cgiters_single: 0
+cgiters_full: 200
+mlpass: 3
+sym_gauss: False
+n_bessel: 25
+n_multipoles: 8
+bessel_wing_n_sigma: 3
+extent: 720
+det_split_dir: "det_lists"
+gauss_multipole: False
+metasplits:
+  nosaturn:
+    - "source"
+    - ["mars", "uranus", "neptune"]
+split_by:
+  - "band"
+  - "tube_slot+band"
+  - "source+band"
+  - "nosaturn+band"
+  - "source+tube_slot+band"
+  - "nosaturn+tube_slot+band"
