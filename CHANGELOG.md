@@ -1,3 +1,50 @@
+## 3.2.0 (2026-06-11)
+
+### Feat
+
+- two stage fitting, better hits calc, rescale pars
+- set powell based on band
+- add more fine grained control over merging fields
+- add option to get points other than fwhm
+- modify prefroc config with out context
+- bessel fitting updates. Use L-BFGS-B when SNR is lower and mask out radii where the profile goes negetive when wing fitting
+- better thresholding and prevent smoothing from making points negetive
+- add merge feature to auto_relplot
+- much better plotting and some error handing
+- allow for radial sum and small fix in fits loading
+- add error
+- add blazar
+- streamline of stacking code
+- add metasplit option
+- fit split maps, this is currently implemented in a somewhat temporary way since make_source_map doesn't add splits to the jobdb
+- deconvolve pixel window func
+
+### Fix
+
+- allow for all tubes but o6
+- apply gauss offset when computing fwhm
+- bbox_inches typo
+- dont plot all dets
+- compat with older python
+- save properly and remove bad cuts
+- better starting amp
+- autoscale x
+- swap row and col again
+- remove debugging code
+- remove unused imports
+- dont error out when computing fwhm for fake map and small metasplit typing fix
+- lots of small fixes from refactor
+- only check centering on filter bin map and fix indexing
+- allow logger to work without MPI
+- null out extra at end
+- don't overwrite fits when fitting splits
+- set a default comm
+- some logger bugs and add profiler for map fitter
+
+### Perf
+
+- slight lstsq improvements
+
 ## 3.1.1 (2026-05-29)
 
 ### Perf
