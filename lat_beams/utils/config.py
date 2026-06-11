@@ -161,6 +161,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["bessel_wing_n_sigma"] = cfg.get("bessel_wing_n_sigma", 5)
     cfg["sym_gauss"] = cfg.get("sym_gauss", True)
     cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
+    cfg["bessel_powell_bands"] = cfg.get("bessel_powell_bands", ["f090", "f150"])
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(
@@ -191,6 +192,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["split_by"] = cfg.get(
         "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
     )
+    cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["r_step"] = cfg.get("r_step", 1)
 

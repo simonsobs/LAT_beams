@@ -1,6 +1,7 @@
 import os
 import sys
 from functools import partial
+from glob import glob
 from typing import cast
 
 import h5py
@@ -44,22 +45,27 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 
+# Adding splits support here in a jank way until I rerun make_source_map with splits in the jobdb
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
         for job in jdb.get_jobs(jclass="fit_map")
     }
     return jobdict
 
 
-def get_jobit(jdb):
+def get_jobit(jdb, det_split_names):
     maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
     maplist = np.array_split(maplist, nproc)[myrank]
-    return maplist
+    to_ret = []
+    for info in maplist:
+        to_ret += [(info, ds) for ds in det_split_names]
+    return to_ret
 
 
 def get_jobstr(mjob, ctx, start_time, stop_time):
-    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}"
+    mjob, split = mjob
+    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
     obs = ctx.obsdb.get(mjob.tags["obs_id"])
     if args.obs_ids is None and (
         obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
@@ -71,6 +77,7 @@ def get_jobstr(mjob, ctx, start_time, stop_time):
 
 
 def get_tags(mjob):
+    mjob, split = mjob
     tags = {
         "obs_id": mjob.tags["obs_id"],
         "wafer_slot": mjob.tags["wafer_slot"],
@@ -82,6 +89,7 @@ def get_tags(mjob):
         "resid": "",
         "resid_weights": "",
         "config": "",
+        "split": split,
     }
     return tags
 
@@ -110,11 +118,19 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}",
 )
 outfile = None
 if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, f"beam_pars{cfg.fit_append}.h5"), "a")
+
+# Get det splits
+det_split_names = [""]
+if cfg.det_split_dir != "":
+    det_split_names += [
+        os.path.splitext(os.path.basename(fname))[0]
+        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
+    ]
 
 # Get the jobs, make them if we need to
 ctx = Context(cfg.ctx_path)
@@ -125,7 +141,7 @@ jdb, all_jobs = setup_jobs(
     data_dir,
     "fit_map",
     get_jobdict,
-    get_jobit,
+    partial(get_jobit, det_split_names=det_split_names),
     partial(get_jobstr, ctx=ctx, start_time=cfg.start_time, stop_time=cfg.stop_time),
     get_tags,
     cfg.source_list,
@@ -144,6 +160,15 @@ max_maps = np.max(n_maps)
 if n_maps[0] != max_maps:
     raise ValueError("Root doesn't have max maps!")
 joblist += [None] * (1 + max_maps - len(joblist))
+
+profiler = None
+if args.profile:
+    from pyinstrument import Profiler
+
+    profiler = Profiler()
+    profiler.start()
+    logger.info("Running in profiler mode! Only one map per proc will be kept")
+    joblist = [joblist[0], None]
 
 to_save = (None, None)
 map_jobs = jdb.get_jobs(jclass="beam_map", jstate="done")
@@ -188,7 +213,10 @@ for i, j in enumerate(joblist):
     ufm = job.tags["stream_id"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
-    logger.extra["extra"] = f" [{obs_id} {ufm} {band} ({i+1}/{len(loblist)})]"
+    split = job.tags["split"]
+    logger.extra["extra"] = (
+        f" [{obs_id} {ufm} {band} {split} ({i+1}/{len(joblist) - 1})]"
+    )
     logger.log(25, "Fitting")
 
     # Get map job
@@ -207,11 +235,17 @@ for i, j in enumerate(joblist):
     set_tag(job, "config", cfg_str)
     set_tag(job, "comps", comps)
 
+    # Figure out paths, this won't need to happen once make_source_map is fixed
+    map_path = os.path.join(data_dir, map_job.tags["solved"])
+    ivar_path = os.path.join(data_dir, map_job.tags["weights"])
+    if split != "":
+        map_path = map_path.replace("solved.fits", f"{split}_map.fits")
+        ivar_path = map_path.replace("map.fits", "weights.fits")
     # Load the maps
     try:
-        solved = enmap.read_map(os.path.join(data_dir, map_job.tags["solved"]))[0]
+        solved = enmap.read_map(map_path)[0]
         solved = cast(enmap.ndmap, solved)
-        weights = enmap.read_map(os.path.join(data_dir, map_job.tags["weights"]))[0][0]
+        weights = enmap.read_map(ivar_path)[0][0]
         weights = cast(enmap.ndmap, weights)
     except FileNotFoundError:
         msg = "Missing map files"
@@ -313,7 +347,7 @@ for i, j in enumerate(joblist):
         continue
 
     # Get FWHM from data
-    rprof = radial_profile(solved, c[::-1])
+    rprof = radial_profile(solved - gauss_params.off.value, c[::-1])
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
     data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
@@ -322,7 +356,10 @@ for i, j in enumerate(joblist):
     aman.wrap("rprof", rprof * u.pW)
 
     # FWHM check
-    if abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol:
+    if (
+        np.isnan(data_fwhm)
+        or abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol
+    ):
         msg = "Data FWHM out of tolerance"
         logger.error("%s", msg)
         set_tag(job, "message", msg)
@@ -397,6 +434,7 @@ for i, j in enumerate(joblist):
             band_mask_size,
             cfg.bessel_wing_n_sigma,
             cfg.skip_multipoles,
+            band in cfg.bessel_powell_bands,
         )
         if bessel_beam_params is None or model is None:
             msg = "Fit failed"
@@ -429,7 +467,7 @@ for i, j in enumerate(joblist):
     # Save residual
     resid = solved.copy()
     resid -= model
-    fname = map_job.tags["solved"]
+    fname = map_path  # map_job.tags["solved"]
     enmap.write_map(
         os.path.join(data_dir, f"{'_'.join(fname.split('_')[:-1])}_resid.fits"),
         resid,
@@ -477,7 +515,7 @@ for i, j in enumerate(joblist):
             cfg.extent,
             plt_cent,
             ufm_plot_dir,
-            f"{obs_id} {ufm} {band}",
+            f"{obs_id} {ufm} {band}{' '*bool(split)}{split}",
             comps="T",
             log_thresh=cfg.log_thresh,
             append=label,
@@ -487,13 +525,19 @@ for i, j in enumerate(joblist):
 
     # Save
     aman.wrap("data_solid_angle_corr", aman[aman.final_model].data_solid_angle_corr)
-    aman_path = os.path.join(obs_id, ufm, band)
+    aman_path = os.path.join(obs_id, ufm, band, split)
     to_save = (aman, aman_path)
 
     set_tag(job, "message", "Success")
     job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
 comm.barrier()
+logger.extra["extra"] = ""
+
+if args.profile and profiler is not None:
+    profiler.stop()
+    profiler.write_html(f"profile_{myrank}.html")
+
 if outfile is not None:
     outfile.close()
 sys.stdout.flush()

@@ -16,6 +16,8 @@ from pixell.enmap import ndmap
 from scipy.interpolate import make_splprep
 from scipy.linalg import lstsq
 from scipy.optimize import minimize
+from scipy.stats import binned_statistic
+from sotodlib import tod_ops
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
 
@@ -339,6 +341,7 @@ def fit_bessel_map(
     mask_size: float = np.inf,
     n_sigma: float = 5,
     skip_multipoles: list[int] = [],
+    powell: bool = True,
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -365,6 +368,9 @@ def fit_bessel_map(
         `guess` by in order to determine the initial wing amplitude.
     skip_multipoles : list[int], default
         Multipoles to exclude from the fit.
+    powell : bool, default: True
+        If True use powells method when fitting wing.
+        If False use L-BFGS-B.
 
     Returns
     -------
@@ -418,7 +424,7 @@ def fit_bessel_map(
     # Compute initial model
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
     beam_model = np.zeros_like(xi)
-    core_msk = r < 2.0 * mask_size  # * (imap > g + guess.off.value)
+    core_msk = r < 2.0 * mask_size
     r_core = r[core_msk]
     X = []
     idx = []
@@ -437,7 +443,7 @@ def fit_bessel_map(
                     idx += [(n0, n1, m, i)]
     X += [np.ones_like(beam_model[core_msk])]
     X = np.column_stack(X) * np.sqrt(ivar[core_msk])[..., None]
-    lres = lstsq(X, imap[core_msk] * np.sqrt(ivar[core_msk]))
+    lres = lstsq(X, imap[core_msk] * np.sqrt(ivar[core_msk]), overwrite_a=True)
     if lres is None:
         return None, None
     als = lres[0]
@@ -458,7 +464,29 @@ def fit_bessel_map(
     r0_wing = np.zeros_like(thetas)
     amp_wing = np.zeros_like(thetas)
 
-    wrmsk = r < 0.8 * mask_size
+    # Get data profile
+    rthresh = mask_size
+    if imap.wcs is None:
+        raise ValueError("WCS is None!")
+    rbc = int(np.ptp(r) / np.deg2rad(imap.wcs.wcs.cdelt[1])) // 2
+    rthresh = 0.9 * mask_size
+    if rbc > 10:
+        rprof, rbins, _ = binned_statistic(
+            np.ravel(r), np.ravel(imap + guess.off.value), bins=rbc
+        )
+        rstd, rbins, _ = binned_statistic(
+            np.ravel(r), np.ravel(imap + guess.off.value), statistic="std", bins=rbc
+        )
+        rbins = (rbins[1:] + rbins[:-1]) / 2
+        rsnr = rprof / rstd
+        rlow = rbins[
+            (rsnr < 0)
+            * np.isfinite(rsnr)
+            * (rbins > (guess.fwhm_xi + guess.fwhm_eta).value)
+        ]
+        if len(rlow) > 0:
+            rthresh = min(np.min(rlow), rthresh)
+    wrmsk = r < rthresh
     wmap = imap[r < wrmsk]
     wvar = ivar[r < wrmsk]
     wtbins = tbins[r < wrmsk]
@@ -467,9 +495,11 @@ def fit_bessel_map(
 
     def _objective(x):
         woff, n_sigma = x
-        thresh = guess.amp.value * np.exp(-0.5 * (n_sigma**2))
-        wing_model = beam_model[wrmsk] - woff
+        thresh = guess.amp.value * 10**n_sigma  # np.exp(-0.5 * (n_sigma**2))
+        wing_model = beam_model[wrmsk]
         wmsk = wing_model < thresh
+        wing_model = wing_model - woff
+        wmsk += wing_model < thresh
         for tb in tbu:
             tmsk = wtbins == tb
             twmsk = tmsk * wmsk
@@ -487,21 +517,28 @@ def fit_bessel_map(
                 amp = thresh
             r0_wing[tb - 1] = r0
             amp_wing[tb - 1] = amp
-            rmsk = tmsk * (wr > r0)  # + (wing_model < amp))
-            wing_model[twmsk + rmsk] = amp * (r0 / wr[twmsk + rmsk]) ** 3
+            rmsk = tmsk * (wr > r0)
+            wing_model[rmsk] = amp * (r0 / wr[rmsk]) ** 3
         wing_model += woff
         return np.sum(wvar * (wing_model - wmap) ** 2)
 
-    res = minimize(
-        _objective,
-        x0=(0, n_sigma),
-        bounds=[(-np.inf, np.inf), (n_sigma - 2, n_sigma + 2)],
-        method="Powell",
-        options={"ftol": 1e-8, "xtol": 1e-8},
-    )  # , "maxiter":20000, "maxfev":20000})
+    t0 = np.log10(np.exp(-0.5 * (n_sigma**2)))
+    if powell:
+        res = minimize(
+            _objective,
+            x0=(0, t0),
+            bounds=[(-np.inf, np.inf), (5 * t0, 0)],  # (n_sigma-2, n_sigma + 2)],
+            method="Powell",
+            options={"ftol": 1e-8, "xtol": 1e-8},
+        )
+    else:
+        res = minimize(
+            _objective,
+            x0=(0, t0),
+            bounds=[(-np.inf, np.inf), (5 * t0, 0)],  # (n_sigma-2, n_sigma + 2)],
+        )
     _objective(res.x)
     woff, n_sigma = res.x
-    thresh = guess.amp.value * np.exp(-0.5 * (n_sigma**2))
 
     # Apply a small amount of smoothing to the parametric curve that defines the wing
     spl, _ = make_splprep(
@@ -511,23 +548,24 @@ def fit_bessel_map(
     )
     r0_wing, amp_wing = spl(thetas)
 
+    # Sometimes the smoothing can drive points negetive, lets correct while we make the model
+    beam_model -= woff
+    for tb in np.unique(tbins):
+        tmsk = tbins == tb
+        amp = amp_wing[tb - 1]
+        r0 = r0_wing[tb - 1]
+        wtmsk = (beam_model[tmsk] <= 0) * (r[tmsk] <= r0)
+        if np.sum(wtmsk) > 0:
+            r0 = r0_wing[tb - 1] = np.min(r[tmsk][wtmsk])
+        rmsk = tmsk * (r > r0)
+        beam_model[rmsk] = amp * (r0 / r[rmsk]) ** 3
+
+    beam_model += woff
+
     aman.wrap("r0_wing", r0_wing * u.radian, [(0, tax)])
     aman.wrap("amp_wing", amp_wing * map_unit, [(0, tax)])
     aman.wrap("off", woff * map_unit)
     aman.wrap("thresh", woff * map_unit)
     aman.bessel_off -= aman.off
-
-    beam_model -= woff
-    wmsk = beam_model < thresh
-
-    for tb in np.unique(tbins):
-        tmsk = tbins == tb
-        twmsk = tmsk * wmsk
-        r0 = r0_wing[tb - 1]
-        amp = amp_wing[tb - 1]
-        rmsk = tmsk * (r > r0)  # + (beam_model < amp))
-        beam_model[twmsk + rmsk] = amp * (r0 / r[twmsk + rmsk]) ** 3
-
-    beam_model += woff
 
     return aman, beam_model

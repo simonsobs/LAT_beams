@@ -1,6 +1,9 @@
+# TODO: jobdb
+# TODO: speed up: mpi? asyncio?
 import os
 import sys
 from glob import glob
+from typing import cast
 
 import astropy.units as u
 import numpy as np
@@ -10,9 +13,7 @@ from tqdm import tqdm
 
 from lat_beams import beam_utils as bu
 from lat_beams.plotting import plot_map_complete
-from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
-
-# TODO: streamline so there is less repeated code between types of maps (det splits, resid maps, etc.)
+from lat_beams.utils import get_args_cfg, init_log, make_jobdb, setup_cfg, setup_paths
 
 
 def view_TQU(imap):
@@ -24,6 +25,9 @@ def view_TQU(imap):
 
 
 nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
+
+# Setup logger
+logger = init_log()
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -57,26 +61,19 @@ mjobdict = {
     f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
     for job in jdb.get_jobs(jclass="beam_map", jstate="done")
 }
-fjobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
-    for job in jdb.get_jobs(jclass="fit_map", jstate="done")
-}
-alljobstr = list(set(list(mjobdict.keys())) & set(list(fjobdict.keys())))
-mjobs = np.array([mjobdict[jobstr] for jobstr in alljobstr])
-fjobs = np.array([fjobdict[jobstr] for jobstr in alljobstr])
+fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
 
-print(f"{len(alljobstr)} maps to add")
-if len(alljobstr) == 0:
+logger.info("%d maps to add", len(fjobs))
+if len(fjobs) == 0:
     sys.exit(0)
 
 # Load fits
-all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
+all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist())
 snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
 solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
 msk = snr > 100
 msk *= solid_angle > 0
 all_fits = all_fits[msk]
-mjobs = mjobs[msk]
 fjobs = fjobs[msk]
 
 # Make template map
@@ -93,19 +90,24 @@ twcs = enmap.wcsutils.build(
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
 
 if args.plot_only:
-    print("Running in plot only mode!")
+    logger.info("Running in plot only mode!")
 
 # Get det splits
-det_split_names = [
-    os.path.splitext(os.path.basename(fname))[0]
-    for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
-]
+det_split_names = [""]
+if cfg.det_split_dir != "":
+    det_split_names += [
+        os.path.splitext(os.path.basename(fname))[0]
+        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
+    ]
 
 # Loop through splits
+map_types = ("", "resid")  # , "ml") # Skipping ML for now
 for split in cfg.split_by:
-    print(f"Splitting by {split}")
-    split_vec = bu.get_split_vec(all_fits, split, ctx)
+    logger.info("Splitting by %s", split)
+    split_vec = bu.get_split_vec(all_fits, split, ctx, metasplits=cfg.metasplits)
     for spl in np.unique(split_vec):
+        if "NOMATCH" in spl:
+            continue
         data_dir_spl = os.path.join(data_dir, "stacks", split, spl)
         plot_dir_spl = os.path.join(plot_dir, split, spl)
         os.makedirs(data_dir_spl, exist_ok=True)
@@ -113,322 +115,172 @@ for split in cfg.split_by:
 
         smsk = split_vec == spl
         sfits = all_fits[smsk]
-        smjobs = mjobs[smsk]
         sfjobs = fjobs[smsk]
         fwhm_exp = np.array([nominal_fwhm[band] for band in sfits["band"]]) * u.arcmin
         sang_exp = (2 * np.pi * (fwhm_exp.to(u.radian) / 2.355) ** 2).to(u.sr)
         data_fwhm = bu.get_fit_vec(sfits, "data_fwhm")
-        solid_angle = bu.get_fit_vec(sfits, "data_solid_angle_corr")
         msk = data_fwhm < 3 * fwhm_exp
         msk *= data_fwhm < np.percentile(data_fwhm[msk], 95)
-        msk *= solid_angle < 3 * sang_exp
         sfits = sfits[msk]
-        smjobs = smjobs[msk]
         sfjobs = sfjobs[msk]
         for epoch in cfg.epochs:
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
-            print(f"\t{spl} {epoch}")
+            logger.info("Running %s %s", spl, str(epoch))
             times = sfits["time"]
             tmsk = (times >= epoch[0]) * (times < epoch[1])
             if np.sum(tmsk) == 0:
-                print(f"\t\tNo maps found! Skipping...")
+                logger.warning("No maps found! Skipping...")
                 continue
-            mcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            wcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            mlcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            mwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            rmcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            rwcoadd = enmap.zeros(tmap.shape, tmap.wcs)
-            det_split_mcoadd = {
-                name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names
+            # Structure here is split -> type (map/ML/resid)
+            mcoadd = {
+                name: {
+                    map_type: enmap.zeros(tmap.shape, tmap.wcs)
+                    for map_type in map_types
+                }
+                for name in det_split_names
             }
-            det_split_wcoadd = {
-                name: enmap.zeros(tmap.shape, tmap.wcs) for name in det_split_names
+            wcoadd = {
+                name: {
+                    map_type: enmap.zeros(tmap.shape, tmap.wcs)
+                    for map_type in map_types
+                }
+                for name in det_split_names
             }
-            for fit, mjob, fjob in tqdm(
-                zip(sfits[tmsk], smjobs[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)
-            ):
+            for fit, fjob in tqdm(zip(sfits[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)):
+                jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['band']}"
+                msplit = fjob.tags["split"]
+                if jobstr not in mjobdict:
+                    logger.debug("Map job not found for %s", jobstr)
+                    continue
+                mjob = mjobdict[jobstr]
                 if args.plot_only:
                     continue
                 # Load
-                try:
-                    solved = enmap.read_map(os.path.join(data_dir, mjob.tags["solved"]))
-                    weights = enmap.read_map(
-                        os.path.join(data_dir, mjob.tags["weights"])
-                    )[np.diag_indices(len(solved))]
-                    resid = enmap.read_map(os.path.join(data_dir, fjob.tags["resid"]))
-                    if len(resid.shape) == 2:
-                        resid = resid.reshape((1,) + resid.shape)
-                    resid_weights = enmap.read_map(
-                        os.path.join(data_dir, fjob.tags["resid_weights"])
-                    )
-                    if len(resid_weights.shape) == 4:
-                        resid_weights = resid_weights[
-                            np.diag_indices(len(resid_weights))
-                        ]
-                    resid_weights = resid_weights.reshape(resid.shape)
-                    det_split_maps = {}
-                    det_split_weights = {}
-                    for name in det_split_names:
-                        map_path = os.path.join(data_dir, mjob.tags["solved"]).replace(
-                            "solved.fits", f"{name}_map.fits"
-                        )
-                        weight_path = os.path.join(
-                            data_dir, mjob.tags["solved"]
-                        ).replace("solved.fits", f"{name}_weights.fits")
-                        if not (
-                            os.path.isfile(map_path) and os.path.isfile(weight_path)
-                        ):
-                            continue
-                        det_split_maps[name] = enmap.read_map(map_path)
-                        det_split_weights[name] = enmap.read_map(weight_path)[
-                            np.diag_indices(len(solved))
-                        ]
-
-                except FileNotFoundError:
-                    print(f"Maps missing for job: {mjob}")
-                    continue
-                if "ml_map" in mjob.tags and mjob.tags["ml_map"] != "":
+                for map_type in map_types:
+                    if map_type == "":
+                        map_path = os.path.join(data_dir, mjob.tags["solved"])
+                        ivar_path = os.path.join(data_dir, mjob.tags["weights"])
+                        if msplit != "":
+                            map_path = map_path.replace(
+                                "solved.fits", f"{msplit}_map.fits"
+                            )
+                            ivar_path = map_path.replace("map.fits", "weights.fits")
+                    elif map_type == "resid":
+                        map_path = os.path.join(data_dir, fjob.tags["resid"])
+                        ivar_path = os.path.join(data_dir, fjob.tags["resid_weights"])
+                    else:
+                        raise ValueError(f"Bad map type {map_type}")
                     try:
-                        mlmap = enmap.read_map(
-                            os.path.join(data_dir, mjob.tags["ml_map"])
-                        )
-                        mlweights = enmap.read_map(
-                            os.path.join(data_dir, mjob.tags["ml_div"])
-                        )[np.diag_indices(len(mlmap))]
+                        imap = enmap.read_map(map_path)
+                        if len(imap.shape) == 2:
+                            imap = imap.reshape((1,) + imap.shape)
+                        ivar = enmap.read_map(ivar_path)
+                        if len(ivar.shape) == 4:
+                            ivar = ivar[np.diag_indices(len(ivar))]
+                        ivar = ivar.reshape(imap.shape)
                     except FileNotFoundError:
-                        print(f"ML Maps missing for job: {mjob}")
-                        mlmap = enmap.zeros(solved.shape, solved.wcs)
-                        mlweights = enmap.zeros(weights.shape, weights.wcs)
-                else:
-                    mlmap = enmap.zeros(solved.shape, solved.wcs)
-                    mlweights = enmap.zeros(weights.shape, weights.wcs)
-
-                # Make everything look like TQU
-                solved = view_TQU(solved)
-                weights = view_TQU(weights)
-                mlmap = view_TQU(mlmap)
-                mlweights = view_TQU(mlweights)
-                resid = view_TQU(resid)
-                resid_weights = view_TQU(resid_weights)
-                det_split_maps = {
-                    name: view_TQU(smap) for name, smap in det_split_maps.items()
-                }
-                det_split_weights = {
-                    name: view_TQU(smap) for name, smap in det_split_weights.items()
-                }
-                if not np.all(
-                    np.array(
-                        [
-                            len(solved),
-                            len(weights),
-                            len(mlmap),
-                            len(mlweights),
-                            len(resid),
-                            len(resid_weights),
-                            len(solved.shape),
-                            len(weights.shape),
-                            len(mlmap.shape),
-                            len(mlweights.shape),
-                            len(resid.shape),
-                            len(resid_weights.shape),
-                        ]
-                    )
-                    == 3
-                ):
-                    raise ValueError("Maps don't look like TQU!")
-
-                # Crop, recenter, and normalize
-                cent = np.array(
-                    (
-                        fit["aman"].gauss.eta0.to(u.rad).value,
-                        fit["aman"].gauss.xi0.to(u.rad).value,
-                    )
-                )
-                solved = (
-                    reproject.thumbnails(
-                        solved,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    / fit["aman"].gauss.amp.value
-                )
-                weights = (
-                    reproject.thumbnails_ivar(
-                        weights,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    * fit["aman"].gauss.amp.value**2
-                )
-                mlmap = (
-                    reproject.thumbnails(
-                        mlmap,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    / fit["aman"].gauss.amp.value
-                )
-                mlweights = (
-                    reproject.thumbnails_ivar(
-                        mlweights,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    * fit["aman"].gauss.amp.value**2
-                )
-                resid = (
-                    reproject.thumbnails(
-                        resid,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    / fit["aman"].gauss.amp.value
-                )
-                resid_weights = (
-                    reproject.thumbnails_ivar(
-                        resid_weights,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    * fit["aman"].gauss.amp.value**2
-                )
-                det_split_maps = {
-                    name: reproject.thumbnails(
-                        smap,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    / fit["aman"].gauss.amp.value
-                    for name, smap in det_split_maps.items()
-                }
-                det_split_weights = {
-                    name: reproject.thumbnails_ivar(
-                        smap,
-                        r=ext_rad,
-                        coords=cent,
-                        oshape=(pix_extent, pix_extent),
-                        owcs=twcs,
-                    )
-                    * fit["aman"].gauss.amp.value**2
-                    for name, smap in det_split_weights.items()
-                }
-
-                # If the new center seems very far from the origin then lets skip
-                cent_est = bu.estimate_cent(solved[0], sigma=10, buf=1)
-                dist = np.linalg.norm(cent_est - solved.wcs.wcs.crpix)
-                if dist > cfg.miscenter_thresh:
-                    print(
-                        f"\t\t{mjob.tags['obs_id']} {mjob.tags['stream_id']} {mjob.tags['band']} ({mjob.tags['source']}) seems miscentered! Skipping!"
-                    )
-                    continue
-
-                # Add
-                np.nan_to_num(solved, copy=False, nan=0, posinf=0, neginf=0)
-                np.nan_to_num(weights, copy=False, nan=0, posinf=0, neginf=0)
-                np.nan_to_num(mlmap, copy=False, nan=0, posinf=0, neginf=0)
-                np.nan_to_num(mlweights, copy=False, nan=0, posinf=0, neginf=0)
-                np.nan_to_num(resid, copy=False, nan=0, posinf=0, neginf=0)
-                np.nan_to_num(resid_weights, copy=False, nan=0, posinf=0, neginf=0)
-                det_split_maps = {
-                    name: np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0)
-                    for name, smap in det_split_maps.items()
-                }
-                det_split_weights = {
-                    name: np.nan_to_num(smap, copy=False, nan=0, posinf=0, neginf=0)
-                    for name, smap in det_split_weights.items()
-                }
-                mcoadd.insert(solved * weights, op=op)
-                wcoadd.insert(weights, op=op)
-                mlcoadd.insert(mlmap * mlweights, op=op)
-                mwcoadd.insert(mlweights, op=op)
-                rmcoadd.insert(resid * resid_weights, op=op)
-                rwcoadd.insert(resid_weights, op=op)
-                for name in det_split_names:
-                    if name not in det_split_maps or name not in det_split_weights:
+                        logger.debug("Maps missing for job: %s-%s", jobstr, msplit)
                         continue
-                    det_split_mcoadd[name].insert(
-                        det_split_maps[name] * det_split_weights[name], op=op
+                    # Make everything look like TQU
+                    imap = view_TQU(imap)
+                    ivar = view_TQU(ivar)
+
+                    # Crop, recenter, and normalize
+                    cent = np.array(
+                        (
+                            fit["aman"].gauss.eta0.to(u.rad).value,
+                            fit["aman"].gauss.xi0.to(u.rad).value,
+                        )
                     )
-                    det_split_wcoadd[name].insert(det_split_weights[name], op=op)
+                    imap = (
+                        reproject.thumbnails(
+                            imap - fit["aman"].gauss.off.value * (map_type == ""),
+                            r=ext_rad,
+                            coords=cent,
+                            oshape=(pix_extent, pix_extent),
+                            owcs=twcs,
+                        )
+                        / fit["aman"].gauss.amp.value
+                    )
+                    ivar = (
+                        reproject.thumbnails_ivar(
+                            ivar,
+                            r=ext_rad,
+                            coords=cent,
+                            oshape=(pix_extent, pix_extent),
+                            owcs=twcs,
+                        )
+                        * fit["aman"].gauss.amp.value**2
+                    )
+
+                    # If the new center seems very far from the origin then lets skip
+                    if map_type == "":
+                        cent_est = bu.estimate_cent(imap[0], sigma=10, buf=1)
+                        dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
+                        if dist > cfg.miscenter_thresh:
+                            logger.debug(
+                                "%s %s (%s) seems miscentered! Skipping!",
+                                jobstr,
+                                msplit,
+                                mjob.tags["source"],
+                            )
+                            break
+
+                    # Add
+                    np.nan_to_num(imap, copy=False, nan=0, posinf=0, neginf=0)
+                    np.nan_to_num(ivar, copy=False, nan=0, posinf=0, neginf=0)
+                    mcoadd[msplit][map_type].insert(imap * ivar, op=op)
+                    wcoadd[msplit][map_type].insert(ivar, op=op)
 
             # Divide weights
-            with np.errstate(divide="ignore", invalid="ignore"):
-                mcoadd /= wcoadd
-                mlcoadd /= mwcoadd
-                rmcoadd /= rwcoadd
-                for name in det_split_names:
-                    det_split_mcoadd[name] /= det_split_wcoadd[name]  # type: ignore
+            for msplit in mcoadd.keys():
+                for map_type in map_types:
+                    with np.errstate(divide="ignore", invalid="ignore"):
+                        mcoadd[msplit][map_type] /= wcoadd[msplit][map_type]  # type: ignore
                     np.nan_to_num(
-                        det_split_mcoadd[name], copy=False, nan=0, posinf=0, neginf=0
+                        mcoadd[msplit][map_type], copy=False, nan=0, posinf=0, neginf=0
                     )
-            np.nan_to_num(mcoadd, copy=False, nan=0, posinf=0, neginf=0)
-            np.nan_to_num(mlcoadd, copy=False, nan=0, posinf=0, neginf=0)
-            np.nan_to_num(rmcoadd, copy=False, nan=0, posinf=0, neginf=0)
+                    # Save and plot
+                    for omap, name in [
+                        (mcoadd[msplit][map_type], "stack"),
+                        (wcoadd[msplit][map_type], "stack_ivar"),
+                    ]:
+                        path = os.path.join(
+                            data_dir_spl,
+                            f"{spl}_{epoch[0]}_{epoch[1]}{'_'*bool(msplit)}{msplit}{'_'*bool(map_type)}{map_type}_{name}.fits",
+                        )
+                        if args.plot_only:
+                            if not os.path.isfile(path):
+                                logger.warning("Maps do not exist!")
+                                continue
+                            omap = enmap.read_map(path)
+                        else:
+                            enmap.write_map(
+                                path,
+                                omap,
+                                "fits",
+                                allow_modify=True,
+                            )
+                        if "ivar" in name:
+                            continue
 
-            # Save and plot
-            det_split_out = []
-            for name in det_split_names:
-                if not np.any(det_split_wcoadd[name]):
-                    continue
-                det_split_out += [
-                    (det_split_mcoadd[name], f"{name}_stack"),
-                    (det_split_wcoadd[name], f"{name}_stack_ivar"),
-                ]
-            for omap, name in [
-                (mcoadd, "stack"),
-                (wcoadd, "stack_ivar"),
-                (mlcoadd, "ml_stack"),
-                (mwcoadd, "ml_stack_ivar"),
-                (rmcoadd, "resid_stack"),
-            ] + det_split_out:
-                path = os.path.join(
-                    data_dir_spl, f"{spl}_{epoch[0]}_{epoch[1]}_{name}.fits"
-                )
-                if args.plot_only:
-                    if not os.path.isfile(path):
-                        print("\t\tMaps do not exist!")
-                        continue
-                    omap = enmap.read_map(path)
-                else:
-                    enmap.write_map(
-                        path,
-                        omap,
-                        "fits",
-                        allow_modify=True,
-                    )
-                if "ivar" in name:
-                    continue
-                posmap = omap.posmap()
-                posmap = np.rad2deg(posmap) * 3600
-                for append, smap in [
-                    ("", omap),
-                    ("_smooth3pix", enmap.smooth_gauss(omap, 3 * cfg.res)),
-                ]:
-                    plot_map_complete(
-                        smap,
-                        posmap,
-                        pixsize,
-                        cfg.extent,
-                        (0, 0),
-                        plot_dir_epc,
-                        f"{spl} {epoch[0]} {epoch[1]}",
-                        log_thresh=cfg.log_thresh,
-                        append=name + append,
-                        qrur=True,
-                    )
+                        omap = cast(enmap.ndmap, omap)
+                        posmap = omap.posmap()
+                        posmap = np.rad2deg(posmap) * 3600
+                        for append, smap in [
+                            ("", omap),
+                            ("_smooth3pix", enmap.smooth_gauss(omap, 3 * cfg.res)),
+                        ]:
+                            plot_map_complete(
+                                smap,
+                                posmap,
+                                pixsize,
+                                cfg.extent,
+                                (0, 0),
+                                plot_dir_epc,
+                                f"{spl} {epoch[0]} {epoch[1]}{' '*bool(msplit)}{msplit}{' '*bool(map_type)}{map_type}",
+                                log_thresh=cfg.log_thresh,
+                                append=name + append,
+                                qrur=True,
+                            )

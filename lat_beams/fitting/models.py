@@ -1,9 +1,8 @@
 import astropy.units as u
 import numpy as np
-from astropy.nddata import block_reduce, block_replicate
 from joblib import Memory
 from numba import njit
-from scipy.special import factorial, jv, spherical_jn
+from scipy.special import factorial, jv
 
 location = "/tmp/lat_beams"
 memory = Memory(location, verbose=0)
@@ -182,18 +181,18 @@ def bessel_beam(
     if len(thetas) == 0:
         return beam_model + off
 
-    wmsk = beam_model < thresh
+    # wmsk = beam_model < thresh
     tbins = np.digitize(
         theta, np.hstack([[-np.pi], thetas[1:-1] + 0.5 * np.diff(thetas)[:-1], [np.pi]])
     )
 
     for tb in np.unique(tbins):
         tmsk = tbins == tb
-        twmsk = tmsk * wmsk
+        # twmsk = tmsk * wmsk
         r0 = r0_wing[tb - 1]
         amp = amp_wing[tb - 1]
         rmsk = tmsk * (r > r0)  # + (beam_model < amp))
-        beam_model[twmsk + rmsk] = amp * (r0 / r[twmsk + rmsk]) ** 3
+        beam_model[rmsk] = amp * (r0 / r[rmsk]) ** 3
 
     beam_model += off
 

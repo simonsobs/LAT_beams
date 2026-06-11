@@ -1,5 +1,5 @@
 """
-rore generic fitting script.
+More generic fitting script.
 Still somewhat LAT specific but could be genralized if desired.
 """
 
@@ -205,7 +205,6 @@ def main():
 
     profiler = None
     if args.profile:
-
         logger.info("Running in profiler mode! Only a few dets will be kept")
 
     if cfg.preprocess_cfg is None:
@@ -223,6 +222,13 @@ def main():
         os.makedirs(plot_dir, exist_ok=True)
         os.makedirs(data_dir, exist_ok=True)
 
+    # Get context
+    with open(cfg.ctx_path) as f:
+        ctx_str = yaml.dump(yaml.safe_load(f))
+    ctx = Context(cfg.ctx_path)
+    if ctx.obsdb is None:
+        raise ValueError("No obsdb in context!")
+
     # Modify preproc with our paths
     preprocess_cfg["archive"]["index"] = os.path.join(
         data_dir, preprocess_cfg["archive"]["index"]
@@ -230,15 +236,9 @@ def main():
     preprocess_cfg["archive"]["policy"]["filename"] = os.path.join(
         data_dir, preprocess_cfg["archive"]["policy"]["filename"]
     )
+    preprocess_cfg["context_file"] = cfg.ctx_path
     os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
     os.makedirs(os.path.dirname(preprocess_cfg["archive"]["index"]), exist_ok=True)
-
-    # Get context
-    with open(cfg.ctx_path) as f:
-        ctx_str = yaml.dump(yaml.safe_load(f))
-    ctx = Context(cfg.ctx_path)
-    if ctx.obsdb is None:
-        raise ValueError("No obsdb in context!")
 
     # Output metadata setup
     h5_path = os.path.join(data_dir, "tod_fits.h5")
@@ -351,14 +351,19 @@ def main():
                 sys.stdout.flush()
                 master_comm.barrier()
                 to_save = master_comm.gather(to_save, root=0)
-                if myrank == 0 and to_save is not None and h5_file is not None:
+                if (
+                    myrank == 0
+                    and to_save is not None
+                    and h5_file is not None
+                    and db is not None
+                ):
                     for ts in to_save:
                         if ts is None:
                             continue
                         rset, obs_id, ufm = ts
                         if rset is None:
                             continue
-                        path = f"{obs['obs_id']}/{ufm}"
+                        path = f"{obs_id}/{ufm}"
                         write_dataset(rset, h5_file, path, True)
                         db.add_entry(
                             params={
@@ -561,9 +566,11 @@ def main():
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
 
                     # Filter
-                    filt = tod_ops.filters.high_pass_sine2(
-                        cfg.hp_fc
-                    ) * tod_ops.filters.low_pass_sine2(cfg.lp_fc)
+                    filt = tod_ops.filters.identity_filter()
+                    if cfg.hp_fc is not None:
+                        filt *= tod_ops.filters.high_pass_sine2(cfg.hp_fc)
+                    if cfg.lp_fc is not None:
+                        filt *= tod_ops.filters.low_pass_sine2(cfg.lp_fc)
                     sig_filt = tod_ops.filters.fourier_filter(aman, filt)
 
                     # Trim edges in case of FFT ringing
@@ -682,7 +689,11 @@ def main():
 
                     # Plot the TOD
                     plot_tod(
-                        aman, sig_filt, tod_plot_dir, f"{ufm}_{band_name}", cfg.min_dets
+                        aman,
+                        sig_filt,
+                        tod_plot_dir,
+                        f"{ufm}_{band_name}",
+                        cfg.min_dets * 10,
                     )
                     if args.plot_only:
                         _msg = f"{band_name} Ran in no fit mode"
@@ -730,15 +741,15 @@ def main():
                     logger.log(25, "Took %s seconds to fit", t1 - t0)
                     for focal_plane in fps:
                         # Do a quick cut based on FWHM tol
-                        focal_plane.restrict(
-                            "dets",
+                        msk = (
                             np.abs(
                                 1
                                 - focal_plane.fwhm
                                 / np.deg2rad(cfg.nominal_fwhm[band_name] / 60)
                             )
-                            < cfg.fwhm_tol,
+                            < cfg.fwhm_tol
                         )
+                        focal_plane = focal_plane.restrict("dets", msk)
 
                         # Convert to results set
                         sarray = np.fromiter(
@@ -795,13 +806,6 @@ def main():
                 msk = np.array(focal_plane.amp) > 0
                 # Kill fits that are statistically bad
                 msk *= np.array(focal_plane.reduced_chisq < cfg.max_chisq)
-                msk *= np.array(focal_plane.amp) < cfg.n_med * np.median(
-                    np.array(focal_plane.amp[msk])
-                )
-                msk *= (
-                    np.array(focal_plane.amp)
-                    > np.median(np.array(focal_plane.amp[msk])) / cfg.n_med**2
-                )
                 # How many times it saw the source (ie. hits).
                 msk *= np.array(focal_plane.hits) >= cfg.min_hits
                 high_hits = np.array(focal_plane.hits) >= cfg.high_hits

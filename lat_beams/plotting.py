@@ -276,7 +276,7 @@ def plot_tod(
 
         lc = LineCollection(segments, alpha=0.3)
         ax.add_collection(lc)
-        ax.autoscale(enable=True, axis="y")
+        ax.autoscale(enable=True, axis="both")
         ax.set_xlabel("Samples")
         ax.set_ylabel(ylabel)
         ax.set_title(file_label.replace("_", " "))
@@ -371,12 +371,18 @@ def plot_focal_plane(
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
         plt.title(f"{obs_id} {ufm}")
-        plt.savefig(os.path.join(fit_plot_dir, filename))
+        plt.savefig(os.path.join(fit_plot_dir, filename), bbox_inches="tight")
     plt.close()
 
 
 def auto_relplot(
-    data: dict[str, Sequence], x: str, y: str, ignore: list[str] = [], **kwargs
+    data: dict[str, Sequence],
+    x: str,
+    y: str,
+    ignore: list[str] = [],
+    merge: list[list[str]] = [],
+    auto: bool = True,
+    **kwargs,
 ) -> sns.FacetGrid:
     """
     Make a relplot.
@@ -403,6 +409,16 @@ def auto_relplot(
         The field to plot as y.
     ignore : list[str]
         List of fields to ignore.
+    merge : list[list[str]]
+        Fields to forcibly merge.
+        Each element in this list should be a list of fields.
+        The merged field will have a name with formate `{field1}+{field2}+...`.
+        The fields speicfied here cannot overlap with each other,
+        `ignore`, or fields speicfied by `**kwargs`.
+    auto : bool, default: True
+        If False then all automatic features to pick catagories for the
+        relplot are turned off and this is simply a wrapper to `relplot`
+        with the ability to specify merged fields.
     **kwargs
         Key word arguments to pass to `relplot`.
         Note that you can pass catagorical varaibles like `hue` here
@@ -413,27 +429,45 @@ def auto_relplot(
     plot : sns.FacetGrid
         The plot output by `relplot`.
     """
+    ignore = ignore.copy()
     cats = ["hue", "col", "row", "style"]
     in_kwargs = [
         kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)
     ]
     can_add = [cat for cat in cats if (cat not in kwargs or kwargs[cat] is None)]
-    fields = [
-        k for k in data if (k not in (x, y) and k not in in_kwargs and k not in ignore)
-    ]
+    for mlist in merge:
+        if len(mlist) == 0:
+            continue
+        for m in mlist:
+            if m in ignore or m in in_kwargs:
+                raise ValueError(
+                    f"Can't perform merge with {m}, it already has a role speicfied!"
+                )
+            ignore += [m]
+        n = len(data[mlist[0]])
+        name = "+".join(mlist)
+        combined = ["+".join(str(data[c][i]) for c in mlist) for i in range(n)]
+        data[name] = combined
 
-    fields.sort(key=lambda c: len(set(data[c])))
-    for field, cat in zip(fields, can_add):
-        kwargs[cat] = field
+    if auto:
+        fields = [
+            k
+            for k in data
+            if (k not in (x, y) and k not in in_kwargs and k not in ignore)
+        ]
 
-    if len(fields) > len(can_add):
-        to_combine = [kwargs["hue"]] + fields[4:]
-        n = len(data[x])
+        fields.sort(key=lambda c: len(set(data[c])))
+        for field, cat in zip(fields, can_add):
+            kwargs[cat] = field
 
-        combined = ["+".join(str(data[c][i]) for c in to_combine) for i in range(n)]
+        if len(fields) > len(can_add):
+            to_combine = [kwargs["hue"]] + fields[can_add:]
+            n = len(data[x])
 
-        kwargs["hue"] = "+".join(to_combine)
-        data[kwargs["hue"]] = combined
+            combined = ["+".join(str(data[c][i]) for c in to_combine) for i in range(n)]
+
+            kwargs["hue"] = "+".join(to_combine)
+            data[kwargs["hue"]] = combined
 
     plot = sns.relplot(
         data=data,

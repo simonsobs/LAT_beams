@@ -1,0 +1,39 @@
+tags:
+  basedir:  /global/cfs/cdirs/sobs/metadata/lat
+  manifestdir: /global/cfs/cdirs/sobs/metadata/lat/manifests/
+
+imports:
+  - sotodlib.io.load_book
+  - sotodlib.io.metadata
+
+obsfiledb: '{basedir}/lat_obsfiledb_local.sqlite'
+obsdb: '/global/cfs/cdirs/sobs/users/mhasse/work/250514/enhanced_obsdbs/lat_obsdb_251114m.sqlite' #'{basedir}/lat_obsdb_240911m_local.sqlite'
+
+obs_loader_type: 'obs-book'
+obs_colon_tags: [wafer.bandpass, wafer_slot]
+
+metadata:
+  - db: '{manifestdir}/smurf_detsets/v0/smurf_detset_info_local.sqlite'
+    name: 'smurf'
+    det_info: true
+    on_missing: trim
+  - db: '{manifestdir}/det_match/lat_det_match_260520m/assignment_local.sqlite'
+    label: assignment
+    det_info: true
+    on_missing: trim
+  - db: '{manifestdir}/wafer_info/lat_wafer_info_260301r1/wafer_info_local.sqlite'
+    label: wafer_info
+    det_info: true
+    on_missing: fail
+  - db: '{manifestdir}/det_cal/lat_det_cal_260216m/det_cal_local.sqlite'
+    label: det_cal
+    unpack: det_cal
+    # on_missing: fail  ## work-around for variable mask
+    on_missing: trim
+  - db: '{manifestdir}/pointing_model/lat_pointing_model_260423r1/db_local.sqlite'
+    label: pointing_model
+    unpack: pointing_model
+  - db: '{manifestdir}/focal_plane/lat_focal_plane_231129r5/db_local.sqlite'
+    label: focal_plane
+    unpack: focal_plane
+    on_missing: fail

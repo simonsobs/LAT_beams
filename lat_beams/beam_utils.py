@@ -6,7 +6,6 @@ TODO: Make everything radians
 
 import datetime as dt
 import os
-from logging import Logger
 from typing import Optional, cast
 
 import astropy.units as u
@@ -152,7 +151,9 @@ def estimate_solid_angle(
 
 
 def radial_profile(
-    data: Float[np.ndarray, "nx ny"], center: tuple[int, int]
+    data: Float[np.ndarray, "nx ny"],
+    center: tuple[int, int],
+    avg=True,
 ) -> Float[np.ndarray, "nr"]:
     """
     Compute the radial profile of a beam.
@@ -175,13 +176,18 @@ def radial_profile(
     r = r.astype(int)
 
     tbin = np.bincount(r.ravel()[msk], data.ravel()[msk])
+    if not avg:
+        return tbin
     nr = np.bincount(r.ravel()[msk])
     radialprofile = tbin / nr
     return radialprofile
 
 
 def get_fwhm_radial_bins(
-    r: Float[np.ndarray, "nr"], y: Float[np.ndarray, "nr"], interpolate: bool = False
+    r: Float[np.ndarray, "nr"],
+    y: Float[np.ndarray, "nr"],
+    interpolate: bool = False,
+    frac: float = 0.5,
 ) -> float:
     """
     Estimate FWHM from a radial profile.
@@ -195,13 +201,17 @@ def get_fwhm_radial_bins(
     interpolate : bool, default: False
         If True then interpolate the input profile on an evenly spaced
         grid of 100 points before estimating the FWHM.
+    frac : float, default: 0.5
+        The fraction of the peak to get the width at.
+        By default this is 0.5 which is the FWHM,
+        but other values can be passed if needed.
 
     Returns
     -------
     fwhm : float
         The estimated FWHM in the same units as `r`.
     """
-    half_point = np.max(y) * 0.5
+    half_point = np.max(y) * frac
 
     if interpolate:
         r_diff = r[1] - r[0]
@@ -211,6 +221,8 @@ def get_fwhm_radial_bins(
         r, y = (r_interp, y_interp)
     d = y - half_point
     inds = np.where(d > 0)[0]
+    if len(inds) < 0.1 * len(r):
+        return np.nan
     fwhm = 2 * (r[inds[-1]])
     return cast(float, fwhm)
 
@@ -300,7 +312,7 @@ def process_model(
     data_fwhm: float,
     min_sigma: float,
     job: Optional[jobdb.Job],
-    logger: Optional[LoggerLke],
+    logger: Optional[LoggerLike],
 ) -> Optional[AxisManager]:
     """
     Convenience function to postproccess a map and it's fit model.
@@ -379,7 +391,7 @@ def process_model(
 
 
 def load_beam_fits_from_jobs(
-    fpath: str, joblist: list[jobdb.Job]
+    fpath: str, joblist: list[jobdb.Job]  # , jdb
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
@@ -402,6 +414,7 @@ def load_beam_fits_from_jobs(
         * wafer_slot : str, the wafer slot of the fit data
         * stream_id : str, the stream id of the fit data
         * band : str, the band (ie. f090) of the fit data
+        * split: str, the split that was run for this map
         * source : str, the source that was fit
         * time : float, the time of the observation
         * hour : float, what hour of the day the observation was at
@@ -417,6 +430,7 @@ def load_beam_fits_from_jobs(
     times = np.array([float(o.split("_")[1]) for o in obs_ids])
     wafer_slots = np.array([job.tags["wafer_slot"] for job in joblist])
     stream_ids = np.array([job.tags["stream_id"] for job in joblist])
+    splits = np.array([job.tags["split"] for job in joblist])
     bands = np.array([job.tags["band"] for job in joblist])
     sources = np.array([job.tags["source"] for job in joblist])
     dates = np.array([dt.date.fromtimestamp(ct) for ct in times])
@@ -432,10 +446,21 @@ def load_beam_fits_from_jobs(
 
     amans = np.array(
         [
-            AxisManager.load(f[os.path.join(o, s, b)])
-            for o, s, b in zip(obs_ids, stream_ids, bands)
+            AxisManager.load(f[os.path.join(o, s, b, m)])
+            for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
         ]
     )
+    # amans = []
+    # for job, o, s, b, m in zip(joblist, obs_ids, stream_ids, bands, splits):
+    #     try:
+    #         aman = AxisManager.load(f[os.path.join(o, s, b, m)])
+    #         amans += [aman]
+    #     except:
+    #         with jdb.session_scope() as session:
+    #             job.jstate = "open"
+    #             session.merge(job)
+    #             session.commit()
+    #         print(os.path.join(o, s, b, m))
     # check that all fits have the same pars
     par_list = np.sort(list(amans[0]._fields.keys()))
     for aman in amans:
@@ -448,13 +473,24 @@ def load_beam_fits_from_jobs(
         ("wafer_slot", wafer_slots.dtype),
         ("stream_id", stream_ids.dtype),
         ("band", bands.dtype),
+        ("split", splits.dtype),
         ("source", sources.dtype),
         ("time", float),
         ("hour", float),
         ("aman", "O"),
     ]
     all_fits = np.fromiter(
-        zip(obs_ids, wafer_slots, stream_ids, bands, sources, times, tdelt, amans),
+        zip(
+            obs_ids,
+            wafer_slots,
+            stream_ids,
+            bands,
+            splits,
+            sources,
+            times,
+            tdelt,
+            amans,
+        ),
         dtype,
         count=len(amans),
     )
@@ -499,8 +535,25 @@ def get_fit_vec(
     return dat
 
 
+def _get_vec(spl, fits, ctx, round_to):
+    if spl in fits.dtype.names:
+        return fits[spl].astype(str)
+    split_vec = []
+    for fit in fits:
+        obs = ctx.obsdb.get(fit["obs_id"])
+        split_vec += [obs[spl]]
+    split_vec = np.array(split_vec)
+    if np.issubdtype(split_vec.dtype, np.number):
+        split_vec = np.round(split_vec, round_to)
+    return split_vec
+
+
 def get_split_vec(
-    fits: Shaped[np.ndarray, "nfits"], split: str, ctx: Context, round_to: int = 2
+    fits: Shaped[np.ndarray, "nfits"],
+    split: str,
+    ctx: Context,
+    round_to: int = 2,
+    metasplits: dict[str, tuple[str, list[str]]] = {},
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Get an array of metadata to split fits by.
@@ -517,25 +570,38 @@ def get_split_vec(
         Context used to lookup values from the obsdb.
     round_to : int
         How many decimal places to round numeric collumns to.
+    metasplits : dict[str, tuple[str, list[str]]]
+        A method of defining a collumn that matches against values
+        from a normal split collumn. Each entry should have some `name`
+        as the key, which then maps to a tuple. The first element of
+        the tuple should be the split we are matching against and the
+        second should be a list of values to match. In the output split_vec
+        anything that matches will have `name` in the split and anything
+        that does not match will have `NOMATCH`.
 
     Returns
     -------
     split_vec : Shaped[np.ndarray, "nfits"]
-        Array of strings constaining the values from the stlip collumns.
+        Array of strings containing the values from the split collumns.
         Values are in the same order as `split` and are seperated by `+`s.
     """
+    if fits.dtype.names is None:
+        raise ValueError("Unknown fits format!")
+    if ctx.obsdb is None:
+        raise ValueError("obsdb is None!")
     split_vecs = []
     for spl in split.split("+"):
-        if spl in fits.dtype.names:
-            split_vecs += [fits[spl].astype(str)]
-            continue
-        split_vec = []
-        for fit in fits:
-            obs = ctx.obsdb.get(fit["obs_id"])
-            split_vec += [obs[spl]]
-        split_vec = np.array(split_vec)
-        if np.issubdtype(split_vec.dtype, np.number):
-            split_vec = np.round(split_vec, round_to)
+        if spl in metasplits:
+            # Structure of metasplits name -> (spl, (vals))
+            split_vec = _get_vec(metasplits[spl][0], fits, ctx, round_to)
+            split_vec = split_vec.astype(
+                f"U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}"
+            )
+            msk = np.isin(split_vec, metasplits[spl][1])
+            split_vec[msk] = spl
+            split_vec[~msk] = "NOMATCH"
+        else:
+            split_vec = _get_vec(spl, fits, ctx, round_to)
         split_vecs += [split_vec.astype(str)]
     split_vecs = np.column_stack(split_vecs)
 
