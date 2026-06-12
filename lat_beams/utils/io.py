@@ -1,20 +1,28 @@
 """
 Utilities for reading and writing data to disk.
 """
+
 import logging
 from typing import Optional
 
 import numpy as np
+from sotodlib.core import AxisManager
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
-from sotodlib.core import AxisManager
 
 from .jobs import set_tag
-from .log import log_lvl, LoggerLike
+from .log import LoggerLike, log_lvl
 
 
 def load_aman(
-        obs_id : str, preprocess_cfg : dict, dets : dict, job : jobdb.Job, min_dets: int, logger : LoggerLike, fp_flag: bool=False, save: bool=False
+    obs_id: str,
+    preprocess_cfg: dict,
+    dets: dict,
+    job: jobdb.Job,
+    min_dets: int,
+    logger: LoggerLike,
+    fp_flag: bool = False,
+    save: bool = False,
 ) -> Optional[AxisManager]:
     """
     Load and preprocess an observation.
