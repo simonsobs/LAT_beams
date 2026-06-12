@@ -1,15 +1,55 @@
+"""
+Utilities for reading and writing data to disk.
+"""
 import logging
+from typing import Optional
 
 import numpy as np
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
+from sotodlib.site_pipeline import jobdb
+from sotodlib.core import AxisManager
 
 from .jobs import set_tag
-from .log import log_lvl
+from .log import log_lvl, LoggerLike
 
 
 def load_aman(
-    obs_id, preprocess_cfg, dets, job, min_dets, logger, fp_flag=False, save=False
-):
+        obs_id : str, preprocess_cfg : dict, dets : dict, job : jobdb.Job, min_dets: int, logger : LoggerLike, fp_flag: bool=False, save: bool=False
+) -> Optional[AxisManager]:
+    """
+    Load and preprocess an observation.
+
+    Parameters
+    ----------
+    obs_id : str
+        The `obs_id` to load.
+    preprocess_cfg : dict
+        The loaded preprocess configuration.
+    dets : dict
+        Detector selections dictionairy.
+        Check your preprocess config to see what the minimum set of selections needed here are.
+    job : jobdb.Job
+        The `Job` that we are loading this observation for.
+        If we fail to load it then the job is marked as failed and the reason we couldn't load
+        will be saved in the `message` tag.
+    min_dets : int
+        The minimum number of detectors allowed after preprocessing that we want.
+        If fewer than `min_dets` detectors remain then the job is marked as failed.
+        and `None` is returned.
+    logger : LoggerLike
+        Logger to log to when preprocessing.
+        Note that the log level will be set to `ERROR` for preprocess.
+    fp_flag : bool, default: False
+        If `True` then keep only detectors with valid pointing.
+    save : bool, default: False
+        If `True` then try to save the preprocess result.
+
+    Returns
+    -------
+    aman : Optional[AxisManager]
+        If we loaded and preprocessed successfully this is the loaded observation.
+        If something failed this is `None`.
+    """
     try:
         with log_lvl(logger, logging.ERROR):
             aman, _, _, err = preproc_or_load_group(
