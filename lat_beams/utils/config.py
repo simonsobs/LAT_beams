@@ -3,7 +3,7 @@ import os
 import time
 
 import numpy as np
-import yaml[session.merge(job) for job in jobs]
+import yaml
 
 
 def get_args_cfg():
