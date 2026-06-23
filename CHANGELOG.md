@@ -1,3 +1,9 @@
+## 3.3.1 (2026-06-23)
+
+### Fix
+
+- dont allow more SVD modes than detectors
+
 ## 3.3.0 (2026-06-23)
 
 ### Feat
