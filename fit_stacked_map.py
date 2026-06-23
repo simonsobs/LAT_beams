@@ -66,12 +66,7 @@ twcs = enmap.wcsutils.build(
 posmap_highres = enmap.posmap((pix_extent, pix_extent), twcs)
 
 # Get det splits
-det_split_names = [""]
-if cfg.det_split_dir != "":
-    det_split_names += [
-        os.path.splitext(os.path.basename(fname))[0]
-        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
-    ]
+det_split_names = ["full"] + cfg.det_splits
 
 # Profiler setup
 profiler = None

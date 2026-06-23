@@ -93,12 +93,7 @@ if args.plot_only:
     logger.info("Running in plot only mode!")
 
 # Get det splits
-det_split_names = [""]
-if cfg.det_split_dir != "":
-    det_split_names += [
-        os.path.splitext(os.path.basename(fname))[0]
-        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
-    ]
+det_split_names = ["full"] + cfg.det_splits
 
 # Loop through splits
 map_types = ("", "resid")  # , "ml") # Skipping ML for now
@@ -159,13 +154,8 @@ for split in cfg.split_by:
                 # Load
                 for map_type in map_types:
                     if map_type == "":
-                        map_path = os.path.join(data_dir, mjob.tags["solved"])
-                        ivar_path = os.path.join(data_dir, mjob.tags["weights"])
-                        if msplit != "":
-                            map_path = map_path.replace(
-                                "solved.fits", f"{msplit}_map.fits"
-                            )
-                            ivar_path = map_path.replace("map.fits", "weights.fits")
+                        map_path = os.path.join(data_dir, mjob.tags["solved"].format(split=fjob.tags["split"]))
+                        ivar_path = os.path.join(data_dir, mjob.tags["weights"].format(split=fjob.tags["split"]))
                     elif map_type == "resid":
                         map_path = os.path.join(data_dir, fjob.tags["resid"])
                         ivar_path = os.path.join(data_dir, fjob.tags["resid_weights"])
