@@ -1,3 +1,9 @@
+## 3.3.0 (2026-06-23)
+
+### Feat
+
+- use nominal fwhm as smoothing kernel when estimating center in make_map
+
 ## 3.2.1 (2026-06-12)
 
 ### Fix
