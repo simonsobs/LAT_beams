@@ -103,6 +103,7 @@ def make_map(
     comps: str,
     n_modes: int,
     pixsize: float,  # TODO: This doesn't need to exist
+    fwhm_nom: float,
     filename: Optional[str],
     min_det_secs: float,
     info: dict[str, str],
@@ -140,6 +141,8 @@ def make_map(
         The number of modes to use when filtering.
     pixsize : float
         `res` in arcseconds
+    fwhm_nom : float
+        The nominal FWHM in arcseconds.
     filename : Optional[str]
         The pattern for the output map filename.
         See `sotodlib.coords.planets.make_map` for details.
@@ -222,7 +225,7 @@ def make_map(
             return None, None
 
     # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], cfg.smooth_kern / pixsize, cfg.buf)
+    cent = estimate_cent(out["solved"][0], fwhm_nom / pixsize, cfg.buf)
 
     # Estimate SNR
     peak = out["solved"][0][cent]
