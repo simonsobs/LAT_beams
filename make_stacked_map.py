@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from lat_beams import beam_utils as bu
 from lat_beams.plotting import plot_map_complete
-from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths, init_log
+from lat_beams.utils import get_args_cfg, init_log, make_jobdb, setup_cfg, setup_paths
 
 
 def view_TQU(imap):
@@ -195,7 +195,7 @@ for split in cfg.split_by:
                     )
                     imap = (
                         reproject.thumbnails(
-                            imap - fit["aman"].gauss.off.value*(map_type == ""),
+                            imap - fit["aman"].gauss.off.value * (map_type == ""),
                             r=ext_rad,
                             coords=cent,
                             oshape=(pix_extent, pix_extent),
@@ -220,7 +220,10 @@ for split in cfg.split_by:
                         dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
                         if dist > cfg.miscenter_thresh:
                             logger.debug(
-                                "%s %s (%s) seems miscentered! Skipping!", jobstr, msplit, mjob.tags['source']
+                                "%s %s (%s) seems miscentered! Skipping!",
+                                jobstr,
+                                msplit,
+                                mjob.tags["source"],
                             )
                             break
 
@@ -239,7 +242,10 @@ for split in cfg.split_by:
                         mcoadd[msplit][map_type], copy=False, nan=0, posinf=0, neginf=0
                     )
                     # Save and plot
-                    for omap, name in [(mcoadd[msplit][map_type], "stack"), (wcoadd[msplit][map_type], "stack_ivar")]:
+                    for omap, name in [
+                        (mcoadd[msplit][map_type], "stack"),
+                        (wcoadd[msplit][map_type], "stack_ivar"),
+                    ]:
                         path = os.path.join(
                             data_dir_spl,
                             f"{spl}_{epoch[0]}_{epoch[1]}{'_'*bool(msplit)}{msplit}{'_'*bool(map_type)}{map_type}_{name}.fits",
