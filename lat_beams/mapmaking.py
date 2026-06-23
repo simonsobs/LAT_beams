@@ -190,23 +190,7 @@ def make_map(
 
     with log_lvl(logger, logging.WARNING):
         try:
-            # Full map
             out = cp.make_map(
-                aman.copy(),
-                thread_algo="domdir",
-                center_on=src_to_map,
-                res=res,
-                cuts=cuts,
-                source_flags=source_flags,
-                comps=comps,
-                filename=filename,
-                n_modes=n_modes,
-                info=info,
-            )
-
-            # Splits, being a litte inefficient by fitering again here
-            if len(det_splits):
-                _ = cp.make_map(
                     aman.copy(),
                     thread_algo="domdir",
                     center_on=src_to_map,
@@ -225,11 +209,12 @@ def make_map(
             return None, None
 
     # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], fwhm_nom / pixsize, cfg.buf)
+    omap = out["solved"][0] if len(det_splits) == 0 else out["det_splits"]["full"]["solved"][0]
+    cent = estimate_cent(omap, fwhm_nom / pixsize, cfg.buf)
 
     # Estimate SNR
-    peak = out["solved"][0][cent]
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+    peak = omap[cent]
+    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
     logger.debug("%s map SNR approximately %s", map_str.title(), snr)
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
@@ -239,7 +224,7 @@ def make_map(
         job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
         if cfg.del_map and filename is not None:
             logger.debug("Deleting map files")
-            glob_path = os.path.splitext(filename)[0] + "*.*"
+            glob_path = filename.format(map="*.*", **info)[:-5]
             flist = glob.glob(glob_path)
             for fname in flist:
                 if os.path.isfile(fname):

@@ -45,7 +45,6 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 
-# Adding splits support here in a jank way until I rerun make_source_map with splits in the jobdb
 def get_jobdict(jdb):
     jobdict = {
         f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
@@ -54,12 +53,12 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, det_split_names):
+def get_jobit(jdb):
     maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
     maplist = np.array_split(maplist, nproc)[myrank]
     to_ret = []
     for info in maplist:
-        to_ret += [(info, ds) for ds in det_split_names]
+        to_ret += [(info, ds) for ds in info.tags["splits"].split(",")]
     return to_ret
 
 
@@ -141,7 +140,7 @@ jdb, all_jobs = setup_jobs(
     data_dir,
     "fit_map",
     get_jobdict,
-    partial(get_jobit, det_split_names=det_split_names),
+    partial(get_jobit),
     partial(get_jobstr, ctx=ctx, start_time=cfg.start_time, stop_time=cfg.stop_time),
     get_tags,
     cfg.source_list,
@@ -236,11 +235,8 @@ for i, j in enumerate(joblist):
     set_tag(job, "comps", comps)
 
     # Figure out paths, this won't need to happen once make_source_map is fixed
-    map_path = os.path.join(data_dir, map_job.tags["solved"])
-    ivar_path = os.path.join(data_dir, map_job.tags["weights"])
-    if split != "":
-        map_path = map_path.replace("solved.fits", f"{split}_map.fits")
-        ivar_path = map_path.replace("map.fits", "weights.fits")
+    map_path = os.path.join(data_dir, map_job.tags["solved"].format(split=job.tags["split"]))
+    ivar_path = os.path.join(data_dir, map_job.tags["weights"].format(split=job.tags["split"]))
     # Load the maps
     try:
         solved = enmap.read_map(map_path)[0]

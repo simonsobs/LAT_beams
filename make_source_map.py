@@ -153,6 +153,7 @@ def get_tags(info):
         "config": "",
         "context": "",
         "preprocess": "",
+        "splits": "",
     }
     return tags
 
@@ -174,7 +175,7 @@ def load_det_splits(split_dir):
 
 
 def make_det_splits(aman, split_dir, min_dets):
-    det_splits = {}
+    det_splits = {"full" : RangesMatrix.zeros(aman.shape)}
     if "det_id" not in aman.det_info:
         return det_splits
     for name, dets in load_det_splits(split_dir):
@@ -521,6 +522,7 @@ for i, j in enumerate(joblist):
 
     # Make splits
     det_splits = make_det_splits(aman, cfg.det_split_dir, cfg.min_dets)
+    set_tag(job, "splits", ",".join(det_splits.keys()))
 
     # Make final map
     out, cent = lbm.make_map(
@@ -544,13 +546,13 @@ for i, j in enumerate(joblist):
     )
     if out is None or cent is None:
         continue
+    omap = out["splits"]["full"]["solved"]
 
     # Add paths to job
-    for name, ext in [
-        ("binned", "fits"),
-        ("detweights", "h5"),
-        ("solved", "fits"),
-        ("weights", "fits"),
+    for name, fname, ext in [
+        ("detweights", "detweights", "h5"),
+        ("solved", "{split}_map", "fits"),
+        ("weights", "{split}_weights", "fits"),
     ]:
         set_tag(
             job,
@@ -564,19 +566,19 @@ for i, j in enumerate(joblist):
     # Plot
     os.makedirs(os.path.join(obs_plot_dir, ufm), exist_ok=True)
     try:
-        posmap = out["solved"].posmap()
+        posmap = omap.posmap()
         posmap = np.rad2deg(posmap) * 3600
         plot_map_complete(
-            out["solved"],
+            omap,
             posmap,
-            out["solved"].wcs.wcs.cdelt[1] * (60 * 60),
+            omap.wcs.wcs.cdelt[1] * (60 * 60),
             cfg.extent,
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band}",
             comps=cfg.comps,
             log_thresh=cfg.log_thresh,
-            lognorm=1.0 / out["solved"][0][cent],
+            lognorm=1.0 / omap[0][cent],
         )
     except Exception as e:
         logger.warning("Plotting failed with error: %s", e)
@@ -591,14 +593,14 @@ for i, j in enumerate(joblist):
     outmap, (mlmap_path, rhs_path, div_path, bin_path) = lbm.make_ml_map(
         {sub_id: (aman, out["P"])},
         passes,
-        out["solved"].shape,
-        out["solved"].wcs,
+        omap.shape,
+        omap.wcs,
         f"{obs_id}_{ufm}_{band}_",
         obs_data_dir,
         l_comm,
         logger,
         cfg,
-        guess=out["solved"],
+        guess=omap,
     )
     if mlmap_path == "" or outmap is None:
         msg = "Failed to make ML map"
