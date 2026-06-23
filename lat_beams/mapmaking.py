@@ -103,7 +103,7 @@ def make_map(
     comps: str,
     n_modes: int,
     pixsize: float,  # TODO: This doesn't need to exist
-    fwhm_nom : float,
+    fwhm_nom: float,
     filename: Optional[str],
     min_det_secs: float,
     info: dict[str, str],
