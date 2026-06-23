@@ -160,7 +160,7 @@ def get_tags(info):
 
 @cache
 def load_det_splits(split_dir):
-    det_splits = []
+    det_splits = {}
     for fname in glob(os.path.join(split_dir, "*.txt")):
         name = os.path.splitext(os.path.basename(fname))[0]
         dets = np.genfromtxt(
@@ -170,22 +170,29 @@ def load_det_splits(split_dir):
                 0,
             ],
         )
-        det_splits += [(name, dets)]
+        det_splits[name] = dets
     return det_splits
 
 
-def make_det_splits(aman, split_dir, min_dets):
+def make_det_splits(aman, split_dir, min_dets, det_split_cfg):
     det_splits = {"full" : RangesMatrix.zeros(aman.shape)}
     if "det_id" not in aman.det_info:
         return det_splits
-    for name, dets in load_det_splits(split_dir):
-        msk = np.isin(aman.det_info.det_id, dets)
-        if np.sum(msk) < min_dets / 2:
-            continue
-        rmat = RangesMatrix.from_mask(
-            np.broadcast_to(~msk[..., None], aman.signal.shape)
-        )
-        det_splits[name] = rmat
+    det_split_files = load_det_splits(split_dir)
+    for det_split in det_split_cfg:
+        if det_split in det_split_files:
+            dets = det_split_files[det_split]
+            msk = np.isin(aman.det_info.det_id, dets)
+            if np.sum(msk) < min_dets / 2:
+                continue
+            rmat = RangesMatrix.from_mask(
+                np.broadcast_to(~msk[..., None], aman.signal.shape)
+            )
+            det_splits[name] = rmat
+        elif det_split == "leftright":
+            det_splits["left"] = aman.preprocess.turnaround_flags.left_scan
+            det_splits["right"] = aman.preprocess.turnaround_flags.right_scan
+
     return det_splits
 
 
@@ -521,7 +528,7 @@ for i, j in enumerate(joblist):
         )
 
     # Make splits
-    det_splits = make_det_splits(aman, cfg.det_split_dir, cfg.min_dets)
+    det_splits = make_det_splits(aman, cfg.det_split_dir, cfg.min_dets, cfg.det_splits)
     set_tag(job, "splits", ",".join(det_splits.keys()))
 
     # Make final map

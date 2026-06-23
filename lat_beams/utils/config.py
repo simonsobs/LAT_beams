@@ -100,6 +100,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["root_dir"] = os.path.expanduser(cfg.get("root_dir", "~"))
     cfg["append"] = cfg.get("append", "")
     cfg["det_split_dir"] = cfg.get("det_split_dir", "")
+    cfg["det_splits"] = cfg.get("det_splits", [])
     cfg["fit_append"] = cfg.get("fit_append", "")
 
     # Source masking and projection settings

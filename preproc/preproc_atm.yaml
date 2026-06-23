@@ -75,9 +75,16 @@ process_pipe:
         use_pca: False
         modes: 1
 
+    - name: "flag_turnarounds"
+      process:
+        method: "scanspeed"
+      calc:
+        method: "scanspeed"
+      save: True
+
     - name : "combine_flags"
       process:
-        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps']
+        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps', 'turnaround_flags.turnarounds']
         total_flags_label: 'glitch_flags'
         method: 'union'
 
