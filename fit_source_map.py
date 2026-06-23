@@ -38,6 +38,8 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    ErrCode,
+    fail
 )
 
 comm = MPI.COMM_WORLD
@@ -85,6 +87,7 @@ def get_tags(mjob):
         "comps": mjob.tags["comps"],
         "source": mjob.tags["source"],
         "message": "",
+        "errcode": 0,
         "resid": "",
         "resid_weights": "",
         "config": "",
@@ -245,9 +248,7 @@ for i, j in enumerate(joblist):
         weights = cast(enmap.ndmap, weights)
     except FileNotFoundError:
         msg = "Missing map files"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.MAP_MISSING, msg, logger)
         to_save = (None, None)
         continue
     if solved.wcs is None:
@@ -257,9 +258,7 @@ for i, j in enumerate(joblist):
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
         msg = "Weights all 0"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.ZERO_IVAR, msg, logger)
         to_save = (None, None)
         continue
 
@@ -278,9 +277,7 @@ for i, j in enumerate(joblist):
 
     if snr < cfg.min_snr:
         msg = "Data SNR too low"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.SNR_LOW, msg, logger)
         to_save = (None, None)
         continue
 
@@ -321,10 +318,8 @@ for i, j in enumerate(joblist):
         1000,
     )
     if gauss_params is None or model is None:
-        msg = "Fit failed"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        msg = "Gauss fit failed"
+        fail(job, ErrCode.FIT_FAILED, msg, logger)
         to_save = (None, None)
         continue
 
@@ -336,9 +331,7 @@ for i, j in enumerate(joblist):
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
     if min_c_dist < 120 * cfg.nominal_fwhm[band]:
         msg = "Source too close to edge of map"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.CLOSE_TO_EDGE, msg, logger)
         to_save = (None, None)
         continue
 
@@ -357,9 +350,7 @@ for i, j in enumerate(joblist):
         or abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol
     ):
         msg = "Data FWHM out of tolerance"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.FWHM_TOL, msg, logger)
         to_save = (None, None)
         continue
 
@@ -433,10 +424,8 @@ for i, j in enumerate(joblist):
             band in cfg.bessel_powell_bands,
         )
         if bessel_beam_params is None or model is None:
-            msg = "Fit failed"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            msg = "Bessel fit failed"
+            fail(job, ErrCode.FIT_FAILED, msg, logger)
             to_save = (None, None)
             continue
 

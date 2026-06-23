@@ -7,7 +7,8 @@ TODO: Add some quick tools for inspecting the jobdb here.
 import os
 import sys
 import time
-from typing import Any, Callable, Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence, cast
+from enum import Enum
 
 import sqlalchemy as sqy
 from sotodlib.site_pipeline import jobdb
@@ -20,8 +21,24 @@ try:
 
     Comm = MPI.Comm
 except:
-    from pixell.mpi import FakeCommunicator as Comm
+    from pixell.mpi import FakeCommunicator
+    Comm = FakeCommunicator
 
+class ErrCode(Enum):
+    NO_ERR = 0
+    META = 1
+    PREPROC = 2
+    MIN_DETS = 3
+    SRC_TAG = 4
+    PLOT = 5
+    ML_MAP = 6
+    MAP_MISSING = 7
+    ZERO_IVAR = 8
+    SNR_LOW = 9
+    FIT_FAILED = 10
+    CLOSE_TO_EDGE = 11
+    FWHM_TOL = 12
+    DET_SECS = 13
 
 def set_tag(job, key, new_val):
     # This should be provided by the Job class but it's not...
@@ -32,6 +49,28 @@ def set_tag(job, key, new_val):
     else:
         raise ValueError(f'No tag called "{key}"')
 
+
+def fail(job : jobdb.Job, errcode : ErrCode, msg : str, logger : Optional[LoggerLike]):
+    """
+    Mark and job as failed.
+
+    Parameters
+    ----------
+    job : jobdb.Job
+        The job to fail.
+    errcode : ErrCode
+        The error code that thi job failed with.
+    msg : str
+        The detailed error message.
+    logger : LoggerLike
+        The logger to log the error to.
+    """
+    if logger is not None:
+        logger.error("%s (Err %d: %s)", msg, errcode.value, errcode.name)
+    set_tag(job, "message", msg)
+    if "errcode" in job.tags:
+        set_tag(job, "errcode", errcode.value)
+    job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
 
 def make_jobdb(
     comm: Optional[Comm], data_dir: str, append: str = ""

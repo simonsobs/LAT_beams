@@ -22,7 +22,7 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 
 from .beam_utils import estimate_cent
-from .utils import LoggerLike, log_lvl, set_tag
+from .utils import LoggerLike, log_lvl, set_tag, ErrCode, fail
 
 
 def make_cuts(
@@ -183,9 +183,7 @@ def make_map(
     logger.debug("%s detector seconds on source in %s mask", det_secs, map_str)
     if det_secs < min_det_secs:
         msg = f"Not enough time on source in {map_str} mask."
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.DET_SECS, msg, logger)
         return None, None
 
     with log_lvl(logger, logging.WARNING):
@@ -219,9 +217,7 @@ def make_map(
     logger.debug("%s map SNR approximately %s", map_str.title(), snr)
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.SNR_LOW, msg, logger)
         if cfg.del_map and filename is not None:
             logger.debug("Deleting map files")
             glob_path = filename.format(map="*.*", **info)[:-5]

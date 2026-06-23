@@ -30,6 +30,8 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    ErrCode,
+    fail,
 )
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
@@ -139,6 +141,7 @@ def get_tags(info):
         "wafer_slot": ws,
         "stream_id": ufm,
         "band": band,
+        "errcode": 0,
         "message": "",
         "binned": "",
         "detweights": "",
@@ -350,10 +353,7 @@ for i, j in enumerate(joblist):
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
             solved = cast(enmap.ndmap, solved)
         except FileNotFoundError:
-            msg = "Missing map files in plot_only mode"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(job, ErrCode.MAP_MISSING, "Missing map files in plot_only mode", logger)
             continue
 
         obs_plot_dir = os.path.join(
@@ -392,15 +392,11 @@ for i, j in enumerate(joblist):
             meta = ctx.get_meta(obs_id)
         except Exception as e:
             msg = f"Failed to load metadata with error {e}"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(job, ErrCode.META, msg, logger)
             continue
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.META, msg, logger)
         continue
     fscale_fac = 90.0 / float(band[1:])
 
@@ -409,9 +405,7 @@ for i, j in enumerate(joblist):
         logger.warning("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
         msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-        logger.error("t%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.SRC_TAG, msg, logger)
         logger.debug("Tags were: %s", obs["tags"])
         continue
     src_name = "_".join(src_names)
@@ -421,9 +415,7 @@ for i, j in enumerate(joblist):
         meta.restrict("dets", meta.focal_plane.hits >= cfg.min_hits)
         if meta.dets.count < cfg.min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(job, ErrCode.MIN_DETS, msg, logger)
             continue
 
     obs_plot_dir = os.path.join(
@@ -611,9 +603,7 @@ for i, j in enumerate(joblist):
     )
     if mlmap_path == "" or outmap is None:
         msg = "Failed to make ML map"
-        logger.error(msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.ML_MAP, msg, logger)
         continue
 
     # Add paths to job

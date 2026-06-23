@@ -19,7 +19,7 @@ from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
 from .utils import LoggerLike
-from .utils.jobs import set_tag
+from .utils.jobs import set_tag, fail, ErrCode
 
 
 def solid_angle(
@@ -364,11 +364,10 @@ def process_model(
         msg = "Model SNR too low"
         if logger is None:
             print(f"{msg}")
-        else:
+        elif job is None:
             logger.error("%s", msg)
-        if job is not None:
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        if job is not None: 
+            fail(job, ErrCode.SNR_LOW, msg, logger)
         return None
 
     # Get model profile
