@@ -595,7 +595,9 @@ def main():
 
                     # SVD filter
                     if cfg.svd_modes > 0:
-                        U, S, V = svds(aman.signal, k=cfg.svd_modes)
+                        U, S, V = svds(
+                            aman.signal, k=min(cfg.svd_modes, len(aman.signal) // 2)
+                        )
                         if U is None or V is None:
                             raise ValueError("SVD didn't compute U or V")
                         # Scipy does ascending order for some reason...
