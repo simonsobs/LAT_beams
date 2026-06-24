@@ -857,7 +857,7 @@ def main():
                     for field, dtype in outdt:
                         if np.issubdtype(dtype, np.floating):
                             pad_res[field][:] = np.nan
-                    rset = metadata.ResultSet.from_friend(pad_res)
+                    rset = rset + metadata.ResultSet.from_friend(pad_res)
                 to_save = (rset, obs_id, ufm)
 
                 if args.profile:
