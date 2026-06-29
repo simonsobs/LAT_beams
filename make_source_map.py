@@ -178,7 +178,7 @@ def load_det_splits(split_dir):
 
 
 def make_det_splits(aman, split_dir, min_dets, det_split_cfg):
-    det_splits = {"full" : RangesMatrix.zeros(aman.shape)}
+    det_splits = {"full" : RangesMatrix.zeros(aman.signal.shape)}
     if "det_id" not in aman.det_info:
         return det_splits
     det_split_files = load_det_splits(split_dir)
@@ -191,10 +191,12 @@ def make_det_splits(aman, split_dir, min_dets, det_split_cfg):
             rmat = RangesMatrix.from_mask(
                 np.broadcast_to(~msk[..., None], aman.signal.shape)
             )
-            det_splits[name] = rmat
+            det_splits[det_split] = rmat
         elif det_split == "leftright":
             det_splits["left"] = aman.preprocess.turnaround_flags.left_scan
             det_splits["right"] = aman.preprocess.turnaround_flags.right_scan
+        else:
+            raise ValueError(f"Unknown det_split: {det_split}")
 
     return det_splits
 
@@ -557,7 +559,7 @@ for i, j in enumerate(joblist):
             job,
             name,
             os.path.relpath(
-                os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_{name}.{ext}"),
+                os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_{fname}.{ext}"),
                 data_dir,
             ),
         )
