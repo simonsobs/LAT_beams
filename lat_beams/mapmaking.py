@@ -199,15 +199,18 @@ def make_map(
                     filename=filename,
                     n_modes=n_modes,
                     info=info,
-                    data_splits=det_splits,
+                    data_splits=det_splits if len(det_splits) else None,
                 )
         except Exception as e:
-            msg = f"Failed to load metadata with error {e}"
+            msg = f"Failed to make map with error {e}"
             logger.error("%s", msg)
             return None, None
 
     # Smooth and find the center
-    omap = out["solved"][0] if len(det_splits) == 0 else out["det_splits"]["full"]["solved"][0]
+    if len(det_splits) == 0:
+        omap = out["solved"][0]
+    else:
+        omap = out["splits"]["full"]["solved"][0]
     cent = estimate_cent(omap, fwhm_nom / pixsize, cfg.buf)
 
     # Estimate SNR
