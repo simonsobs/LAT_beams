@@ -33,7 +33,7 @@ metadata:
   - db: '{manifestdir}/pointing_model/lat_pointing_model_260423r1/db_local.sqlite'
     label: pointing_model
     unpack: pointing_model
-  - db: '{manifestdir}/focal_plane/lat_focal_plane_231129r5/db_local.sqlite'
+  - db: '/global/homes/s/skh/data/pointing/lat/finalize_focal_plane/results/combined/db.sqlite'
     label: focal_plane
     unpack: focal_plane
     on_missing: fail
