@@ -258,6 +258,7 @@ def setup_jobs(
             if job.jstate.name != "open":
                 job.jstate = "open"
                 jobs_to_open += [job]
+                # joblist += [job]
             else:
                 joblist += [job]
         elif replot and job.jstate.name == "done":
@@ -280,8 +281,13 @@ def setup_jobs(
             jdb.clear_locks(jobs=joblist)
             if len(jobs_to_open) > 0:
                 with jdb.session_scope() as session:
-                    joblist += [session.merge(job) for job in jobs_to_open]
-                    session.commit()
+                    for job in jobs_to_open:
+                        jid = job.id
+                        session.merge(job)
+                        session.commit()
+                        job = session.get(jobdb.Job, jid)
+                        session.expunge(job)
+                        joblist += [job]
         comm.barrier()
     t1 = time.time()
     logger.info("Took %s seconds to add", t1 - t0)
