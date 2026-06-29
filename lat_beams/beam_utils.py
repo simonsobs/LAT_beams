@@ -390,7 +390,7 @@ def process_model(
 
 
 def load_beam_fits_from_jobs(
-    fpath: str, joblist: list[jobdb.Job]  # , jdb
+        fpath: str, joblist: list[jobdb.Job] , jdb : Optional[jobdb.JobManager] = None
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
@@ -443,23 +443,25 @@ def load_beam_fits_from_jobs(
         / 3600
     )
 
-    amans = np.array(
-        [
-            AxisManager.load(f[os.path.join(o, s, b, m)])
-            for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
-        ]
-    )
-    # amans = []
-    # for job, o, s, b, m in zip(joblist, obs_ids, stream_ids, bands, splits):
-    #     try:
-    #         aman = AxisManager.load(f[os.path.join(o, s, b, m)])
-    #         amans += [aman]
-    #     except:
-    #         with jdb.session_scope() as session:
-    #             job.jstate = "open"
-    #             session.merge(job)
-    #             session.commit()
-    #         print(os.path.join(o, s, b, m))
+    # amans = np.array(
+    #     [
+    #         AxisManager.load(f[os.path.join(o, s, b, m)])
+    #         for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
+    #     ]
+    # )
+    amans = []
+    for job, o, s, b, m in zip(joblist, obs_ids, stream_ids, bands, splits):
+        try:
+            aman = AxisManager.load(f[os.path.join(o, s, b, m)])
+            amans += [aman]
+        except:
+            print(os.path.join(o, s, b, m))
+            if jdb is None:
+                continue
+            with jdb.session_scope() as session:
+                job.jstate = "open"
+                session.merge(job)
+                session.commit()
     # check that all fits have the same pars
     par_list = np.sort(list(amans[0]._fields.keys()))
     for aman in amans:
