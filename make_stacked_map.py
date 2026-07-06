@@ -145,6 +145,8 @@ for split in cfg.split_by:
             for fit, fjob in tqdm(zip(sfits[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)):
                 jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['band']}"
                 msplit = fjob.tags["split"]
+                if msplit not in det_split_names:
+                    continue
                 if jobstr not in mjobdict:
                     logger.debug("Map job not found for %s", jobstr)
                     continue
