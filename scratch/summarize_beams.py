@@ -41,10 +41,10 @@ if len(fjobs) == 0:
     sys.exit(0)
 
 # Load fits
-all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist())
+all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist(), jdb)
 snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
 solid_angle = bu.get_fit_vec(all_fits, "bessel.model_solid_angle_true")
-msk = snr > 100
+msk = snr > 1
 msk *= solid_angle > 0
 all_fits = all_fits[msk]
 fjobs = fjobs[msk]
