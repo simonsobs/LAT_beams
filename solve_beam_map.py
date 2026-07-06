@@ -105,6 +105,9 @@ ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
 
+if cfg.single_det:
+    raise ValueError("No single detector mode implemented!")
+
 # Setup folders
 plot_dir, data_dir_root = setup_paths(
     cfg.root_dir,

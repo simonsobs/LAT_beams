@@ -177,8 +177,14 @@ def load_det_splits(split_dir):
     return det_splits
 
 
-def make_det_splits(aman, split_dir, min_dets, det_split_cfg):
+def make_det_splits(aman, split_dir, min_dets, det_split_cfg, single_det=False):
     det_splits = {"full" : RangesMatrix.zeros(aman.signal.shape)}
+    if single_det:
+        for i, det_id in enumerate(aman.det_info.det_id):
+            rmat = RangesMatrix.ones(aman.signal.shape)
+            rmat.ranges[i] = rmat.ranges[i].complement() 
+            det_splits = {det_id : rmat}
+        return det_splits
     if "det_id" not in aman.det_info:
         return det_splits
     det_split_files = load_det_splits(split_dir)
@@ -230,6 +236,9 @@ if cfg.preprocess_cfg is None:
 with open(cfg.preprocess_cfg) as f:
     preprocess_cfg = yaml.safe_load(f)
     preprocess_str = yaml.dump(preprocess_cfg)
+if cfg.single_det:
+    logger.info("Running in single det mode, changing comps from %s to T", cfg.comps)
+    cfg.comps = "T"
 
 # Check pointing_type
 if cfg.pointing_type not in ["pointing_model", "per_obs", "raw"]:
@@ -243,7 +252,7 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}{(cfg.single_det)*'_single_det'}",
 )
 
 # Get context

@@ -49,7 +49,7 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}{(cfg.single_det)*'_single_det'}",
 )
 plot_dir = os.path.join(plot_dir, "stacks")
 os.makedirs(plot_dir, exist_ok=True)
@@ -94,6 +94,8 @@ if args.plot_only:
 
 # Get det splits
 det_split_names = ["full"] + cfg.det_splits
+if cfg.single_det:
+    det_split_names = np.unique(all_fits["split"])
 
 # Loop through splits
 map_types = ("", "resid")  # , "ml") # Skipping ML for now

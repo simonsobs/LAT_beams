@@ -48,7 +48,7 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!="")*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}{(cfg.single_det)*'_single_det'}",
 )
 out_file = os.path.join(data_dir, "stacks", "beam_pars.h5")
 
