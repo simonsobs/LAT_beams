@@ -104,20 +104,17 @@ for split in cfg.split_by:
     os.makedirs(prof_plot_dir, exist_ok=True)
     for spl_dir in sorted([f.path for f in os.scandir(data_dir_spl) if f.is_dir()]):
         spl_rel = os.path.relpath(spl_dir, data_dir_spl)
-        # if "f090" not in spl_rel: continue
-        # if "f280" not in spl_rel: continue
-        # if "uranus" not in spl_rel: continue
-        # if "c1" not in spl_rel: continue
         plot_dir_spl = os.path.join(plot_dir, "stacks", split, spl_rel)
         os.makedirs(plot_dir_spl, exist_ok=True)
         band = spl_rel.split("+")[band_idx]
         fscale_fac = 90.0 / float(band[1:])
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
         for epoch in cfg.epochs:
-            # if epoch[1] != 20000000000: continue
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             os.makedirs(plot_dir_epc, exist_ok=True)
             for det_split in det_split_names:
+                if det_split == "full" and len(glob(os.path.join(spl_dir, "*_full_stack.fits"))) == 0:
+                    det_split = ""
                 if det_split != "":
                     continue
                 dstr = f"{'_'*bool(det_split)}{det_split}"
@@ -204,6 +201,7 @@ for split in cfg.split_by:
                     const.c / (float(band[1:]) * u.GHz),
                     band_mask_size,
                     cfg.bessel_wing_n_sigma,
+                    cfg.skip_multipoles,
                     band in cfg.bessel_powell_bands,
                 )
                 if bessel_beam_params is None or model is None:
