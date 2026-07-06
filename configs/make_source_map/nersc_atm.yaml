@@ -54,4 +54,5 @@ split_by:
 det_splits:
   - inout0
   - inout1
-  - leftright
+  - left
+  - right

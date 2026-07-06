@@ -51,9 +51,10 @@ split_by:
   - "tube_slot+band"
   - "source+band"
   - "source+tube_slot+band"
-  # - "nosaturn+band"
-  # - "nosaturn+tube_slot+band"
-# det_splits:
-#   - inout0
-#   - inout1
-#   - leftright
+  - "nosaturn+band"
+  - "nosaturn+tube_slot+band"
+det_splits:
+  - inout0
+  - inout1
+  - left
+  - right
