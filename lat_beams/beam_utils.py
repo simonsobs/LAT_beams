@@ -429,7 +429,7 @@ def load_beam_fits_from_jobs(
     times = np.array([float(o.split("_")[1]) for o in obs_ids])
     wafer_slots = np.array([job.tags["wafer_slot"] for job in joblist])
     stream_ids = np.array([job.tags["stream_id"] for job in joblist])
-    splits = np.array([job.tags["split"] for job in joblist])
+    splits = np.array([job.tags.get("split", "") for job in joblist])
     bands = np.array([job.tags["band"] for job in joblist])
     sources = np.array([job.tags["source"] for job in joblist])
     dates = np.array([dt.date.fromtimestamp(ct) for ct in times])
