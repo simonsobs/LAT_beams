@@ -192,8 +192,9 @@ def make_det_splits(aman, split_dir, min_dets, det_split_cfg):
                 np.broadcast_to(~msk[..., None], aman.signal.shape)
             )
             det_splits[det_split] = rmat
-        elif det_split == "leftright":
+        elif det_split == "left":
             det_splits["left"] = aman.preprocess.turnaround_flags.left_scan
+        elif det_split == "right":
             det_splits["right"] = aman.preprocess.turnaround_flags.right_scan
         else:
             raise ValueError(f"Unknown det_split: {det_split}")
