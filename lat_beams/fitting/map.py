@@ -28,6 +28,7 @@ from .models import (
     multipole,
     multipole_decomp,
     multipole_expansion,
+    bessel_beam_from_aman,
 )
 
 flog.setLevel(logging.ERROR)
@@ -342,6 +343,7 @@ def fit_bessel_map(
     n_sigma: float = 5,
     skip_multipoles: list[int] = [],
     powell: bool = True,
+    calc_cov : bool = False,
 ):
     r"""
     Fit a model of squared bessel functions with multipole expansions to the map.
@@ -371,6 +373,8 @@ def fit_bessel_map(
     powell : bool, default: True
         If True use powells method when fitting wing.
         If False use L-BFGS-B.
+    calc_cov : bool, default: False
+        If True calculate the parameter covariance.
 
     Returns
     -------
@@ -453,7 +457,12 @@ def fit_bessel_map(
         amps[i] = a
     aman.wrap("amps", amps * map_unit, [(0, b_ax), (1, b_ax), (2, mp_ax), (3, sc_ax)])
     aman.wrap("bessel_off", off * map_unit)
+    aman.wrap("bessel_idx", np.array(idx))
     beam_model = bessel_beam(posmap, xi0, eta0, ell_max, amps, off, [], [], [], 0, 0)
+    if calc_cov:
+        XtX = X.T @ X
+        cov_core = np.linalg.pinv(XtX)
+        aman.wrap("core_cov", cov_core)
 
     # Setup output
     thetas = np.linspace(-np.pi, np.pi, 72)
@@ -487,10 +496,10 @@ def fit_bessel_map(
         if len(rlow) > 0:
             rthresh = min(np.min(rlow), rthresh)
     wrmsk = r < rthresh
-    wmap = imap[r < wrmsk]
-    wvar = ivar[r < wrmsk]
-    wtbins = tbins[r < wrmsk]
-    wr = r[r < wrmsk]
+    wmap = imap[wrmsk]
+    wvar = ivar[wrmsk]
+    wtbins = tbins[wrmsk]
+    wr = r[wrmsk]
     tbu = np.unique(tbins)
 
     def _objective(x):
@@ -523,11 +532,12 @@ def fit_bessel_map(
         return np.sum(wvar * (wing_model - wmap) ** 2)
 
     t0 = np.log10(np.exp(-0.5 * (n_sigma**2)))
+    bounds=[(-np.inf, np.inf), (5 * t0, 0)]
     if powell:
         res = minimize(
             _objective,
             x0=(0, t0),
-            bounds=[(-np.inf, np.inf), (5 * t0, 0)],  # (n_sigma-2, n_sigma + 2)],
+            bounds=bounds,
             method="Powell",
             options={"ftol": 1e-8, "xtol": 1e-8},
         )
@@ -535,7 +545,7 @@ def fit_bessel_map(
         res = minimize(
             _objective,
             x0=(0, t0),
-            bounds=[(-np.inf, np.inf), (5 * t0, 0)],  # (n_sigma-2, n_sigma + 2)],
+            bounds=bounds,
         )
     _objective(res.x)
     woff, n_sigma = res.x
@@ -562,10 +572,115 @@ def fit_bessel_map(
 
     beam_model += woff
 
-    aman.wrap("r0_wing", r0_wing * u.radian, [(0, tax)])
-    aman.wrap("amp_wing", amp_wing * map_unit, [(0, tax)])
+    aman.wrap("r0_wing", r0_wing.copy() * u.radian, [(0, tax)])
+    aman.wrap("amp_wing", amp_wing.copy() * map_unit, [(0, tax)])
     aman.wrap("off", woff * map_unit)
     aman.wrap("thresh", woff * map_unit)
     aman.bessel_off -= aman.off
 
+    if calc_cov:
+        rng = np.random.default_rng()
+        x_best = np.asarray(res.x)
+        step = x_best/1000
+        n_samples = 250
+        scale = np.abs(x_best) * np.asarray(step)
+
+        samples = []
+        chi2 = []
+        for _ in range(n_samples):
+            x = x_best + rng.normal(scale=scale)
+
+            if any((lo is not None and v < lo) or (hi is not None and v > hi)
+                   for v, (lo, hi) in zip(x, bounds)):
+                continue
+            c = _objective(x)
+            samples.append(np.hstack((r0_wing.copy(), amp_wing.copy(), woff.copy(), woff.copy())))
+            chi2.append(c)
+
+        samples = np.asarray(samples)
+        chi2 = np.asarray(chi2)
+
+        w = np.exp(-0.5 * (chi2 - np.min(chi2)))
+        w /= np.sum(w)
+
+        mean = np.sum(samples * w[:, None], axis=0)
+
+        cov = np.sum(
+            w[:, None, None] *
+            (samples - mean)[:, :, None] *
+            (samples - mean)[:, None, :],
+            axis=0
+        )
+
+        aman.wrap("wing_cov", cov)
+        aman.wrap("wing_samples", samples)
+        aman.wrap("wing_weights", w)
+
     return aman, beam_model
+
+
+def bessel_realizations_from_cov(
+    posmap,
+    aman,
+    cov_core,
+    wing_cov,
+    wing_sample_weights,
+    n_real=200,
+    random_state=None,
+    eps=1e-12,
+):
+    """
+    Generate beam realizations using Gaussian approximations for:
+    - core (exact LSQ covariance)
+    - wing (MC-derived covariance)
+    """
+    rng = np.random.default_rng(random_state)
+
+    Nc = len(aman.bessel.amps) + 1
+    Nw = 2*len(aman.bessel.r0_wing) + 2
+
+    core_mean = np.hstack((aman.bessel.amps.value.ravel(), aman.bessel.bessel_off.value + aman.bessel.off.value))
+    Lc = np.linalg.cholesky(cov_core + eps * np.eye(Nc))
+    wing_mean = np.hstack((aman.bessel.r0_wing.value.ravel(), aman.bessel.amp_wing.value.ravel(), aman.bessel.off.value, aman.bessel.thresh.value()))
+    if wing_sample_weights is None:
+        sample_wing = True
+        if wing_cov is None:
+            raise ValueError("Both wing_cov and wing_sample_weights cannot be None!")
+        Lw = np.linalg.cholesky(wing_cov + eps * np.eye(Nw))
+        wing_idx, wing_samples, wing_weights = [], [], []
+    else:
+        sample_wing = False
+        wing_samples, wing_weights = wing_sample_weights
+        wing_weights = wing_weights / np.sum(wing_weights)
+        wing_idx = np.arange(len(wing_samples))
+        Lw = 1
+
+    beams = []
+    samples = []
+
+    for _ in range(n_real):
+        zc = rng.normal(size=Nc)
+        zw = rng.normal(size=Nw)
+
+        core_i = core_mean + Lc @ zc
+        if sample_wing:
+            wing_i = wing_mean + Lw @ zw
+        else:
+            j = rng.choice(wing_idx, p=wing_weights)
+            wing_i = wing_samples[j]
+
+        sample = aman.copy()
+        sample.bessel.r0_wing[:] = wing_i[:aman.bessel.tax.count]
+        sample.bessel.amp_wing[:] = wing_i[aman.bessel.tax.count:-2]
+        sample.bessel.off = wing_i[-2] * aman.bessel.off.unit
+        sample.bessel.thresh = wing_i[-1] * aman.bessel.thresh.unit
+        sample.bessel.bessel_off = core_i[-1] * aman.bessel.bessel_off.unit - sample.bessel.off
+        for i, idx in enumerate(aman.bessel.bessel_idx):
+            sample.bessel.amps[idx] = core_i[i] * aman.bessel.amps.unit
+
+        beam_i = bessel_beam_from_aman(posmap, sample) 
+        beams.append(beam_i)
+        samples.append(sample)
+
+    beams = np.asarray(beams)
+    return beams, samples 
