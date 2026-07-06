@@ -4,11 +4,13 @@ map_source_list:
   - "neptune"
   - "uranus"
   - "taua"
+  - "3c279"
 fit_source_list:
   - "mars"
   - "neptune"
   - "uranus"
   - "saturn"
+  - "3c279"
 pointing_type: "pointing_model" 
 preprocess_cfg: "preproc/preproc_atm.yaml"
 min_det_secs: 300
