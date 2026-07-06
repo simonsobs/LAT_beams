@@ -277,7 +277,7 @@ for i, j in enumerate(joblist):
     solved, weights = crop_maps([solved, weights], cent, int(cfg.extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
     cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
-    fscale_fac = 90.0 / float(band[1:])
+    fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
     band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
 
     # Make weights and zero things out

@@ -107,7 +107,7 @@ for split in cfg.split_by:
         plot_dir_spl = os.path.join(plot_dir, "stacks", split, spl_rel)
         os.makedirs(plot_dir_spl, exist_ok=True)
         band = spl_rel.split("+")[band_idx]
-        fscale_fac = 90.0 / float(band[1:])
+        fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
         for epoch in cfg.epochs:
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")

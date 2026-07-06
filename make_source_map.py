@@ -410,7 +410,7 @@ for i, j in enumerate(joblist):
         msg = "Looks like we don't have real metadata for this observation!"
         fail(job, ErrCode.META, msg, logger)
         continue
-    fscale_fac = 90.0 / float(band[1:])
+    fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
 
     src_names = list(source_list & set(obs["tags"]))
     if len(src_names) > 1:
