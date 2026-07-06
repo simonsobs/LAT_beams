@@ -144,6 +144,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["buf"] = cfg.get("buf", 30)
     cfg["buf_cropped"] = cfg.get("buf_cropped", 10)
     cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
+    cfg["apply_fscale"] = cfg.get("apply_fscale", True)
 
     # Mapping
     cfg["n_modes"] = cfg.get("n_modes", 10)
@@ -152,6 +153,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["cgiters_full"] = cfg.get("cgiters_full", 400)
     cfg["mlpass"] = cfg.get("mlpass", 3)
     cfg["comps"] = cfg.get("comps", "TQU")
+    cfg["single_det"] = cft.get("single_det", False)
 
     # Map fits
     cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
