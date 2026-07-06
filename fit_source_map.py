@@ -237,7 +237,7 @@ for i, j in enumerate(joblist):
     set_tag(job, "config", cfg_str)
     set_tag(job, "comps", comps)
 
-    # Figure out paths, this won't need to happen once make_source_map is fixed
+    # Figure out paths
     map_path = os.path.join(data_dir, map_job.tags["solved"].format(split=job.tags["split"]))
     ivar_path = os.path.join(data_dir, map_job.tags["weights"].format(split=job.tags["split"]))
     # Load the maps
