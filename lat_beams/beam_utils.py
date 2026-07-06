@@ -571,7 +571,7 @@ def get_split_vec(
         Context used to lookup values from the obsdb.
     round_to : int
         How many decimal places to round numeric collumns to.
-    metasplits : dict[str, tuple[str, list[str]]]
+    metasplits : dict[str, tuple[str, list[str | float]]]
         A method of defining a collumn that matches against values
         from a normal split collumn. Each entry should have some `name`
         as the key, which then maps to a tuple. The first element of
@@ -579,6 +579,9 @@ def get_split_vec(
         second should be a list of values to match. In the output split_vec
         anything that matches will have `name` in the split and anything
         that does not match will have `NOMATCH`.
+        If you want to match against a numeric range instaed then 
+        the `list` should be a two element float list that defines the range
+        `[low, high)`.
 
     Returns
     -------
@@ -598,7 +601,11 @@ def get_split_vec(
             split_vec = split_vec.astype(
                 f"U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}"
             )
-            msk = np.isin(split_vec, metasplits[spl][1])
+            if len(metasplits[spl][1]) == 2 and np.array(metasplits[spl][1]).dtype == float:
+                svf = split_vec.astype(float)
+                msk = (svf >= metasplits[spl][1][0]) * (svf < metasplits[spl][1][1])
+            else:
+                msk = np.isin(split_vec, metasplits[spl][1])
             split_vec[msk] = spl
             split_vec[~msk] = "NOMATCH"
         else:
