@@ -153,7 +153,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["cgiters_full"] = cfg.get("cgiters_full", 400)
     cfg["mlpass"] = cfg.get("mlpass", 3)
     cfg["comps"] = cfg.get("comps", "TQU")
-    cfg["single_det"] = cft.get("single_det", False)
+    cfg["single_det"] = cfg.get("single_det", False)
 
     # Map fits
     cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
