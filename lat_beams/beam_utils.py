@@ -412,6 +412,7 @@ def load_beam_fits_from_jobs(
         * obs_id : str, the obs_id of the fit data
         * wafer_slot : str, the wafer slot of the fit data
         * stream_id : str, the stream id of the fit data
+        * array : str, the array of the fit data
         * band : str, the band (ie. f090) of the fit data
         * split: str, the split that was run for this map
         * source : str, the source that was fit
@@ -429,6 +430,7 @@ def load_beam_fits_from_jobs(
     times = np.array([float(o.split("_")[1]) for o in obs_ids])
     wafer_slots = np.array([job.tags["wafer_slot"] for job in joblist])
     stream_ids = np.array([job.tags["stream_id"] for job in joblist])
+    arrays = np.array([job.tags["array"] for job in joblist])
     splits = np.array([job.tags.get("split", "") for job in joblist])
     bands = np.array([job.tags["band"] for job in joblist])
     sources = np.array([job.tags["source"] for job in joblist])
@@ -450,12 +452,12 @@ def load_beam_fits_from_jobs(
     #     ]
     # )
     amans = []
-    for job, o, s, b, m in zip(joblist, obs_ids, stream_ids, bands, splits):
+    for job, o, u, b, m in zip(joblist, obs_ids,  arrays, bands, splits):
         try:
-            aman = AxisManager.load(f[os.path.join(o, s, b, m)])
+            aman = AxisManager.load(f[os.path.join(o, u, b, m)])
             amans += [aman]
         except:
-            print(os.path.join(o, s, b, m))
+            print(os.path.join(o, u, b, m))
             if jdb is None:
                 continue
             with jdb.session_scope() as session:
@@ -473,6 +475,7 @@ def load_beam_fits_from_jobs(
         ("obs_id", obs_ids.dtype),
         ("wafer_slot", wafer_slots.dtype),
         ("stream_id", stream_ids.dtype),
+        ("array", arrays.dtype),
         ("band", bands.dtype),
         ("split", splits.dtype),
         ("source", sources.dtype),
@@ -485,6 +488,7 @@ def load_beam_fits_from_jobs(
             obs_ids,
             wafer_slots,
             stream_ids,
+            arrays,
             bands,
             splits,
             sources,

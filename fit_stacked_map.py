@@ -27,8 +27,6 @@ def view_TQU(imap):
     return padded
 
 
-nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
-
 # Get settings
 args, cfg_dict = get_args_cfg()
 cfg, cfg_str = setup_cfg(

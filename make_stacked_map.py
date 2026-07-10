@@ -2,7 +2,6 @@
 # TODO: speed up: mpi? asyncio?
 import os
 import sys
-from glob import glob
 from typing import cast
 
 import astropy.units as u
@@ -23,8 +22,6 @@ def view_TQU(imap):
         padded[0][:] = imap[0][:]
     return padded
 
-
-nominal_fwhm = {"f090": 2.0, "f150": 1.3, "f220": 0.95, "f280": 0.83}  # arcmin
 
 # Setup logger
 logger = init_log()
@@ -58,7 +55,7 @@ jdb = make_jobdb(None, data_dir)
 
 # Get jobs
 mjobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
+    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
     for job in jdb.get_jobs(jclass="beam_map", jstate="done")
 }
 fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
@@ -113,7 +110,7 @@ for split in cfg.split_by:
         smsk = split_vec == spl
         sfits = all_fits[smsk]
         sfjobs = fjobs[smsk]
-        fwhm_exp = np.array([nominal_fwhm[band] for band in sfits["band"]]) * u.arcmin
+        fwhm_exp = np.array([cfg.nominal_fwhm[band] for band in sfits["band"]]) * u.arcmin
         sang_exp = (2 * np.pi * (fwhm_exp.to(u.radian) / 2.355) ** 2).to(u.sr)
         data_fwhm = bu.get_fit_vec(sfits, "data_fwhm")
         msk = data_fwhm < 3 * fwhm_exp
@@ -145,7 +142,7 @@ for split in cfg.split_by:
                 for name in det_split_names
             }
             for fit, fjob in tqdm(zip(sfits[tmsk], sfjobs[tmsk]), total=np.sum(tmsk)):
-                jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['band']}"
+                jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['array']}-{fjob.tags['band']}"
                 msplit = fjob.tags["split"]
                 if msplit not in det_split_names:
                     continue

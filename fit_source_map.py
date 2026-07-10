@@ -49,7 +49,7 @@ nproc = comm.Get_size()
 
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
         for job in jdb.get_jobs(jclass="fit_map")
     }
     return jobdict
@@ -66,7 +66,7 @@ def get_jobit(jdb):
 
 def get_jobstr(mjob, ctx, start_time, stop_time):
     mjob, split = mjob
-    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
+    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['array']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
     obs = ctx.obsdb.get(mjob.tags["obs_id"])
     if args.obs_ids is None and (
         obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
@@ -83,6 +83,7 @@ def get_tags(mjob):
         "obs_id": mjob.tags["obs_id"],
         "wafer_slot": mjob.tags["wafer_slot"],
         "stream_id": mjob.tags["stream_id"],
+        "array": mjob.tags["array"],
         "band": mjob.tags["band"],
         "comps": mjob.tags["comps"],
         "source": mjob.tags["source"],
@@ -167,7 +168,7 @@ if args.profile:
 to_save = (None, None)
 map_jobs = jdb.get_jobs(jclass="beam_map", jstate="done")
 map_jobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
+    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
     for job in map_jobs
 }
 job = None
@@ -204,7 +205,8 @@ for i, j in enumerate(joblist):
 
     job.mark_visited()
     obs_id = job.tags["obs_id"]
-    ufm = job.tags["stream_id"]
+    sid = job.tags["stream_id"]
+    ufm = job.tags["array"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
     split = job.tags["split"]
@@ -475,7 +477,7 @@ for i, j in enumerate(joblist):
         job.tags["source"],
         str(obs["timestamp"])[:5],
         obs_id,
-        job.tags["stream_id"],
+        job.tags["array"],
     )
     os.makedirs(ufm_plot_dir, exist_ok=True)
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(

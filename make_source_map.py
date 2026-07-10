@@ -44,7 +44,7 @@ band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
 
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
         for job in jdb.get_jobs(jclass="beam_map")
     }
     return jobdict
@@ -99,8 +99,6 @@ def get_jobit(
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
         for obs in obslist:
-            # if obs["tube_slot"] in ["o6"]:
-            #     continue
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
@@ -112,34 +110,38 @@ def get_jobit(
             wsufmsband = np.unique(
                 np.column_stack(
                     [
-                        det_info["wafer_slot"],
+                        [ws1 if ws1 != "ws." else ws2 for ws1, ws2 in zip(det_info["wafer_slot"], det_info["wafer.wafer_slot"])],
                         det_info["stream_id"],
+                        det_info["wafer.array"],
                         det_info["wafer.bandpass"],
                     ]
                 ),
                 axis=0,
             )
-            for ws, ufm, band in wsufmsband:
+            for ws, sid, ufm, band in wsufmsband:
                 if band[0] != "f":
+                    continue
+                if ws == "ws.":
                     continue
                 if ws not in wafers and "all" not in obs["tags"]:
                     continue
-                obsit += [(obs, ws, ufm, band)]
+                obsit += [(obs, ws, sid, ufm, band)]
     return obsit
 
 
 def get_jobstr(info):
-    obs, ws, ufm, band = info
-    job_str = f"{obs['obs_id']}-{ws}-{ufm}-{band}"
+    obs, ws, sid, ufm, band = info
+    job_str = f"{obs['obs_id']}-{ws}-{sid}-{ufm}-{band}"
     return job_str
 
 
 def get_tags(info):
-    obs, ws, ufm, band = info
+    obs, ws, sid, ufm, band = info
     tags = {
         "obs_id": obs["obs_id"],
         "wafer_slot": ws,
-        "stream_id": ufm,
+        "stream_id": sid,
+        "array": ufm,
         "band": band,
         "errcode": 0,
         "message": "",
@@ -352,7 +354,8 @@ for i, j in enumerate(joblist):
 
     job.mark_visited()
     obs_id = job.tags["obs_id"]
-    ufm = job.tags["stream_id"]
+    sid = job.tags["stream_id"]
+    ufm = job.tags["array"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
     sub_id = f"{obs_id}:{ws}:{band}"
@@ -450,7 +453,7 @@ for i, j in enumerate(joblist):
     aman = load_aman(
         obs["obs_id"],
         preprocess_cfg,
-        {"wafer_slot": ws, "wafer.bandpass": band},
+        {"wafer.array": ufm, "wafer.bandpass": band},
         job,
         cfg.min_dets,
         logger,

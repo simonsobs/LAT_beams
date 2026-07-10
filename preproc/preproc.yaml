@@ -6,8 +6,8 @@ context_file: '/global/homes/s/skh/code/LAT_beams/contexts/nersc_pointing_model.
 plot_dir: '/so/site-pipeline/lat/preprocess/'
 
 subobs:
-  use: ['wafer_slot', 'wafer.bandpass']
-  label: wafer_slot
+  use: ['wafer.array', 'wafer.bandpass']
+  label: "wafer.array" 
 
 archive:
   # index: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/process_archive.sqlite'

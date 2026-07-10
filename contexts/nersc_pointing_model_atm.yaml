@@ -30,10 +30,10 @@ metadata:
     unpack: det_cal
     # on_missing: fail  ## work-around for variable mask
     on_missing: trim
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_260208r1/db.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_260423r1/db.sqlite'
     label: pointing_model
     unpack: pointing_model
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r4/db.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r5/db.sqlite'
     label: focal_plane
     unpack: focal_plane
     on_missing: fail
