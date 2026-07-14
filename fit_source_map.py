@@ -216,7 +216,7 @@ for i, j in enumerate(joblist):
     logger.log(25, "Fitting")
 
     # Get map job
-    job_str = f"{obs_id}-{ws}-{ufm}-{band}"
+    job_str = f"{obs_id}-{ws}-{sid}-{ufm}-{band}"
     if job_str not in map_jobdict:
         msg = "No map job"
         logger.debug("%s", msg)
