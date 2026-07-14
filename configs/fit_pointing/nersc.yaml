@@ -26,15 +26,15 @@ nominal_fwhm: # arcmin LAT; change per platform
     
 try_all: True 
 
-hp_fc: 1
-lp_fc: 30
+hp_fc: 3
+lp_fc: 20
 
 min_hits: 1
 svd_modes: 10
 min_dets: 10
 
-src_msk: True # False
-blind_search: True # False
+src_msk: False
+blind_search: False
 pointing_mask:
   shape: "circle"
   xyr:
@@ -47,3 +47,5 @@ fit_pars:
   min_snr: 3
 
 fwhm_tol_pointing: .6
+n_std: 10
+n_med: 10

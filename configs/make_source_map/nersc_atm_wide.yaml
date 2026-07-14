@@ -19,7 +19,7 @@ min_hits: 1
 min_snr: 1
 ctx_path: 'contexts/nersc_pointing_model_atm.yaml'
 start_time: 1749600000 
-stop_time: 20000000000
+stop_time: 1767243600 
 n_med: 3
 map_mask_size: 1.
 apply_fscale: False
@@ -31,7 +31,7 @@ search_mask:
     - .5
 epochs:
     - [1749600000, 1756699200]
-    - [1756699200, 20000000000]
+    - [1756699200, 1767243600]
 append: "atm_relcal_wide"
 cgiters_single: 0
 cgiters_full: 200

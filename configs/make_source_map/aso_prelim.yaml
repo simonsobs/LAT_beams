@@ -19,7 +19,7 @@ min_dets: 20
 min_hits: 1
 min_snr: 1
 ctx_path: 'contexts/nersc_aso_prelim.yaml'
-start_time: 1780682400 
+start_time: 1777213800 
 stop_time: 20000000000 
 n_med: 3
 map_mask_size: .2
