@@ -673,10 +673,11 @@ def main():
                     # Make a p2p cut
                     # TODO: This cut might be different for SAT and LAT.
                     # Do some final cuts to kill dets that didn't see the source
+                    logger.log(25, "%s detectors", aman.dets.count)
                     ptp = np.ptp(sig_filt, axis=-1)
                     std = np.std(sig_filt, axis=-1)
-                    thresh = 0.1 * np.percentile(ptp, 90)
-                    msk = (ptp > thresh) * (ptp > cfg.n_std * std) * (std > 0)
+                    thresh = 0.01 * np.percentile(ptp, 90)
+                    msk = (ptp > thresh) * (std > 0)
                     aman = aman.restrict("dets", msk)
                     sig_filt = sig_filt[msk]
                     if aman.dets.count < cfg.min_dets:
