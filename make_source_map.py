@@ -39,8 +39,6 @@ comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
-band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
-
 
 def get_jobdict(jdb):
     jobdict = {
@@ -108,8 +106,8 @@ def get_jobit(
                 [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]] + forced_ws
             )
             ws = det_info["wafer_slot"]
-            if "wafer.wafer_slot" in det_info:
-                ws = [ws1 if ws1 != "ws." else ws2 for ws1, ws2 in zip(det_info["wafer_slot"], det_info["wafer.wafer_slot"])],
+            if "wafer.wafer_slot" in det_info.keys:
+                ws = np.array([ws1 if ws1 != "ws." else ws2 for ws1, ws2 in zip(det_info["wafer_slot"], det_info["wafer.wafer_slot"])])
             wsufmsband = np.unique(
                 np.column_stack(
                     [
