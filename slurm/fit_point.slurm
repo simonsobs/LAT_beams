@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=48:00:00
+#SBATCH --time=12:00:00
 #SBATCH --constraint=cpu
 #SBATCH --ntasks-per-node=64
 #SBATCH --cpus-per-task=4
