@@ -80,7 +80,7 @@ dset["Epoch"] = np.array(epoch_strs)[epoch_ids]
 # Loop through splits
 for split in cfg.split_by:
     print(f"Splitting by {split}")
-    split_vec = bu.get_split_vec(all_fits, split, ctx)
+    split_vec = bu.get_split_vec(all_fits, split, ctx, metasplits=cfg.metasplits)
     spls = np.unique(split_vec)
     plot_dir_spl = os.path.join(plot_dir, split)
     os.makedirs(plot_dir_spl, exist_ok=True)
@@ -92,7 +92,8 @@ for split in cfg.split_by:
 
         # Filter out outliers by split
         dat = dset[name]
-        msk = np.ones(len(dat), bool)
+        msk = dset["Epoch"] != "unknown"
+        msk *= ~np.isin(dset["band"], ["f030", "f040"])
         for spl in np.unique(split_vec):
             smsk = split_vec == spl
             ds = dat[smsk]
@@ -111,6 +112,7 @@ for split in cfg.split_by:
             split=True,
             inner="quart",
             cut=0,
+            order=np.sort(np.unique(dset_filt[split]))
         )
         plt.title(f"{' '.join(name.split(' ')[:-1])} Distrubution")
         # Add nominal FWHM if we are plotting FWHM
