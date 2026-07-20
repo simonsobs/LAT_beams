@@ -28,11 +28,11 @@ process_pipe:
         merge: True
       save: True
 
-    - name: "det_bias_flags"
-      calc:
-        rfrac_range: [0.2, 0.8]
-      save: True
-      select: True
+    # - name: "det_bias_flags"
+    #   calc:
+    #     rfrac_range: [0.2, 0.8]
+    #   save: True
+    #   select: True
 
     - name: "detcal_nan_cuts"
       select:
