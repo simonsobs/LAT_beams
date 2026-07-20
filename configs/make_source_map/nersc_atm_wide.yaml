@@ -22,6 +22,7 @@ start_time: 1749600000
 stop_time: 1767243600 
 n_med: 3
 map_mask_size: 1.
+log_thresh: .0001
 apply_fscale: False
 search_mask:
   shape: "circle"
@@ -40,7 +41,7 @@ sym_gauss: False
 n_bessel: 25
 n_multipoles: 8
 bessel_wing_n_sigma: 3
-extent: 300
+extent: 1800
 det_split_dir: "det_lists"
 gauss_multipole: False
 metasplits:
@@ -49,13 +50,13 @@ metasplits:
     - ["mars", "uranus", "neptune"]
 split_by:
   - "band"
-  - "tube_slot+band"
-  - "source+band"
-  - "nosaturn+band"
-  - "source+tube_slot+band"
-  - "nosaturn+tube_slot+band"
-det_splits:
-  - inout0
-  - inout1
-  - left
-  - right
+#   - "tube_slot+band"
+#   - "source+band"
+#   - "nosaturn+band"
+#   - "source+tube_slot+band"
+#   - "nosaturn+tube_slot+band"
+# det_splits:
+#   - inout0
+#   - inout1
+#   - left
+#   - right

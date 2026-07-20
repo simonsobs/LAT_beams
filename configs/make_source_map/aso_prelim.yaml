@@ -8,10 +8,11 @@ map_source_list:
   - "jupiter"
 fit_source_list:
   - "mars"
+  - "saturn"
   - "neptune"
   - "uranus"
   - "3c279"
-  - "saturn"
+  - "jupiter"
 pointing_type: "pointing_model" 
 preprocess_cfg: "preproc/preproc.yaml"
 min_det_secs: 100
@@ -52,8 +53,8 @@ split_by:
   - "tube_slot+band"
   - "source+band"
   - "source+tube_slot+band"
-  - "nosaturn+band"
-  - "nosaturn+tube_slot+band"
+  # - "nosaturn+band"
+  # - "nosaturn+tube_slot+band"
 # det_splits:
 #   - inout0
 #   - inout1
