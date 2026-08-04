@@ -191,6 +191,7 @@ for split in cfg.split_by:
                             coords=cent,
                             oshape=(pix_extent, pix_extent),
                             owcs=twcs,
+                            oversample=1,
                         )
                         / fit["aman"].gauss.amp.value
                     )
