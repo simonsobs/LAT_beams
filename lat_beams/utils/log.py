@@ -5,6 +5,7 @@ Utilities for managing logging.
 import logging
 from contextlib import contextmanager
 from typing import Optional
+from pixell import colors
 
 from sotodlib.mapmaking import ColoredFormatter, init
 
@@ -47,6 +48,9 @@ def init_log(
     logging.LoggerAdapter
         The logger wrapped in a LoggerAdapter to add the `extra` formatting option.
     """
+    def default_colfun(verbosity):
+        cols = [colors.lpurple, colors.lred, "\033[1;34m", colors.lbrown, colors.lgreen, colors.reset]
+        return cols[max(0, min(len(cols)-1, verbosity+3))]
     rank = 0
     if comm is not None:
         rank = comm.Get_rank()
@@ -56,7 +60,7 @@ def init_log(
     logger = init(level, rank=rank, fmt=fmt)
     for handler in logger.handlers:
         if isinstance(handler.formatter, ColoredFormatter):
-            handler.formatter.colors["NORMAL"] = "\033[1;34m"
+            handler.formatter.colors =  default_colfun
     logger = logging.LoggerAdapter(logger, {"extra": ""})
 
     return logger
