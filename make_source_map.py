@@ -468,8 +468,8 @@ for i, j in enumerate(joblist):
     if "relcal" in aman._fields:
         aman.restrict(
             "dets",
-            (aman.relcal.relcal >= cfg.relcal_range[0])
-            * (aman.relcal.relcal <= cfg.relcal_range[1]),
+            (aman.relcal.rel_factor >= cfg.relcal_range[0])
+            * (aman.relcal.rel_factor <= cfg.relcal_range[1]),
         )
 
     # Get initial source_flags
@@ -561,7 +561,6 @@ for i, j in enumerate(joblist):
     )
     if out is None or cent is None:
         continue
-    omap = out["splits"]["full"]["solved"]
 
     # Add paths to job
     for name, fname, ext in [
@@ -579,24 +578,29 @@ for i, j in enumerate(joblist):
         )
 
     # Plot
-    os.makedirs(os.path.join(obs_plot_dir, ufm), exist_ok=True)
-    try:
-        posmap = omap.posmap()
-        posmap = np.rad2deg(posmap) * 3600
-        plot_map_complete(
-            omap,
-            posmap,
-            omap.wcs.wcs.cdelt[1] * (60 * 60),
-            cfg.extent,
-            (posmap[1][cent], posmap[0][cent]),
-            os.path.join(obs_plot_dir, ufm),
-            f"{obs_id} {ufm} {band}",
-            comps=cfg.comps,
-            log_thresh=cfg.log_thresh,
-            lognorm=1.0 / omap[0][cent],
-        )
-    except Exception as e:
-        logger.warning("Plotting failed with error: %s", e)
+    for spl in out["splits"].keys():
+        try:
+            omap = out["splits"][spl]["solved"]
+            if omap[0][cent] == 0:
+                continue
+            os.makedirs(os.path.join(obs_plot_dir, ufm, spl), exist_ok=True)
+            posmap = omap.posmap()
+            posmap = np.rad2deg(posmap) * 3600
+            plot_map_complete(
+                omap,
+                posmap,
+                omap.wcs.wcs.cdelt[1] * (60 * 60),
+                cfg.extent,
+                (posmap[1][cent], posmap[0][cent]),
+                os.path.join(obs_plot_dir, ufm, spl),
+                f"{obs_id} {ufm} {band} {spl}",
+                comps=cfg.comps,
+                log_thresh=cfg.log_thresh,
+                lognorm=1.0 / omap[0][cent],
+            )
+        except Exception as e:
+            logger.warning("Plotting for %s failed with error: %s", spl, e)
+    omap = out["splits"]["full"]["solved"]
 
     # In case we don't want to make ML maps
     if cfg.mlpass < 1 or cfg.cgiters < 1:
