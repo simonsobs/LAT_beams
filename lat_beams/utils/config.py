@@ -198,6 +198,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["r_step"] = cfg.get("r_step", 1)
+    cfg["min_stack_snr"] = cfg.get("min_stack_snr", 100)
 
     # Rename for our scope
     for o, n in replace.items():

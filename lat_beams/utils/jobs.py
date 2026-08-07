@@ -39,6 +39,7 @@ class ErrCode(Enum):
     CLOSE_TO_EDGE = 11
     FWHM_TOL = 12
     DET_SECS = 13
+    NO_MAPS = 14
 
 def set_tag(job, key, new_val):
     # This should be provided by the Job class but it's not...
