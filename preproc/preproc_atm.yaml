@@ -102,7 +102,7 @@ process_pipe:
       skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
       process:
         kind: "array"
-        cal_array: "relcal.relcal"
+        cal_array: "relcal.rel_factor"
 
     - name: "psd"
       wrap: "psdT"

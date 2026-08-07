@@ -5,21 +5,23 @@ map_source_list:
   - "uranus"
   - "taua"
   - "3c279"
+  - "jupiter"
 fit_source_list:
   - "mars"
   - "neptune"
   - "uranus"
   - "saturn"
   - "3c279"
+  - "jupiter"
 pointing_type: "pointing_model" 
 preprocess_cfg: "preproc/preproc_atm.yaml"
-min_det_secs: 300
-min_dets: 50
+min_det_secs: 100
+min_dets: 20
 min_hits: 1
-min_snr: 1
+min_snr: 5
 ctx_path: 'contexts/nersc_pointing_model_atm.yaml'
 start_time: 1749600000 
-stop_time: 1767243600 
+stop_time: 20000000000 
 n_med: 3
 map_mask_size: .2
 search_mask:
@@ -31,6 +33,7 @@ search_mask:
 epochs:
     - [1749600000, 1756699200]
     - [1756699200, 1767243600]
+    - [1777213800, 200000000000]
 append: "atm_relcal"
 cgiters_single: 0
 cgiters_full: 200
@@ -39,22 +42,22 @@ sym_gauss: False
 n_bessel: 25
 n_multipoles: 8
 bessel_wing_n_sigma: 3
-extent: 720
+extent: 1200
 det_split_dir: "det_lists"
 gauss_multipole: False
 metasplits:
-  nosaturn:
+  mainsrc:
     - "source"
     - ["mars", "uranus", "neptune"]
 split_by:
   - "band"
   - "tube_slot+band"
   - "source+band"
-  - "nosaturn+band"
+  - "mainsrc+band"
   - "source+tube_slot+band"
-  - "nosaturn+tube_slot+band"
+  - "mainsrc+tube_slot+band"
 det_splits:
   - inout0
   - inout1
-  - left
-  - right
+  # - left
+  # - right
