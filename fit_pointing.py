@@ -444,6 +444,7 @@ def main():
     # Load nominal pointing [i.e. template pointing from the zemax model
     nominal = h5py.File(cfg.nominal_path)
     # JobDB stuff
+    breakpoint()
     jdb, all_jobs = setup_jobs(
         comm,
         data_dir,
@@ -639,6 +640,7 @@ def main():
                     logger,
                     fp_flag=False,
                     save=(nproc == 1),
+                    debug_dets=cfg.debug_dets,
                 )
                 if aman is None:
                     continue

@@ -1,0 +1,49 @@
+fit_source_list:
+  #- "saturn"
+  #- "jupiter"
+  - "moon"
+min_samps: 5000
+ctx_path: '/scratch/gpfs/SIMONSOBS/so/tracked/metadata/satp3/contexts/use_this_local.yaml'
+preprocess_cfg: "/scratch/gpfs/SIMONSOBS/users/eshaw/repos/LAT_beams/preproc/preproc_fit_point_sat3_tiger.yaml"
+nominal_path: '/scratch/gpfs/SIMONSOBS/users/eshaw/ffp_per_obs/satp3/nominal/nominal.h5'
+
+tel: "satp3"
+root_dir: '/scratch/gpfs/SIMONSOBS/users/eshaw/lattype_process_brightsrc/'
+
+start_time: 1723964000 # 1769922000
+stop_time: 1723965000
+
+#plot_only: True
+forced_ws: 'ws1'
+
+ds: 1
+
+nominal_fwhm: # arcmin LAT; change per platform
+  f090: 28.6
+  f150: 19.6
+    
+try_all: False
+
+hp_fc: 0.0005
+lp_fc: 1.1
+
+min_hits: 5
+svd_modes: 0 #10
+min_dets: 10
+
+src_msk: False
+blind_search: True
+pointing_mask:
+  shape: "circle"
+  xyr:
+    - -0.013 #satp3 az offset
+    - 0.
+    - 8 #or 2.5 (LAT)
+
+fit_pars:
+  bin_priors: True 
+  min_snr: 3
+
+fwhm_tol_pointing: 100 #.6
+n_std: 10
+n_med: 10

@@ -1,0 +1,93 @@
+# when running in cli please specify the following
+# --tags 'mars' 'neptune' 'uranus' 'taua' 'saturn' 'mercury'
+# --planet-obs
+
+context_file: '/scratch/gpfs/SIMONSOBS/so/tracked/metadata/satp3/contexts/use_this_local.yaml'
+plot_dir: '/so/site-pipeline/lat/preprocess/fit_pointing' #does not actually do anything
+
+subobs:
+  use: ['wafer_slot']
+  label: wafer_slot
+
+archive:
+  # index: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/process_archive.sqlite'
+  index: '/scratch/gpfs/SIMONSOBS/users/eshaw/fp_process_archive.sqlite'
+  policy:
+    type: 'simple'
+    # filename: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/preprocess_archive.h5'
+    filename: '/scratch/gpfs/SIMONSOBS/users/eshaw/fp_preprocess_archive.h5'
+
+process_pipe:
+    - name: "correct_iir_params"
+      process: True
+
+    - name: "smurfgaps_flags"
+      calc:
+        buffer: 200
+        name: "smurfgaps"
+        merge: True
+      save: True
+      
+    #- name : "fp_flags"
+    #  calc:
+    #    merge: False
+    #  save: True
+    #  select: True
+    
+    - name: "det_bias_flags"
+      calc:
+        rfrac_range: [0.2, 0.8]
+      save: True
+      select: True
+
+    - name: "detcal_nan_cuts"
+      select:
+        fields: ["tau_eff", "phase_to_pW"]
+
+    - name: "detrend"
+      process:
+        method: "median"
+
+    - name: "trends"
+      calc:
+        max_trend: 2.5 #was 1 and that was bad for SAT and Moon
+        t_piece: 10
+      save: True
+      select:
+        kind: "any"
+
+    - name : "combine_flags"
+      process:
+        flag_labels: ['smurfgaps.smurfgaps'] #, 'jumps_slow.jump_flag'] #, 'glitches.glitch_flags']
+        total_flags_label: 'glitch_flags'
+        method: 'union'
+
+    - name: "detrend"
+      process:
+        method: "linear"
+
+    - name: "calibrate"
+      skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
+      process:
+        kind: "array"
+        cal_array: "det_cal.phase_to_pW"
+
+    - name: "fourier_filter"
+      process:
+        filters:
+          - name: "iir_filter"
+            filter_params:
+              invert: True
+          - name: "timeconst_filter"
+            filter_params:
+              timeconst: "det_cal.tau_eff"
+              invert: True
+
+    - name: "apodize"
+      process:
+        apodize_samps: 2000
+
+    - name: "fft_trim"
+      process:
+        axis: "samps"
+

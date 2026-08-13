@@ -1,0 +1,49 @@
+fit_source_list:
+  #- "saturn"
+  #- "jupiter"
+  - "moon"
+min_samps: 5000
+ctx_path: '/global/cfs/cdirs/sobs/metadata/satp3/contexts/use_this_local.yaml'
+preprocess_cfg: "preproc/preproc_fit_point_sat3.yaml"
+nominal_path: '/global/homes/e/elleshaw/ffp_per_obs/satp3/nominal/nominal.h5'
+
+tel: 'satp3'
+root_dir: '/global/cfs/cdirs/sobs/users/elleshaw/lattype_process_brightsrc/'
+
+start_time: 1723964000 # 1769922000
+stop_time: 1723965000
+
+#plot_only: True
+forced_ws: 'ws1'
+
+ds: 1
+
+nominal_fwhm: # arcmin LAT; change per platform
+  f090: 28.6
+  f150: 19.6
+    
+try_all: False
+
+hp_fc: 0.0005 
+lp_fc: 1.1
+
+min_hits: 5 # moon is big, could make even higher 
+svd_modes: 0 #like a pca thing helps with atmosphere
+min_dets: 10
+
+src_msk: False
+blind_search: True 
+pointing_mask:
+  shape: "circle"
+  xyr:
+    - -0.013 #satp3 az offset
+    - 0.
+    - 8 #or 2?
+
+fit_pars:
+  bin_priors: True 
+  min_snr: 3 #might need to adjust,keeping hp_fc in mind. maybe signal is noisier than LAT
+
+fwhm_tol_pointing: .6
+n_std: 10
+n_med: 10
