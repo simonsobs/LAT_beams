@@ -564,7 +564,7 @@ def main():
                     )
                     logger.log(25, "Fitting")
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
-
+                    logger.log(25, "%s detectors left after preproc", aman.dets.count)
                     # Filter
                     filt = tod_ops.filters.identity_filter()
                     if cfg.hp_fc is not None:
@@ -673,7 +673,7 @@ def main():
                     # Make a p2p cut
                     # TODO: This cut might be different for SAT and LAT.
                     # Do some final cuts to kill dets that didn't see the source
-                    logger.log(25, "%s detectors", aman.dets.count)
+                    logger.log(25, "%s detectors before p2p cut", aman.dets.count)
                     ptp = np.ptp(sig_filt, axis=-1)
                     std = np.std(sig_filt, axis=-1)
                     thresh = 0.01 * np.percentile(ptp, 90)
