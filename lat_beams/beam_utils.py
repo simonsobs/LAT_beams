@@ -14,6 +14,8 @@ import numpy as np
 import sqlalchemy as sqy
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from jaxtyping import Float, Shaped
+from pixell.enmap import ndmap
+from scipy import sparse
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
@@ -156,7 +158,7 @@ def radial_profile(
     avg=True,
 ) -> Float[np.ndarray, "nr"]:
     """
-    Compute the radial profile of a beam.
+    Compute the radial profile of a beam, this is a naive way of doing thing just looking at the pixels.
 
     Parameters
     ----------
@@ -181,6 +183,80 @@ def radial_profile(
     nr = np.bincount(r.ravel()[msk])
     radialprofile = tbin / nr
     return radialprofile
+
+
+def radial_profile_lin(
+    data,
+    posmap,
+    xi0=0.0,
+    eta0=0.0,
+    r=None,
+    n_bins=None,
+    rmax=None,
+):
+    """
+    Compute the azimuthally averaged radial profile using the true beam center.
+    This computes a matrix for the binning operation that can be reused.
+
+    Parameters
+    ----------
+    data : ndarray
+        Map to bin.
+    posmap : tuple[ndarray, ndarray]
+        Beam-coordinate maps `(eta, xi)`.
+    xi0, eta0 : float
+        Beam center in the same units as `posmap`.
+    r : ndarray, optional
+        Radial bin centers. If omitted, `n_bins` equally spaced bins are
+        generated from zero to `rmax`.
+    n_bins : int, optional
+        Number of radial bins when `r` is not supplied.
+    rmax : float, optional
+        Maximum radius when generating bins.
+
+    Returns
+    -------
+    r : ndarray
+        Radial bin centers.
+    profile : ndarray
+        Azimuthally averaged radial profile.
+    R : scipy.sparse.csr_matrix
+        Radial binning operator satisfying
+        `profile = R @ data.ravel()`.
+    """
+    eta, xi = posmap
+    rmap = np.hypot(xi - xi0, eta - eta0).ravel()
+    data = np.asarray(data).ravel()
+
+    if r is None:
+        if n_bins is None:
+            raise ValueError("Specify either r or n_bins.")
+        if rmax is None:
+            rmax = rmap.max()
+        dr = rmax / n_bins
+        r = np.arange(n_bins) * dr
+    else:
+        r = np.asarray(r)
+        if len(r) < 2:
+            raise ValueError("r must contain at least two bin centers.")
+        dr = np.mean(np.diff(r))
+
+    edges = np.r_[0.0, r[1:] - dr / 2, r[-1] + dr / 2]
+    bin_idx = np.digitize(rmap, edges) - 1
+    valid = (bin_idx >= 0) & (bin_idx < len(r)) & np.isfinite(data)
+
+    pix = np.flatnonzero(valid)
+    bins = bin_idx[valid]
+    counts = np.bincount(bins, minlength=len(r))
+
+    weights = 1.0 / np.maximum(counts[bins], 1)
+    R = sparse.csr_matrix(
+        (weights, (bins, pix)),
+        shape=(len(r), len(data)),
+    )
+
+    profile = np.asarray(R @ data).ravel()
+    return r, profile, R
 
 
 def get_fwhm_radial_bins(
@@ -228,15 +304,15 @@ def get_fwhm_radial_bins(
 
 
 def crop_maps(
-    maps: list[Float[np.ndarray, "nx ny"]], cent: tuple[int, int], extent: int
-) -> list[Float[np.ndarray, "2extent 2extent"]]:
+    maps: list[Float[ndmap, "nx ny"]], cent: tuple[int, int], extent: int
+) -> list[Float[ndmap, "2extent 2extent"]]:
     """
     Crop a list of maps to be smaller.
     Note that all input maps will be cropped relative to the same pixel.
 
     Parameters
     ----------
-    maps : list[Float[np.ndarray, "nx ny"]]
+    maps : list[Float[ndmap, "nx ny"]]
         List of maps to crop.
         These should all have the same center.
     cent : tuple[int, int]
@@ -246,7 +322,7 @@ def crop_maps(
 
     Returns
     -------
-    cropped : list[Float[np.ndarray "2extent 2extent"]]
+    cropped : list[Float[ndmap "2extent 2extent"]]
         The cropped maps.
         Each one will have size (2*extent, 2*extent)
         unless that goes outside of the input map's bounding box,

@@ -1,7 +1,6 @@
 import os
 from collections import defaultdict
 from functools import partial
-from glob import glob
 from typing import cast
 
 import astropy.units as u
@@ -18,15 +17,14 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
-import lat_beams.fitting.models as bm
-from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile
-from lat_beams.fitting.map import (
-    bessel_profile_covariance,
-    fit_bessel_map,
-    fit_gauss_map,
-    make_guess,
+import lat_beams.fitting.map.bessel as fb
+import lat_beams.fitting.map.gauss as fg
+from lat_beams.beam_utils import (
+    get_fwhm_radial_bins,
+    radial_profile,
     radial_profile_lin,
 )
+from lat_beams.fitting.map.base import make_guess
 from lat_beams.plotting import auto_relplot, plot_map_complete
 from lat_beams.utils import (
     ErrCode,
@@ -337,7 +335,7 @@ for split in jobdict.keys():
                     phi=0,
                     off=0,
                 )
-                gauss_params, model = fit_gauss_map(
+                gauss_params, model = fg.fit_gauss_map(
                     imap,
                     ivar,
                     posmap,
@@ -381,7 +379,7 @@ for split in jobdict.keys():
                 aman.wrap("rprof", rprof * u.pW)
 
                 # Now fit the bessel beam
-                bessel_beam_params, model = fit_bessel_map(
+                bessel_beam_params, model = fb.fit_bessel_map(
                     imap,
                     ivar,
                     posmap,
@@ -390,7 +388,7 @@ for split in jobdict.keys():
                     cfg.n_bessel,
                     cfg.n_multipoles,
                     cfg.aperature,
-                    const.c / (float(band[1:]) * u.GHz),
+                    const.c / (float(band[1:]) * u.GHz),  # type: ignore
                     band_mask_size,
                     cfg.bessel_wing_n_sigma,
                     cfg.skip_multipoles,
@@ -407,7 +405,7 @@ for split in jobdict.keys():
                 # Make and save a higher resolution profile
                 prof_dir = os.path.join(data_dir, "stack_profiles", split, spl)
                 os.makedirs(prof_dir, exist_ok=True)
-                prof_cov, model_highres = bessel_profile_covariance(
+                prof_cov, model_highres = fb.bessel_profile_covariance(
                     aman.bessel,
                     posmap_highres,
                     cfg.lmax,
