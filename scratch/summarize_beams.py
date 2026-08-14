@@ -44,12 +44,13 @@ if len(fjobs) == 0:
 all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist(), jdb)
 snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
 solid_angle = bu.get_fit_vec(all_fits, "bessel.model_solid_angle_true")
-msk = snr > 1
+msk = snr > 10
 msk *= solid_angle > 0
+msk *= all_fits["split"] == "full"
 all_fits = all_fits[msk]
 fjobs = fjobs[msk]
 
-print(f"{len(all_fits)} good fits to plot")
+print(f"{len(all_fits)} good fits to plot (ignoring splits)")
 if len(fjobs) == 0:
     sys.exit(0)
 
@@ -94,16 +95,31 @@ for split in cfg.split_by:
         dat = dset[name]
         msk = dset["Epoch"] != "unknown"
         msk *= ~np.isin(dset["band"], ["f030", "f040"])
-        for spl in np.unique(split_vec):
-            smsk = split_vec == spl
-            ds = dat[smsk]
-            Q1 = np.percentile(ds, 25)
-            Q3 = np.percentile(ds, 75)
-            IQR = Q3 - Q1
-            msk[smsk] *= (ds > Q1 - 1.5 * IQR) * (ds < Q3 + 1.5 * IQR)
+        if np.issubdtype(dset[split].dtype, np.str_) or np.issubdtype(dset[split].dtype, np.object_):
+            msk *= np.char.find(dset[split].astype(str), "NOMATCH") == -1
+        for spl in np.unique(split_vec[msk]):
+            smsk = (split_vec == spl) * msk
+            for epc in np.unique(dset["Epoch"][smsk]):
+                emsk = smsk * (dset["Epoch"] == epc) 
+
+                ds = dat[emsk]
+                median = np.median(ds)
+                mad = np.median(np.abs(ds - median))
+                lower = median - 9.0 * mad
+                upper = median + 9.0 * mad
+                msk[emsk] *= (ds >= lower) & (ds <= upper)
+
+                emsk *= msk
+
+                ds = dat[emsk]
+                Q1 = np.percentile(ds, 25)
+                Q3 = np.percentile(ds, 75)
+                IQR = Q3 - Q1
+                msk[emsk] *= (ds >= Q1 - (1.5 * IQR)) * (ds <= Q3 + (1.5 * IQR))
         dset_filt = {key: val[msk] for key, val in dset.items()}
 
         # Violin with epoch hue
+        plt.figure(figsize=(max(8, len(np.unique(dset_filt[split]))* 0.8 + .5*len(np.unique(dset_filt["Epoch"]))), 6))
         sns.violinplot(
             data=dset_filt,
             x=split,
@@ -111,20 +127,22 @@ for split in cfg.split_by:
             hue="Epoch",
             split=True,
             inner="quart",
-            cut=0,
+            common_norm=True,
             order=np.sort(np.unique(dset_filt[split]))
         )
+        plt.xticks(rotation=45, ha="right")
         plt.title(f"{' '.join(name.split(' ')[:-1])} Distrubution")
         # Add nominal FWHM if we are plotting FWHM
         if "FWHM" in name:
             for b in np.unique(dset_filt["band"]):
                 plt.axhline(cfg.nominal_fwhm[b] * 60.0, linestyle="--")
 
+        plt.tight_layout(pad=1.5)
         plt.savefig(os.path.join(plot_dir_spl, f"{prefix}_dist.png"))
         plt.close()
 
         # Scatter vs ctime with epoch cols
-        sns.relplot(
+        ax = sns.relplot(
             data=dset_filt,
             x="Time (ctime)",
             y=name,
