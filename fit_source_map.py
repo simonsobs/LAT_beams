@@ -1,7 +1,6 @@
 import os
 import sys
 from functools import partial
-from glob import glob
 from typing import cast
 
 import h5py
@@ -55,12 +54,12 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb):
+def get_jobit(jdb, det_splits):
     maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
     maplist = np.array_split(maplist, nproc)[myrank]
     to_ret = []
     for info in maplist:
-        to_ret += [(info, ds) for ds in info.tags["splits"].split(",")]
+        to_ret += [(info, ds) for ds in info.tags["splits"].split(",") if ds in det_splits]
     return to_ret
 
 
@@ -127,6 +126,9 @@ outfile = None
 if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, f"beam_pars{cfg.fit_append}.h5"), "a")
 
+# Get det splits
+det_split_names = ["full"] + cfg.det_splits
+
 # Get the jobs, make them if we need to
 ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
@@ -136,7 +138,7 @@ jdb, all_jobs = setup_jobs(
     data_dir,
     "fit_map",
     get_jobdict,
-    partial(get_jobit),
+    partial(get_jobit, det_splits=det_split_names),
     partial(get_jobstr, ctx=ctx, start_time=cfg.start_time, stop_time=cfg.stop_time),
     get_tags,
     cfg.source_list,
@@ -367,38 +369,10 @@ for i, j in enumerate(joblist):
         to_save = (None, None)
         continue
     aman.wrap("gauss", gauss_params)
+    off = gauss_params.off.value
     for to_parent in ["amp", "off", "xi0", "eta0"]:
         aman.wrap(to_parent, gauss_params[to_parent])
     aman.wrap("final_model", "gauss")
-
-    # Get gauss multipoles if we want them
-    if cfg.gauss_multipole:
-        base_beam = (model - gauss_params.off.value) / gauss_params.amp.value
-        gauss_multipole_params, model = fit_multipole_map(
-            solved - gauss_params.off.value,
-            weights,
-            posmap,
-            gauss_params,
-            "pW",
-            base_beam,
-            cfg.n_multipoles,
-        )
-        gauss_multipole_params = process_model(
-            gauss_multipole_params,
-            solved,
-            model,
-            noise,
-            cfg.min_snr,
-            c,
-            u.pW,
-            pixsize,
-            data_fwhm,
-            cfg.min_sigma,
-            job,
-            logger,
-        )
-        aman.wrap("gauss_multipole", gauss_multipole_params)
-        aman.final_model = "gauss_multipole"
 
     # Get bessel beam if we want
     if cfg.bessel_beam:
@@ -413,9 +387,8 @@ for i, j in enumerate(joblist):
             cfg.aperature,
             const.c / (float(band[1:]) * u.GHz),
             band_mask_size,
-            cfg.bessel_wing_n_sigma,
+            np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac)/np.log(10),
             cfg.skip_multipoles,
-            band in cfg.bessel_powell_bands,
         )
         if bessel_beam_params is None or model is None:
             msg = "Bessel fit failed"
@@ -423,6 +396,7 @@ for i, j in enumerate(joblist):
             to_save = (None, None)
             continue
 
+        off = bessel_beam_params.off.value
         bessel_beam_params = process_model(
             bessel_beam_params,
             solved - bessel_beam_params.off.value,
@@ -478,6 +452,7 @@ for i, j in enumerate(joblist):
         str(obs["timestamp"])[:5],
         obs_id,
         job.tags["array"],
+        split,
     )
     os.makedirs(ufm_plot_dir, exist_ok=True)
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
@@ -486,7 +461,7 @@ for i, j in enumerate(joblist):
     plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
     norm = float(1.0 / aman.amp.value)
     posmap = np.rad2deg(posmap) * 3600
-    for dat, label in [(model, "model"), (resid, "resid")]:
+    for dat, label in [(model - off, "model"), (resid, "resid")]:
         plot_map_complete(
             dat,
             posmap,
@@ -494,7 +469,7 @@ for i, j in enumerate(joblist):
             cfg.extent,
             plt_cent,
             ufm_plot_dir,
-            f"{obs_id} {ufm} {band}{' '*bool(split)}{split}",
+            f"{obs_id} {ufm} {band} {split}",
             comps="T",
             log_thresh=cfg.log_thresh,
             append=label,

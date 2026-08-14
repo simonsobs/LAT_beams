@@ -35,12 +35,12 @@ nproc = comm.Get_size()
 def get_jobdict(jdb):
     jobdict = {
         f"{job.tags['split']}-{job.tags['split_str']}-{job.tags['det_split']}-{job.tags['epoch_start']}-{job.tags['epoch_end']}": job
-        for job in jdb.get_jobs(jclass="solve_maps")
+        for job in jdb.get_jobs(jclass="stack_maps")
     }
     return jobdict
 
 
-def get_jobit(jdb, cfg, all_fits, all_fjobs):
+def get_jobit(jdb, cfg, all_fits, all_fjobs, det_splits):
     _ = jdb
     jobit = []
     if myrank == 0:
@@ -57,6 +57,8 @@ def get_jobit(jdb, cfg, all_fits, all_fjobs):
                     if "NOMATCH" in spl:
                         continue
                     for det_split in np.unique(fits["split"]):
+                        if det_split not in det_splits:
+                            continue
                         jobit += [(split, spl, det_split, epoch[0], epoch[1])]
     return jobit
 
@@ -124,7 +126,7 @@ plot_dir, data_dir = setup_paths(
 )
 os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, "beam_pars.h5")
-jdb = make_jobdb(None, data_dir)
+jdb = make_jobdb(comm, data_dir)
 
 # Get jobs
 mjobdict = {
@@ -150,6 +152,9 @@ msk *= data_fwhm > .5 * fwhm_exp
 all_fits = all_fits[msk]
 fjobs = fjobs[msk]
 
+# Det splits
+det_split_names = ["full"] + cfg.det_splits
+
 # Setup jobdb
 jdb, all_jobs = setup_jobs(
     comm,
@@ -161,6 +166,7 @@ jdb, all_jobs = setup_jobs(
         cfg=cfg,
         all_fits=all_fits,
         all_fjobs=fjobs,
+        det_splits=det_split_names,
     ),
     get_jobstr,
     get_tags,
@@ -174,8 +180,8 @@ jdb, all_jobs = setup_jobs(
 )
 
 # Make template map
-ext_rad = np.deg2rad(cfg.mask_size)
-pix_extent = 2 * int(3600 * cfg.mask_size // pixsize)
+ext_rad = np.deg2rad(cfg.extent/3600)
+pix_extent = 2 * cfg.extent 
 # rowmajor = True here to match sotodlib
 twcs = enmap.wcsutils.build(
     [0, 0],
@@ -200,8 +206,9 @@ if args.plot_only:
     sys.exit(1)
 
 # Split inputs up by mpi rank
-fjobs = np.array_split(fjobs, nproc)[myrank]
-fits = np.array_split(all_fits, nproc)[myrank]
+# Looks like things tend to clump up so doing slicing rather than array split
+fjobs = fjobs[myrank::nproc] # np.array_split(fjobs, nproc)[myrank]
+fits = all_fits[myrank::nproc] #np.array_split(all_fits, nproc)[myrank]
 
 # Get splits
 all_splits = np.unique([job.tags['split'] for job in all_jobs])
@@ -214,13 +221,21 @@ for job in all_jobs:
     jobdict = deepcopy(template_dict)
     logger.info("Making stack: %s", job_str)
 
+    zoom = 1
+    if "band" in job.tags['split']:
+        b_idx = np.where("band" == np.array(job.tags["split"].split("+")))[0][0]
+        band = job.tags["split_str"].split("+")[b_idx]
+        zoom = 90/float(band[1:])
+
     comm.barrier()
 
     split_vec = split_dict[job.tags['split']]
     smsk = (split_vec == job.tags['split_str']) * (fits["split"] == job.tags['det_split'])
+    smsk *= fits["time"] >= float(job.tags["epoch_start"])
+    smsk *= fits["time"] < float(job.tags["epoch_end"])
     sfjobs = fjobs[smsk]
-    sfits = fjobs[smsk]
-    logger.info("%d maps to add", np.sum(smsk))
+    sfits = fits[smsk]
+    logger.log(25, "%d maps in rank", np.sum(smsk))
 
     obslist = []
     comm.barrier()
@@ -265,7 +280,7 @@ for job in all_jobs:
             )
             imap = (
                 reproject.thumbnails(
-                    imap - fit["aman"].gauss.off.value * (map_type == ""),
+                    imap - fit["aman"].bessel.off.value * (map_type == ""),
                     r=ext_rad,
                     coords=cent,
                     oshape=(pix_extent, pix_extent),
@@ -333,13 +348,14 @@ for job in all_jobs:
         msg = "No maps made it into stack!"
         fail(job, ErrCode.NO_MAPS, msg, logger)
         continue
+    logger.info("%d maps in stack", len(obslist))
 
     # Divide weights, save, and plot
     for map_type in map_types:
         with np.errstate(divide="ignore", invalid="ignore"):
-            mv = deepcopy(jobdict[job_str][map_type]["map_stack"])
+            mv = deepcopy(jobdict[map_type]["map_stack"])
             jobdict[map_type]["map_stack"] /= jobdict[map_type]["ivar_stack"] # type: ignore
-            jobdict[map_type]["map_ivar"] = (jobdict[map_type]["map_ivar"]/jobdict[map_type]["ivar_stack"]) + (mv/jobdict[map_type]["ivar_stack"])**2 # type: ignore
+            jobdict[map_type]["map_ivar"] = (jobdict[map_type]["map_ivar"]/jobdict[map_type]["ivar_stack"]) - (mv/jobdict[map_type]["ivar_stack"])**2 # type: ignore
             jobdict[map_type]["map_ivar"] = 1/jobdict[map_type]["map_ivar"] # type: ignore
             np.nan_to_num( jobdict[map_type]["map_stack"], copy=False, nan=0, posinf=0, neginf=0)
             np.nan_to_num( jobdict[map_type]["map_ivar"], copy=False, nan=0, posinf=0, neginf=0)
@@ -366,15 +382,16 @@ for job in all_jobs:
 
             posmap = omap.posmap()
             posmap = np.rad2deg(posmap) * 3600
-            for append, smap in [
-                ("", omap),
-                ("_smooth3pix", enmap.smooth_gauss(omap, 3 * cfg.res)),
+            for append, smap, z in [
+                ("", omap, 1),
+                ("_smooth3pix", enmap.smooth_gauss(omap, 3 * cfg.res), 1),
+                ("_mask_zoom", omap, zoom),
             ]:
                 plot_map_complete(
                     smap,
                     posmap,
                     pixsize,
-                    cfg.extent,
+                    cfg.extent * z,
                     (0, 0),
                     plot_dir_spl,
                     f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}{' '*bool(map_type)}{map_type} {name}",

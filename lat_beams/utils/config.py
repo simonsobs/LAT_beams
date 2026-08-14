@@ -165,6 +165,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["sym_gauss"] = cfg.get("sym_gauss", True)
     cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
     cfg["bessel_powell_bands"] = cfg.get("bessel_powell_bands", ["f090", "f150"])
+    cfg["cov_modes"] = cfg.get("cov_modes", 20)
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(
