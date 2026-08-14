@@ -8,21 +8,22 @@ from typing import Optional
 from pixell import colors
 
 from sotodlib.mapmaking import ColoredFormatter, init
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mpi4py.MPI import Comm
 
 try:
     from mpi4py import MPI
-
     comm = MPI.COMM_WORLD
-    Comm = MPI.Comm
-except:
-    from pixell.mpi import FakeCommunicator as Comm
-
+except ImportError:
     comm = None
+
 LoggerLike = logging.Logger | logging.LoggerAdapter[logging.Logger]
 
 
 def init_log(
-    level: int = logging.DEBUG, comm: Optional[Comm] = comm
+    level: int = logging.DEBUG, comm: Optional["Comm"] = comm
 ) -> logging.LoggerAdapter:
     """
     Initialize the sotodlib mapmaking logger with the following extra log levels:
