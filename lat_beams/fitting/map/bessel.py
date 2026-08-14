@@ -1,337 +1,279 @@
-"""
-Functions for fitting beam models to a map.
-
-All functions will have the following standardized interface
-which is defined by the `FitMap` protocol in this module.
-Fitting functions should follow the naming convention `fit_{MODEL}_map`
-where `{MODEL}` is a one word description of the model being fit.
-"""
-
-import logging
-from typing import Optional, Protocol
-
+from typing import cast
 import numpy as np
+import numba
 import scipy.linalg
 import scipy.optimize
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
-from pixell import curvedsky
 from pixell.enmap import ndmap
-from scipy import sparse
-from scipy.interpolate import make_splprep
-from scipy.linalg import lstsq
-from scipy.optimize import minimize, nnls
-from scipy.stats import binned_statistic
-from sotodlib import tod_ops
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
-from sotodlib.tod_ops.filters import logger as flog
+from numpy.typing import NDArray
 
-from .models import (
-    bessel_beam,
-    bessel_beam_from_aman,
-    bessel_term_cached,
-    fast_wing_transition,
-    gaussian2d,
-    multipole_decomp,
-    multipole_expansion,
-)
+from ..core import bessel_term_cached
+from ...beam_utils import radial_profile_lin
 
-flog.setLevel(logging.ERROR)
+@numba.jit(nopython=True, fastmath=True, cache=True)
+def fast_wing_transition(
+    r_fit: NDArray,
+    loga_coeff: NDArray,
+    logr_coeff: NDArray,
+    p_val: float,
+    F_mat_T: NDArray,
+) -> tuple[NDArray, NDArray]:
+    r"""
+    Evaluate the positive $r^{-3}$ wing and smooth core-to-wing transition.
 
+    The wing amplitude and transition radius are Fourier expansions in
+    angle:
 
-class FitMap(Protocol):
-    def __call__(
-        self,
-        imap: ndmap,
-        ivar: ndmap,
-        posmap: ndmap,
-        guess: AxisManager,
-        map_units: str = "pW",
-        **kwargs,
-    ) -> tuple[Optional[AxisManager], Optional[ndmap]]:
-        """
-        Function to fit a beam model to a map.
+    $$
+    a(\theta) = \exp[F(\theta)\,c_a], \qquad
+    r_0(\theta) = \exp[F(\theta)\,c_{r_0}]
+    $$
 
-        Arguments
-        ---------
-        imap : ndmap
-            Input map to fit with shape `(nx, ny)`.
-        ivar : ndmap
-            Inverse-variance map for `imap` with shape `(nx, ny)`.
-        posmap : ndmap
-            Position map in radians for `imap`.
-            First element is eta and the second is xi.
-            Should have shape `(2, nx, ny)`.
-        guess : AxisManager
-            `AxisManager` containing parameters that are useful as a starting point.
-            See `make_guess` for the expected parameters.
-        map_units : str, default: 'pW'
-            The units of the map.
-            Should be a string that astromy units understands.
-        **kwargs
-            Additional arguments for the specific fitting function.
+    giving the asymptotic wing
+    ;
 
-        Returns
-        -------
-        fit_params : Optional[AxisManager]
-            The fit parameters.
-            See individual function docstrings for detail.
-            Returns `None` if the fit failed.
-        model : Optional[NDArray]
-            The model evaluated with the fit parameters.
-            Returns `None` if the fit failed.
-        """
+    $$
+    W(r,\theta) = \frac{a(\theta)}{r^3}
+    $$
 
+    The mixing weight is 0 below
 
-def make_guess(
-    amp: float = 1,
-    fwhm_xi: float = 2 / 60,
-    fwhm_eta: float = 2 / 60,
-    xi0: float = 0,
-    eta0: float = 0,
-    phi: float = 0,
-    off: float = 0,
-) -> AxisManager:
-    """
-    Helper function to make the initial guess `AxisManager`.
-    Note that all arguments will be scalars in the output
-    and all positional parameters are in radians.
+    $$
+    r_{\rm lo} = r_0 - \frac{\delta}{2}
+    $$
 
-    Arguments
-    ---------
-    amp : float, default: 1
-        Amplitude of the beam.
-    fwhm_xi : float, default: 2/60
-        FWHM in xi.
-    fwhm_eta : float, default: 2/60
-        FWHM in eta.
-    xi0 : float, default: 0
-        Center of beam in xi.
-    eta0 : float, default: 0
-        Center of beam in eta.
-    phi : float, default: 0
-        Rotation of the beam.
-    off : float, default: 0
-        DC offset of the beam.
+    and 1 above
+
+    $$
+    r_{\rm hi} = r_0 + \frac{\delta}{2}
+    $$
+
+    and a quintic smoothstep within the transition region.
+    Where
+
+    $$
+    \delta = \frac{0.3\,r_0}{p}
+    $$
+
+    and
+
+    $$
+    w(u) = 10u^3 - 15u^4 + 6u^5
+    $$
+
+    The sharpness parameter is constrained to $0.5 \leq p \leq 20$.
+
+    Parameters
+    ----------
+    r_fit : NDArray
+        Radial coordinates of the fitted pixels, in radians.
+    loga_coeff : NDArray
+        Fourier coefficients of $\log a(\theta)$.
+    logr_coeff : NDArray
+        Fourier coefficients of $\log r_0(\theta)$.
+    p_val : float
+        Logarithm of the transition sharpness, $\log p$.
+    F_mat_T : NDArray
+        Transposed Fourier design matrix with shape
+        `(n_pixels, n_fourier)`.
 
     Returns
     -------
-    guess : AxisManager
-        `AxisManager` with the guess parameters.
+    pure_wing : NDArray
+        Unblended wing model $a(\theta)/r^3$ at each fitted pixel.
+    wing_weight : NDArray
+        Core-to-wing mixing weight, ranging from 0 to 1.
     """
-    guess_dict = locals()
-    guess = AxisManager()
-    for n, v in guess_dict.items():
-        guess.wrap(n, v)
-    return guess
+    loga = F_mat_T @ loga_coeff
+    logr = F_mat_T @ logr_coeff
+    a = np.exp(loga)
+    r0 = np.exp(logr)
+    p = max(0.5, min(20.0, np.exp(p_val)))
 
+    n_fit = len(r_fit)
+    pure_wing = np.empty(n_fit)
+    wing_weight = np.empty(n_fit)
 
-def fit_gauss_map(
-    imap: ndmap,
-    ivar: ndmap,
-    posmap: ndmap,
-    guess: AxisManager,
-    map_units: str = "pW",
-    force_sym: bool = False,
-    mask_size: float = -1,
-):
-    """
-    Fit 2d Gaussian to input map.
-    Note that only keywod arguments are shown below.
-    See `FitMap` for the rest.
+    for i in range(n_fit):
+        r = max(r_fit[i], 1e-5)
+        r0_i = max(r0[i], 1e-4)
+        delta = 0.3 * r0_i / p
+        r_lo = r0_i - 0.5 * delta
+        r_hi = r0_i + 0.5 * delta
 
-    Arguments
-    ---------
-    force_sym: bool, default: False
-        It true fit a symmetric beam.
-        Both FWHMs will still be in the output,
-        but they will have the same value.
-    mask_size : float, default: -1
-        If this is >0 then a mask will be applies to ivar
-        such that only data within `mask_size*(guess.fwhm_xi + guess.fwhm_eta)/2`
-        of `(guess.xi0, guess.eta0)` is used in the fit.
-
-    Returns
-    -------
-    fit_params : Optional[AxisManager]
-        Parameters are:
-
-        - `amp`: Amplitude of the beam
-        - `fwhm_xi`: FWHM in xi
-        - `fwhm_eta`: FWHM in eta
-        - `xi0`: Center of beam in xi
-        - `eta0`: Center of beam in eta
-        - `phi`: Rotation of the beam
-        - `off`: DC offset of the beam
-
-        Note that all positional parameters are in radians.
-        Returns `None` if the fit failed.
-    model : Optional[NDArray]
-        The model evaluated with the fit parameters.
-        Returns `None` if the fit failed.
-    """
-    y, x = posmap
-    x0 = [
-        guess.xi0,
-        guess.eta0,
-        guess.off,
-        guess.amp,
-        guess.fwhm_xi,
-        guess.fwhm_eta,
-        guess.phi,
-    ]
-    bounds = [
-        [
-            np.min(x) - guess.fwhm_xi,
-            np.min(y) - guess.fwhm_eta,
-            -5 * np.max(np.abs(imap)),
-            0,
-            guess.fwhm_xi / 3,
-            guess.fwhm_eta / 3,
-            0,
-            # r0,
-            # 0,
-        ],
-        [
-            np.max(x) + guess.fwhm_xi,
-            np.max(y) + guess.fwhm_eta,
-            5 * np.max(imap),
-            5 * np.max(imap),
-            guess.fwhm_xi * 3,
-            guess.fwhm_eta * 3,
-            2 * np.pi,
-        ],
-    ]
-    map_unit = u.Unit(map_units)
-    par_names = [
-        "xi0",
-        "eta0",
-        "off",
-        "amp",
-        "fwhm_xi",
-        "fwhm_eta",
-        "phi",
-    ]  # , "wing_r0", "wing_amp"]
-    par_units = [
-        u.radian,
-        u.radian,
-        map_unit,
-        map_unit,
-        u.radian,
-        u.radian,
-        u.radian,
-    ]  # , u.radian, map_unit]  # type: ignore
-    if force_sym:
-        x0 = x0[:-2]
-        bounds[0] = bounds[0][:-2]
-        bounds[1] = bounds[1][:-2]
-    bounds = [(lb, ub) for lb, ub in zip(*bounds)]
-
-    # Mask out things too far from the starting center
-    if mask_size > 0:
-        r = np.sqrt((x - x0[0]) ** 2 + (y - x0[1]) ** 2)
-        ivar = ivar.copy()
-        ivar[r > mask_size * 0.5 * (guess.fwhm_xi + guess.fwhm_eta)] = 0
-
-    def _to_pars(coeffs):
-        dx, dy, off, amp = coeffs[:4]
-
-        if force_sym:
-            fwhm_xi = fwhm_eta = coeffs[4]
-            phi = 0
+        if r <= r_lo:
+            weight = 0.0
+        elif r >= r_hi:
+            weight = 1.0
         else:
-            fwhm_xi, fwhm_eta, phi = coeffs[4:]
+            u = (r - r_lo) / delta
+            weight = u**3 * (10.0 + u * (-15.0 + 6.0 * u))
 
-        return dx, dy, off, amp, fwhm_xi, fwhm_eta, phi
+        wing_weight[i] = weight
+        wing = min(a[i], 1e20) / r**3
+        pure_wing[i] = wing if np.isfinite(wing) else 0.0
 
-    def _objective(
-        coeffs,
-    ):
-        dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = _to_pars(coeffs)
-        beam = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
-
-        diff = imap - beam
-        chisq = np.nansum((diff**2) * ivar)
-        return chisq
-
-    res = minimize(_objective, x0, bounds=bounds)
-    if not res.success:
-        return None, None
-
-    # Convert to aman
-    aman = AxisManager()
-    dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = pars = _to_pars(res.x)
-    for n, un, v in zip(par_names, par_units, pars):
-        aman.wrap(n, v * un)
-    model = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
-
-    return aman, model
+    return pure_wing, wing_weight
 
 
-def fit_multipole_map(
-    imap: ndmap,
-    ivar: ndmap,
+def bessel_beam(
     posmap: ndmap,
-    guess: AxisManager,
-    map_units: str = "pW",
-    base_beam: Optional[ndmap] = None,
-    n_multipoles: int = 5,
-):
-    """
-    Fit the multipole expansion of a input model to a map.
+    xi0: float,
+    eta0: float,
+    ell_max: float,
+    amps: NDArray[np.floating],
+    bessel_off: float,
+    wing_params: NDArray[np.floating],
+    off: float,
+) -> ndmap:
+    r"""
+    Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing model.
 
-    Arguments
-    ---------
-    base_beam : Optional[ndmap], default: None
-        The base beam model to take the multipole expansion of.
-        If `None` then this will be computend by passing the `guess` parameters to
-        `guassian2d` (but with the amplitude set to 1).
-    n_multipoles : int, default: 5
-        The number of multipoles to fit.
-        0 will just be the monopole, 1 the dipole, and so on.
+    The model is
+
+    $$
+    M(r,\theta) =
+    [1-w(r,\theta)]\,C(r,\theta)
+    + w(r,\theta)\,W(r,\theta)
+    + b,
+    $$
+
+    where $C$ is the Bessel/multipole core, $W$ is the positive
+    asymptotic wing, $w$ is the smooth transition weight, and $b$ is
+    the global offset.
+
+    The wing transition and its parameterization are defined by
+    `fast_wing_transition`. See that function for details.
+
+    Parameters
+    ----------
+    posmap : ndmap, ndmap
+        Two-dimensional coordinate maps `(eta, xi)` in radians.
+    xi0 : float
+        Beam center in the `xi` coordinate, in radians.
+    eta0 : float
+        Beam center in the `eta` coordinate, in radians.
+    ell_max : float
+        Maximum multipole used to construct the Bessel basis.
+    amps : NDArray[np.floating]
+        Bessel/multipole coefficients with shape
+        `(n_bessel, n_bessel, n_multipoles, 2)`. The final axis
+        contains cosine and sine coefficients.
+    bessel_off : float
+        Additive offset applied to the Bessel core.
+    wing_params : NDArray[np.floating]
+        Nonlinear wing parameters containing the Fourier coefficients
+        of $\log a$, the Fourier coefficients of $\log r_0$, and
+        $\log p$, in that order.
+    off : float
+        Global additive model offset.
+
     Returns
     -------
-    fit_params : AxisManager
-        The only element is an array called `amps` with shape
-        `(n_multipoles, 2)` where each row containes the amplitudes
-        for a given multipole, the first collumn is the `cos` terms,
-        and the second `collumn` is the `sin` terms.
-        The `AxisManager` will contain axes called `multipoles` and `term`
-        for this array.
-    model : NDArray
-        The model evaluated with the fit parameters.
+    bessel_beam : ndmap
+        Model evaluated on the same two-dimensional grid as `posmap`.
     """
-    if base_beam is None:
-        base_beam = gaussian2d(
-            posmap,
-            1,
-            guess.xi0,
-            guess.eta0,
-            guess.fwhm_xi,
-            guess.fwhm_eta,
-            guess.phi,
-            guess.off,
-        )
-    y, x = posmap
-    theta = np.arctan2(
-        y - guess.eta0.to(u.radian).value, x - guess.eta0.to(u.radian).value
+
+    n_bessel = amps.shape[0]
+    n_multipoles = amps.shape[2]
+    n_ang = 1 + 2 * n_multipoles
+
+    eta, xi = posmap
+    xi_rel = xi - xi0
+    eta_rel = eta - eta0
+    theta = np.arctan2(eta_rel, xi_rel)
+    r = np.hypot(xi_rel, eta_rel)
+
+    orig_shape = r.shape
+    r_flat = r.ravel()
+    theta_flat = theta.ravel()
+    n_pixels = r_flat.size
+
+    # Fourier basis for the angular dependence.
+    F_mat = np.empty((n_ang, n_pixels), dtype=float)
+    F_mat[0] = 1.0
+
+    cos_m_theta, sin_m_theta = [], []
+    if n_multipoles:
+        m = np.arange(1, n_multipoles + 1)[:, None]
+        cos_m_theta = np.cos(m * theta_flat)
+        sin_m_theta = np.sin(m * theta_flat)
+
+        for i in range(n_multipoles):
+            F_mat[1 + 2 * i] = cos_m_theta[i]
+            F_mat[2 + 2 * i] = sin_m_theta[i]
+
+    F_mat_T = F_mat.T
+
+    # Construct the Bessel pair basis.
+    b_terms = np.column_stack(
+        [bessel_term_cached(r_flat, ell_max, n) for n in range(n_bessel)]
+    )
+    n0, n1 = np.triu_indices(n_bessel)
+    base_beams = np.nan_to_num(
+        b_terms[:, n0] * b_terms[:, n1],
+        copy=False,
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
     )
 
-    # Compute model
-    if n_multipoles == 0:
-        amps = np.array([[guess.amp.value, 0]])
-    else:
-        amps = multipole_decomp(base_beam, imap, ivar, n_multipoles, theta, True)
-    model = multipole_expansion(base_beam, amps, theta)
+    # Reconstruct the pure Bessel/multipole core.
+    core_flat = np.full(n_pixels, bessel_off, dtype=float)
 
-    # Convert to aman
-    map_units = u.Unit(map_units)
-    aman = AxisManager()
-    mp_ax = IndexAxis("multipoles", n_multipoles)
-    sc_ax = LabelAxis("term", ["cos", "sin"])
-    aman.wrap("amps", amps * map_units, [(0, mp_ax), (1, sc_ax)])
+    for pair_idx, (i0, i1) in enumerate(zip(n0, n1)):
+        pair_beam = base_beams[:, pair_idx]
 
-    return aman, model
+        for m_idx in range(n_multipoles):
+            c = amps[i0, i1, m_idx, 0]
+            if c != 0:
+                angular = 1.0 if m_idx == 0 else cos_m_theta[m_idx - 1]
+                core_flat += c * pair_beam * angular
+
+            if m_idx > 0:
+                s = amps[i0, i1, m_idx, 1]
+                if s != 0:
+                    core_flat += s * pair_beam * sin_m_theta[m_idx - 1]
+
+    # Evaluate the wing and transition using the same implementation as
+    # the fitting code.
+    _, wing_weight = fast_wing_transition(
+        r_flat,
+        wing_params[:n_ang],
+        wing_params[n_ang : 2 * n_ang],
+        wing_params[-1],
+        F_mat_T,
+    )
+
+    loga = F_mat_T @ wing_params[:n_ang]
+    a = np.exp(loga)
+
+    pure_wing = np.nan_to_num(
+        a / np.maximum(r_flat, 1e-5) ** 3,
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+
+    model = ((1.0 - wing_weight) * core_flat + wing_weight * pure_wing + off).reshape(
+        orig_shape
+    )
+    return ndmap(model.reshape(orig_shape), posmap.wcs)
+
+
+def bessel_beam_from_aman(posmap, aman):
+    return bessel_beam(
+        posmap,
+        aman.gauss.xi0.to(u.radian).value,
+        aman.gauss.eta0.to(u.radian).value,
+        aman.bessel.ell_max.value,
+        aman.bessel.amps.value,
+        aman.bessel.bessel_off.value,
+        aman.bessel.wing_params.value,
+        aman.bessel.off.value,
+    )
 
 
 def fit_bessel_map(
@@ -343,7 +285,7 @@ def fit_bessel_map(
     n_bessel: int = 10,
     n_multipoles: int = 5,
     d: u.Quantity = 6 * u.m,
-    lmd: u.Quantity = 90 * u.GHz,
+    lmd: u.Quantity = 3.3 * u.mm,
     mask_size: float = np.inf,
     n_sigma: float = 5,
     skip_multipoles: list[int] = [],
@@ -680,7 +622,7 @@ def fit_bessel_map(
     beam_model : ndmap
         Final fitted model evaluated on the full input position map.
     """
-    ell_max = (np.pi * d / lmd).decompose().value
+    ell_max = np.pi * (d / lmd).decompose().value
 
     eta, xi = posmap
     eta0 = guess.eta0.to(u.radian).value
@@ -1460,7 +1402,7 @@ def bessel_profile_covariance(
     lmax: int,
     n_modes: int,
     n_radial: int = 200,
-) -> AxisManager:
+) -> tuple[AxisManager, ndmap]:
     r"""
     Propagate the full fit and covariance into a radial beam profile and b_l and their covariances.
     The covariance is propagated using a linearized model,
@@ -1503,9 +1445,11 @@ def bessel_profile_covariance(
 
     Returns
     -------
-    AxisManager
+    prof_cov : AxisManager
         AxisManager containing the normalized radial profile, beam window
         function, covariance eigenmodes, and normalization information.
+    model_no_off : ndmap
+        The model evaluated at posmap without the offset.
     """
     full_cov = np.asarray(fit.full_cov)
     wing_params = np.asarray(fit.wing_params.value)
@@ -1532,10 +1476,7 @@ def bessel_profile_covariance(
     ell_max = float(fit.ell_max.value)
 
     model = bessel_beam(posmap, xi0, eta0, ell_max, amps, 0.0, wing_params, off)
-    eta, xi = posmap
-    r_flat = np.hypot(xi - xi0, eta - eta0).ravel()
     model_flat = np.asarray(model).ravel()
-    r_max = np.max(r_flat)
     radial_centers, profile, R = radial_profile_lin(
         model - off,
         posmap,
@@ -1639,77 +1580,4 @@ def bessel_profile_covariance(
     out.wrap("lmax", lmax)
     out.wrap("n_modes", n_modes_actual)
 
-    return out, model - off
-
-
-def radial_profile_lin(
-    data,
-    posmap,
-    xi0=0.0,
-    eta0=0.0,
-    r=None,
-    n_bins=None,
-    rmax=None,
-):
-    """
-    Compute the azimuthally averaged radial profile using the true beam center.
-
-    Parameters
-    ----------
-    data : ndarray
-        Map to bin.
-    posmap : tuple[ndarray, ndarray]
-        Beam-coordinate maps `(eta, xi)`.
-    xi0, eta0 : float
-        Beam center in the same units as `posmap`.
-    r : ndarray, optional
-        Radial bin centers. If omitted, `n_bins` equally spaced bins are
-        generated from zero to `rmax`.
-    n_bins : int, optional
-        Number of radial bins when `r` is not supplied.
-    rmax : float, optional
-        Maximum radius when generating bins.
-
-    Returns
-    -------
-    r : ndarray
-        Radial bin centers.
-    profile : ndarray
-        Azimuthally averaged radial profile.
-    R : scipy.sparse.csr_matrix
-        Radial binning operator satisfying
-        `profile = R @ data.ravel()`.
-    """
-    eta, xi = posmap
-    rmap = np.hypot(xi - xi0, eta - eta0).ravel()
-    data = np.asarray(data).ravel()
-
-    if r is None:
-        if n_bins is None:
-            raise ValueError("Specify either r or n_bins.")
-        if rmax is None:
-            rmax = rmap.max()
-        dr = rmax / n_bins
-        r = np.arange(n_bins) * dr
-    else:
-        r = np.asarray(r)
-        if len(r) < 2:
-            raise ValueError("r must contain at least two bin centers.")
-        dr = np.mean(np.diff(r))
-
-    edges = np.r_[0.0, r[1:] - dr / 2, r[-1] + dr / 2]
-    bin_idx = np.digitize(rmap, edges) - 1
-    valid = (bin_idx >= 0) & (bin_idx < len(r)) & np.isfinite(data)
-
-    pix = np.flatnonzero(valid)
-    bins = bin_idx[valid]
-    counts = np.bincount(bins, minlength=len(r))
-
-    weights = 1.0 / np.maximum(counts[bins], 1)
-    R = sparse.csr_matrix(
-        (weights, (bins, pix)),
-        shape=(len(r), len(data)),
-    )
-
-    profile = np.asarray(R @ data).ravel()
-    return r, profile, R
+    return out, cast(ndmap, model - off)

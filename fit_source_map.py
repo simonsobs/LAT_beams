@@ -15,7 +15,6 @@ from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
-import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import (
     crop_maps,
     estimate_cent,
@@ -23,12 +22,9 @@ from lat_beams.beam_utils import (
     process_model,
     radial_profile,
 )
-from lat_beams.fitting.map import (
-    fit_bessel_map,
-    fit_gauss_map,
-    fit_multipole_map,
-    make_guess,
-)
+from lat_beams.fitting.map.base import make_guess
+import lat_beams.fitting.map.gauss as fg
+import lat_beams.fitting.map.bessel as fb
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
     ErrCode,
@@ -302,15 +298,15 @@ for i, j in enumerate(joblist):
     # Fit gaussian model
     cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
     guess = make_guess(
-        amp=solved[cent],
+        amp=solved[cent].item(),
         fwhm_xi=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
         fwhm_eta=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
-        xi0=posmap[1][cent[0], cent[1]],
-        eta0=posmap[0][cent[0], cent[1]],
+        xi0=posmap[1][cent[0], cent[1]].item(),
+        eta0=posmap[0][cent[0], cent[1]].item(),
         phi=0,
         off=0,
     )
-    gauss_params, model = fit_gauss_map(
+    gauss_params, model = fg.fit_gauss_map(
         solved,
         weights,
         posmap,
@@ -326,7 +322,7 @@ for i, j in enumerate(joblist):
         continue
 
     # Compute the gaussian model
-    model = bm.gaussian2d_from_aman(posmap, gauss_params)
+    model = fg.gaussian2d_from_aman(posmap, gauss_params)
 
     # Check clipping
     c = np.unravel_index(np.argmax(model, axis=None), model.shape)
@@ -338,7 +334,8 @@ for i, j in enumerate(joblist):
         continue
 
     # Get FWHM from data
-    rprof = radial_profile(solved - gauss_params.off.value, c[::-1])
+    cent = (int(c[-1]), int(c[-2]))
+    rprof = radial_profile(solved - gauss_params.off.value, cent)
     r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
     data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
@@ -361,9 +358,9 @@ for i, j in enumerate(joblist):
         gauss_params,
         solved - gauss_params.off.value,
         model - gauss_params.off.value,
-        noise,
+        float(noise),
         cfg.min_snr,
-        c,
+        (cent[-2], cent[-1]),
         u.pW,
         pixsize,
         data_fwhm,
@@ -382,7 +379,7 @@ for i, j in enumerate(joblist):
 
     # Get bessel beam if we want
     if cfg.bessel_beam:
-        bessel_beam_params, model = fit_bessel_map(
+        bessel_beam_params, model = fb.fit_bessel_map(
             solved,
             weights,
             posmap,
@@ -391,7 +388,7 @@ for i, j in enumerate(joblist):
             cfg.n_bessel,
             cfg.n_multipoles,
             cfg.aperature,
-            const.c / (float(band[1:]) * u.GHz),
+            const.c / (float(band[1:]) * u.GHz), # type: ignore
             band_mask_size,
             np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
             cfg.skip_multipoles,
@@ -407,9 +404,9 @@ for i, j in enumerate(joblist):
             bessel_beam_params,
             solved - bessel_beam_params.off.value,
             model - bessel_beam_params.off.value,
-            noise,
+            float(noise),
             cfg.min_snr,
-            c,
+            (cent[-2], cent[-1]),
             u.pW,
             pixsize,
             data_fwhm,

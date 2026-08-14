@@ -29,7 +29,7 @@ from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
-from .models import gaussian2d
+from .core import gaussian2d
 
 flog.setLevel(logging.ERROR)
 

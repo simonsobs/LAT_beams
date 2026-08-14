@@ -32,8 +32,8 @@ search_mask:
     - .5
 epochs:
     - [1749600000, 1756699200]
-    # - [1756699200, 1767243600]
-    # - [1777213800, 200000000000]
+    - [1756699200, 1767243600]
+    - [1777213800, 200000000000]
 append: "atm_relcal"
 cgiters_single: 0
 cgiters_full: 200
@@ -57,10 +57,10 @@ split_by:
   # - "tube_slot+band"
   # - "source+band"
   - "mainsrc+band"
-  # - "nojup+band"
+  - "nojup+band"
   # - "source+tube_slot+band"
-  # - "mainsrc+tube_slot+band"
-  # - "nojup+tube_slot+band"
+  - "mainsrc+tube_slot+band"
+  - "nojup+tube_slot+band"
 # det_splits:
 #   - inout0
 #   - inout1
