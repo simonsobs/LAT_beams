@@ -5,7 +5,7 @@ they should be refactored to rely on more generic units.
 """
 
 import os
-from typing import Sequence
+from typing import Sequence, Optional
 
 import matplotlib
 
@@ -18,6 +18,8 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import SymLogNorm
 from pixell import enmap
 from sotodlib.core import AxisManager
+from numpy.typing import NDArray
+import textwrap
 
 from .beam_utils import radial_profile
 
@@ -128,7 +130,7 @@ def plot_map(
     x = np.linspace(0, pixsize * len(rprof), len(rprof))
     plt.plot(x, rprof)
     plt.xlabel(f"Radius ({units})")
-    plt.title(f"{title}{label.replace('_', ' ')}")
+    plt.title("\n".join(textwrap.wrap(f"{title}{label.replace('_', ' ')}")))
     plt.xlim((0, extent))
     plt.savefig(
         os.path.join(plot_dir, f"{title.replace(' ', '_')}_prof{label}.png"),
@@ -376,12 +378,14 @@ def plot_focal_plane(
 
 
 def auto_relplot(
-    data: dict[str, Sequence],
+    data: dict[str, NDArray],
     x: str,
     y: str,
-    ignore: list[str] = [],
-    merge: list[list[str]] = [],
+    ignore: Optional[list[str]] = None,
+    merge: Optional[list[list[str]]] = None,
     auto: bool = True,
+    errorbar: Optional[str] = None,
+    max_errorbars: Optional[int] = 20,
     **kwargs,
 ) -> sns.FacetGrid:
     """
@@ -389,93 +393,190 @@ def auto_relplot(
     This function tries to be semi-clever about automatically selecting
     which terms to use for `hue`, `col`, `row`, and `style`.
 
-    First it determines the catagories of `data` as any fields other than
-    the ones specified in `x` and `y` or in `ignore`.
-    We then assign the catagory with the most unique entries to `hue`,
-    the second most the `col`, then `row`, and then `style`.
-    Any catagories beyond that are combined with whatever the `hue`
-    catagory is.
-    Note that you can still manually specify thing with `**kwargs`.
+    First it determines the categories of `data` as any fields other than
+    the ones specified in `x` and `y` or in `ignore`. We then assign the
+    category with the most unique entries to `hue`, the second most to
+    `col`, then `row`, and then `style`. Any categories beyond that are
+    combined with whatever the `hue` category is. Note that you can still
+    manually specify things with `**kwargs`.
 
     Parameters
     ----------
-    data : dict[str, Sequence]
-        The data to plot.
-        Should be a dict that `seaborn` understands as a
+    data : dict[str, NDArray]
+        The data to plot. Should be a dict that `seaborn` understands as a
         long form dataset.
     x : str
         The field to plot as x.
     y : str
         The field to plot as y.
-    ignore : list[str]
+    ignore : list[str], optional
         List of fields to ignore.
-    merge : list[list[str]]
-        Fields to forcibly merge.
-        Each element in this list should be a list of fields.
-        The merged field will have a name with formate `{field1}+{field2}+...`.
-        The fields speicfied here cannot overlap with each other,
-        `ignore`, or fields speicfied by `**kwargs`.
-    auto : bool, default: True
-        If False then all automatic features to pick catagories for the
+    merge : list[list[str]], optional
+        Fields to forcibly merge. Each element in this list should be a list
+        of fields. The merged field will have a name with the format
+        `{field1}+{field2}+...`. The fields specified here cannot overlap
+        with each other, `ignore`, or fields specified by `**kwargs`.
+    auto : bool, default=True
+        If False then all automatic features to pick categories for the
         relplot are turned off and this is simply a wrapper to `relplot`
         with the ability to specify merged fields.
+    errorbar : str, optional
+        The field containing the precomputed 1-sigma errors for `y`.
+        Requires `kind="line"`. Errorbars inherit the `hue` and `style`
+        of the corresponding lines.
     **kwargs
-        Key word arguments to pass to `relplot`.
-        Note that you can pass catagorical varaibles like `hue` here
-        if you want to specify them manually.
+        Keyword arguments to pass to `relplot`. Note that you can pass
+        categorical variables like `hue` here if you want to specify them
+        manually.
 
     Returns
     -------
     plot : sns.FacetGrid
         The plot output by `relplot`.
     """
-    ignore = ignore.copy()
-    cats = ["hue", "col", "row", "style"]
-    in_kwargs = [
-        kwargs[cat] for cat in cats if (cat in kwargs and kwargs[cat] is not None)
-    ]
-    can_add = [cat for cat in cats if (cat not in kwargs or kwargs[cat] is None)]
+    ignore = [] if ignore is None else ignore.copy()
+    merge = [] if merge is None else merge
+
+    if errorbar is not None:
+        if errorbar not in data:
+            raise ValueError(f"Errorbar field {errorbar!r} not found in data.")
+        if kwargs.get("kind", "scatter") != "line":
+            raise ValueError("Explicit errorbars require kind='line'.")
+        if errorbar not in ignore:
+            ignore.append(errorbar)
+
+    cats = ["hue", "row", "col", "style"]
+    in_kwargs = [kwargs[c] for c in cats if kwargs.get(c) is not None]
+    can_add = [c for c in cats if kwargs.get(c) is None]
+
     for mlist in merge:
-        if len(mlist) == 0:
+        if not mlist:
             continue
+
         for m in mlist:
             if m in ignore or m in in_kwargs:
                 raise ValueError(
-                    f"Can't perform merge with {m}, it already has a role speicfied!"
+                    f"Can't perform merge with {m}, it already has a role specified!"
                 )
-            ignore += [m]
-        n = len(data[mlist[0]])
+            ignore.append(m)
+
         name = "+".join(mlist)
-        combined = ["+".join(str(data[c][i]) for c in mlist) for i in range(n)]
-        data[name] = combined
+        data[name] = np.array([
+            "+".join(str(data[c][i]) for c in mlist)
+            for i in range(len(data[mlist[0]]))
+        ])
 
     if auto:
         fields = [
-            k
-            for k in data
-            if (k not in (x, y) and k not in in_kwargs and k not in ignore)
+            k for k in data
+            if k not in (x, y) and k not in in_kwargs and k not in ignore
         ]
-
         fields.sort(key=lambda c: len(set(data[c])))
+
         for field, cat in zip(fields, can_add):
             kwargs[cat] = field
 
         if len(fields) > len(can_add):
-            to_combine = [kwargs["hue"]] + fields[can_add:]
-            n = len(data[x])
+            to_combine = [kwargs["hue"]] + fields[len(can_add):]
+            name = "+".join(to_combine)
+            data[name] = np.array([
+                "+".join(str(data[c][i]) for c in to_combine)
+                for i in range(len(data[x]))
+            ])
+            kwargs["hue"] = name
 
-            combined = ["+".join(str(data[c][i]) for c in to_combine) for i in range(n)]
+    if np.issubdtype(data[x].dtype, np.str_):
+        nx = len(np.unique(data[x]))
+        kwargs.setdefault("height", 5)
+        kwargs.setdefault("aspect", max(6, nx * 0.4) / kwargs["height"])
+        order = np.argsort(data[x])
+        data = {k: np.asarray(v)[order] for k, v in data.items()}
 
-            kwargs["hue"] = "+".join(to_combine)
-            data[kwargs["hue"]] = combined
+    plot = sns.relplot(data=data, x=x, y=y, **kwargs)
 
-    plot = sns.relplot(
-        data=data,
-        x=x,
-        y=y,
-        **kwargs,
-    )
+    if errorbar is not None:
+        hue = kwargs.get("hue")
+        style = kwargs.get("style")
+
+        for (row_i, col_i, _), facet_data in plot.facet_data():
+            ax = plot.facet_axis(row_i, col_i)
+
+            groups = [(None, None, facet_data)]
+            if hue is not None or style is not None:
+                keys = [c for c in (hue, style) if c is not None]
+                groups = [
+                    (
+                        key[0] if hue is not None else None,
+                        key[-1] if style is not None else None,
+                        group,
+                    )
+                    for key, group in facet_data.groupby(keys, sort=False)
+                ]
+
+            for hue_value, style_value, group in groups:
+                # Subsample errorbars while preserving the full curve.
+                if max_errorbars is not None:
+                    if max_errorbars < 1:
+                        raise ValueError("max_errorbars must be >= 1.")
+
+                    if len(group) > max_errorbars:
+                        order = np.argsort(np.asarray(group[x]))
+
+                        if max_errorbars == 1:
+                            take = np.array([len(order) // 2])
+                        elif max_errorbars == 2:
+                            take = np.array([0, len(order) - 1])
+                        else:
+                            take = np.linspace(
+                                0,
+                                len(order) - 1,
+                                max_errorbars,
+                            ).astype(int)
+
+                        group = group.iloc[order[take]]
+
+                # Get the color from the line corresponding to this group.
+                color = None
+
+                if hue is not None:
+                    for line in ax.lines:
+                        if line.get_label() == str(hue_value):
+                            color = line.get_color()
+                            break
+
+                if color is None:
+                    color = ax.lines[0].get_color() if ax.lines else "C0"
+
+                ax.errorbar(
+                    np.asarray(group[x]),
+                    np.asarray(group[y]),
+                    yerr=np.asarray(group[errorbar]),
+                    fmt="none",
+                    color=color,
+                    capsize=2,
+                    capthick=1,
+                    elinewidth=1,
+                    alpha=0.7,
+                )
+
+        # for ax in plot.axes.flat:
+        #     ymax = -np.inf
+        #     ymin_data = np.inf
+        #
+        #     for line in ax.lines:
+        #         ydata = np.asarray(line.get_ydata(), dtype=float)
+        #         good = np.isfinite(ydata) & (ydata > 0)
+        #         if np.any(good):
+        #             ymax = max(ymax, np.max(ydata[good]))
+        #             ymin_data = min(ymin_data, np.min(ydata[good]))
+        #
+        #     if np.isfinite(ymax):
+        #         ymin = ax.get_ylim()[0]
+        #         if not np.isfinite(ymin) or ymin <= 0:
+        #             ymin = ymin_data
+        #         ax.set_ylim(ymin, 1.2 * ymax)
 
     for ax in plot.axes.flat:
         ax.label_outer()
+
     return plot
