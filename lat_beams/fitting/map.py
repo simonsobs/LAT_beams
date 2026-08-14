@@ -374,7 +374,7 @@ def fit_bessel_map(
         \log a_k,\,
         \log r_{0,k},\,
         \log p
-    \right].
+    \right]
     $$
 
     At each nonlinear iteration the wing parameters are evaluated on the
@@ -388,22 +388,19 @@ def fit_bessel_map(
         \cdots &
         (1-w_{\rm wing}) B_{N_{\rm core}} &
         1
-    \end{bmatrix}.
+    \end{bmatrix}
     $$
 
     The wing contribution is moved to the right-hand side:
 
     $$
-    \mathbf{y}' =
-    \mathbf{y}
-    -
-    w_{\rm wing}\mathbf{W}.
+    \mathbf{y}' = \mathbf{y} - w_{\rm wing}\mathbf{W}
     $$
 
     The linear coefficients are then found from
 
     $$
-    (X^T X + R)\mathbf{c} = X^T\mathbf{y}',
+    (X^T X + R)\mathbf{c} = X^T\mathbf{y}'
     $$
 
     where `R` is a small ridge applied only to the Bessel-core
@@ -427,7 +424,7 @@ def fit_bessel_map(
     s_j =
     \left\|
         (B_{\cdot j} \odot w)
-    \right\|_2.
+    \right\|_2
     $$
 
     This keeps the columns of the normal matrix reasonably conditioned.
@@ -451,7 +448,7 @@ def fit_bessel_map(
         \mathbf{M}_w-\mathbf{y}_w \\
         0.01\,\mathbf{q} \\
         P_{\rm neg}
-    \end{bmatrix}.
+    \end{bmatrix}
     $$
 
     The Fourier regularization acts only on the non-constant angular
@@ -462,21 +459,13 @@ def fit_bessel_map(
     \begin{bmatrix}
         \log a_1,\ldots,\log a_{N-1},
         \log r_{0,1},\ldots,\log r_{0,N-1}
-    \end{bmatrix}.
+    \end{bmatrix}
     $$
 
     The negative-model penalty is
 
     $$
-    P_{\rm neg}
-    =
-    10
-    \sqrt{
-        \sum_i
-        \left[
-            \max(0,-M_i)w_i
-        \right]^2
-    }.
+    P_{\rm neg} = 10 \sqrt{ \sum_i \left[ \max(0,-M_i)w_i \right]^2 }
     $$
 
     An analytic Jacobian is supplied to `scipy.optimize.least_squares`,
@@ -485,46 +474,33 @@ def fit_bessel_map(
     For the wing amplitude,
 
     $$
-    W =
-    \frac{a}{r^3},
+    W = \frac{a}{r^3}
     $$
 
     and since the amplitude is parameterized as `log(a)`, its derivative
     with respect to a Fourier coefficient is
 
     $$
-    \frac{\partial W_i}
-    {\partial \log a_k}
-    =
-    W_i F_{ik}.
+    \frac{\partial W_i} {\partial \log a_k} = W_i F_{ik}
     $$
 
     The transition coordinate can be written as
 
     $$
-    u =
-    \frac{1}{2}
-    +
-    \frac{p}{0.3}
-    \left(
-        \frac{r}{r_0}-1
-    \right).
+    u = \frac{1}{2} + \frac{p}{0.3} \left( \frac{r}{r_0}-1 \right)
     $$
 
     Inside the transition region the wing weight is the quintic
     smoothstep
 
     $$
-    s(u) =
-    10u^3 - 15u^4 + 6u^5,
+    s(u) = 10u^3 - 15u^4 + 6u^5
     $$
 
     with derivative
 
     $$
-    \frac{ds}{du}
-    =
-    30u^2(1-u)^2.
+    \frac{ds}{du} = 30u^2(1-u)^2
     $$
 
     For the logarithmic transition-radius and sharpness parameters,
@@ -532,7 +508,7 @@ def fit_bessel_map(
     $$
     \frac{\partial u}{\partial\log r_0}
     =
-    -\frac{p}{0.3}\frac{r}{r_0},
+    -\frac{p}{0.3}\frac{r}{r_0}
     $$
 
     and
@@ -543,7 +519,7 @@ def fit_bessel_map(
     \frac{p}{0.3}
     \left(
         \frac{r}{r_0}-1
-    \right).
+    \right)
     $$
 
     Therefore
@@ -574,7 +550,7 @@ def fit_bessel_map(
     +
     w_{\rm wing}W
     +
-    {\rm off},
+    {\rm off}
     $$
 
     the derivative with respect to a transition parameter is
@@ -586,7 +562,7 @@ def fit_bessel_map(
     (W-C)
     +
     w_{\rm wing}
-    \frac{\partial W}{\partial q}.
+    \frac{\partial W}{\partial q}
     $$
 
     The Jacobian returned to `least_squares` is the Jacobian of the
@@ -607,14 +583,14 @@ def fit_bessel_map(
     C_{\rm wing}
     =
     \sigma^2
-    (J^T J)^+,
+    (J^T J)^+
     $$
 
     where `+` denotes the pseudoinverse and
 
     $$
     \sigma^2 =
-    \frac{\chi^2}{N_{\rm dof}}.
+    \frac{\chi^2}{N_{\rm dof}}
     $$
 
     The linear covariance is computed from the final full-pixel Cholesky
@@ -624,7 +600,7 @@ def fit_bessel_map(
     C_{\rm linear,scaled}
     =
     \sigma^2
-    (X^T X + R)^{-1},
+    (X^T X + R)^{-1}
     $$
 
     and transformed back from the column-scaled basis using
@@ -634,7 +610,7 @@ def fit_bessel_map(
     =
     D^{-1}
     C_{\rm linear,scaled}
-    D^{-1},
+    D^{-1}
     $$
 
     where `D` is the diagonal matrix of column scales.
@@ -1261,7 +1237,7 @@ def compute_full_covariance(
     The fitted model can be written as
 
     $$
-    M = (1 - w_{\rm wing}) C + w_{\rm wing} W + {\rm off},
+    M = (1 - w_{\rm wing}) C + w_{\rm wing} W + {\rm off}
     $$
 
     where `C` is the Bessel core, `W` is the pure $r^{-3}$ wing, and
@@ -1278,7 +1254,7 @@ def compute_full_covariance(
     of the model with respect to all parameters,
 
     $$
-    H = J^T J,
+    H = J^T J
     $$
 
     together with the same Fourier regularization and linear ridge used
@@ -1287,7 +1263,7 @@ def compute_full_covariance(
     The covariance is then
 
     $$
-    C_{\rm full} = \sigma^2 H^{-1}.
+    C_{\rm full} = \sigma^2 H^{-1}
     $$
 
     In block form,
@@ -1297,7 +1273,7 @@ def compute_full_covariance(
     \begin{pmatrix}
         H_{cc} & H_{cq} \\
         H_{cq}^T & H_{qq}
-    \end{pmatrix},
+    \end{pmatrix}
     $$
 
     so the resulting covariance contains the linear/nonlinear
@@ -1305,7 +1281,7 @@ def compute_full_covariance(
 
     $$
     C_{cq} =
-    \operatorname{Cov}(c, q).
+    \operatorname{Cov}(c, q)
     $$
 
     This is different from simply combining `core_cov` and `wing_cov`,
@@ -1490,7 +1466,7 @@ def bessel_profile_covariance(
     The covariance is propagated using a linearized model,
 
     $$
-    C_y = J_y C_p J_y^T,
+    C_y = J_y C_p J_y^T
     $$
 
     where `p` is the vector of fitted parameters and `y` is either the
@@ -1499,14 +1475,14 @@ def bessel_profile_covariance(
     If `n_modes` is specified, the fit covariance is approximated as
 
     $$
-    C_p \simeq V_N \Lambda_N V_N^T,
+    C_p \simeq V_N \Lambda_N V_N^T
     $$
 
     where the columns of `V_N` are the `n_modes` eigenvectors with the
     largest eigenvalues. The propagated covariance is then
 
     $$
-    C_y \simeq (J_y V_N)\Lambda_N(J_y V_N)^T.
+    C_y \simeq (J_y V_N)\Lambda_N(J_y V_N)^T
     $$
 
     Parameters
