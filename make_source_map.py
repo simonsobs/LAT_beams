@@ -485,7 +485,7 @@ for i, j in enumerate(joblist):
         )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = lbm.make_cuts(aman, source_flags, 2 * cfg.n_modes, job, logger, cfg)
+    cuts = lbm.make_cuts(aman, source_flags, min(len(aman.signal), 2 * cfg.n_modes), job, logger, cfg)
     if cuts is None:
         continue
 
@@ -498,7 +498,7 @@ for i, j in enumerate(joblist):
         cuts,
         source_flags,
         "T",
-        cfg.n_modes,
+        min(len(aman.signal), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         None,
@@ -547,7 +547,7 @@ for i, j in enumerate(joblist):
         cuts,
         source_flags,
         cfg.comps,
-        cfg.n_modes,
+        min(len(aman.signal), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
