@@ -42,4 +42,4 @@ jobs:
           git config --global user.email "docs.deploy@saianeesh.com"
       - name: Build Docs Website
         run: mike deploy --push --update-aliases ${{ env.REVISION }} latest
-      
+        run: mike set-default --push latest
