@@ -1,16 +1,18 @@
 from typing import cast
-import numpy as np
+
 import numba
+import numpy as np
 import scipy.linalg
 import scipy.optimize
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
+from numpy.typing import NDArray
 from pixell.enmap import ndmap
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
-from numpy.typing import NDArray
 
-from ..core import bessel_term_cached
 from ...beam_utils import radial_profile_lin
+from ..core import bessel_term_cached
+
 
 @numba.jit(nopython=True, fastmath=True, cache=True)
 def fast_wing_transition(

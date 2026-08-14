@@ -12,13 +12,13 @@ import astropy.units as u
 import h5py
 import numpy as np
 import sqlalchemy as sqy
-from scipy import sparse
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 from jaxtyping import Float, Shaped
+from pixell.enmap import ndmap
+from scipy import sparse
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
-from pixell.enmap import ndmap
 
 from .utils import LoggerLike
 from .utils.jobs import ErrCode, fail, set_tag

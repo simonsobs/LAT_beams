@@ -15,6 +15,8 @@ from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
+import lat_beams.fitting.map.bessel as fb
+import lat_beams.fitting.map.gauss as fg
 from lat_beams.beam_utils import (
     crop_maps,
     estimate_cent,
@@ -23,8 +25,6 @@ from lat_beams.beam_utils import (
     radial_profile,
 )
 from lat_beams.fitting.map.base import make_guess
-import lat_beams.fitting.map.gauss as fg
-import lat_beams.fitting.map.bessel as fb
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
     ErrCode,
@@ -388,7 +388,7 @@ for i, j in enumerate(joblist):
             cfg.n_bessel,
             cfg.n_multipoles,
             cfg.aperature,
-            const.c / (float(band[1:]) * u.GHz), # type: ignore
+            const.c / (float(band[1:]) * u.GHz),  # type: ignore
             band_mask_size,
             np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
             cfg.skip_multipoles,

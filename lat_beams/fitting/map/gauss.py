@@ -13,7 +13,6 @@ from ..core import gaussian2d, multipole_decomp, multipole_expansion
 flog.setLevel(logging.ERROR)
 
 
-
 def fit_gauss_map(
     imap: ndmap,
     ivar: ndmap,
@@ -154,6 +153,7 @@ def fit_gauss_map(
     model = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
 
     return aman, model
+
 
 def fit_multipole_map(
     imap: ndmap,

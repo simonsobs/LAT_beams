@@ -17,10 +17,14 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
-from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile, radial_profile_lin
-from lat_beams.fitting.map.base import make_guess
-import lat_beams.fitting.map.gauss as fg
 import lat_beams.fitting.map.bessel as fb
+import lat_beams.fitting.map.gauss as fg
+from lat_beams.beam_utils import (
+    get_fwhm_radial_bins,
+    radial_profile,
+    radial_profile_lin,
+)
+from lat_beams.fitting.map.base import make_guess
 from lat_beams.plotting import auto_relplot, plot_map_complete
 from lat_beams.utils import (
     ErrCode,
@@ -384,7 +388,7 @@ for split in jobdict.keys():
                     cfg.n_bessel,
                     cfg.n_multipoles,
                     cfg.aperature,
-                    const.c / (float(band[1:]) * u.GHz), # type: ignore
+                    const.c / (float(band[1:]) * u.GHz),  # type: ignore
                     band_mask_size,
                     cfg.bessel_wing_n_sigma,
                     cfg.skip_multipoles,
