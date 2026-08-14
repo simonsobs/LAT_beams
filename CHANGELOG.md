@@ -1,3 +1,8 @@
+## 5.0.0 (2026-08-14)
+
+
+- reorganize fitting module
+
 ## 4.0.0 (2026-08-14)
 
 ### Feat
