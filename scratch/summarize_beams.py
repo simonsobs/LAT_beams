@@ -95,12 +95,14 @@ for split in cfg.split_by:
         dat = dset[name]
         msk = dset["Epoch"] != "unknown"
         msk *= ~np.isin(dset["band"], ["f030", "f040"])
-        if np.issubdtype(dset[split].dtype, np.str_) or np.issubdtype(dset[split].dtype, np.object_):
+        if np.issubdtype(dset[split].dtype, np.str_) or np.issubdtype(
+            dset[split].dtype, np.object_
+        ):
             msk *= np.char.find(dset[split].astype(str), "NOMATCH") == -1
         for spl in np.unique(split_vec[msk]):
             smsk = (split_vec == spl) * msk
             for epc in np.unique(dset["Epoch"][smsk]):
-                emsk = smsk * (dset["Epoch"] == epc) 
+                emsk = smsk * (dset["Epoch"] == epc)
 
                 ds = dat[emsk]
                 median = np.median(ds)
@@ -119,7 +121,16 @@ for split in cfg.split_by:
         dset_filt = {key: val[msk] for key, val in dset.items()}
 
         # Violin with epoch hue
-        plt.figure(figsize=(max(8, len(np.unique(dset_filt[split]))* 0.8 + .5*len(np.unique(dset_filt["Epoch"]))), 6))
+        plt.figure(
+            figsize=(
+                max(
+                    8,
+                    len(np.unique(dset_filt[split])) * 0.8
+                    + 0.5 * len(np.unique(dset_filt["Epoch"])),
+                ),
+                6,
+            )
+        )
         sns.violinplot(
             data=dset_filt,
             x=split,
@@ -128,7 +139,7 @@ for split in cfg.split_by:
             split=True,
             inner="quart",
             common_norm=True,
-            order=np.sort(np.unique(dset_filt[split]))
+            order=np.sort(np.unique(dset_filt[split])),
         )
         plt.xticks(rotation=45, ha="right")
         plt.title(f"{' '.join(name.split(' ')[:-1])} Distrubution")

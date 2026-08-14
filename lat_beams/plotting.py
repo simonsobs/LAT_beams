@@ -5,21 +5,22 @@ they should be refactored to rely on more generic units.
 """
 
 import os
-from typing import Sequence, Optional
+from typing import Optional, Sequence
 
 import matplotlib
 
 matplotlib.use("Agg")
+import textwrap
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from jaxtyping import Float
 from matplotlib.collections import LineCollection
 from matplotlib.colors import SymLogNorm
+from numpy.typing import NDArray
 from pixell import enmap
 from sotodlib.core import AxisManager
-from numpy.typing import NDArray
-import textwrap
 
 from .beam_utils import radial_profile
 
@@ -461,14 +462,17 @@ def auto_relplot(
             ignore.append(m)
 
         name = "+".join(mlist)
-        data[name] = np.array([
-            "+".join(str(data[c][i]) for c in mlist)
-            for i in range(len(data[mlist[0]]))
-        ])
+        data[name] = np.array(
+            [
+                "+".join(str(data[c][i]) for c in mlist)
+                for i in range(len(data[mlist[0]]))
+            ]
+        )
 
     if auto:
         fields = [
-            k for k in data
+            k
+            for k in data
             if k not in (x, y) and k not in in_kwargs and k not in ignore
         ]
         fields.sort(key=lambda c: len(set(data[c])))
@@ -477,12 +481,14 @@ def auto_relplot(
             kwargs[cat] = field
 
         if len(fields) > len(can_add):
-            to_combine = [kwargs["hue"]] + fields[len(can_add):]
+            to_combine = [kwargs["hue"]] + fields[len(can_add) :]
             name = "+".join(to_combine)
-            data[name] = np.array([
-                "+".join(str(data[c][i]) for c in to_combine)
-                for i in range(len(data[x]))
-            ])
+            data[name] = np.array(
+                [
+                    "+".join(str(data[c][i]) for c in to_combine)
+                    for i in range(len(data[x]))
+                ]
+            )
             kwargs["hue"] = name
 
     if np.issubdtype(data[x].dtype, np.str_):

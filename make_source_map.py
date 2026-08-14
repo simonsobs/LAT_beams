@@ -22,6 +22,8 @@ import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
+    ErrCode,
+    fail,
     get_args_cfg,
     init_log,
     load_aman,
@@ -30,8 +32,6 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
-    ErrCode,
-    fail,
 )
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
@@ -107,7 +107,14 @@ def get_jobit(
             )
             ws = det_info["wafer_slot"]
             if "wafer.wafer_slot" in det_info.keys:
-                ws = np.array([ws1 if ws1 != "ws." else ws2 for ws1, ws2 in zip(det_info["wafer_slot"], det_info["wafer.wafer_slot"])])
+                ws = np.array(
+                    [
+                        ws1 if ws1 != "ws." else ws2
+                        for ws1, ws2 in zip(
+                            det_info["wafer_slot"], det_info["wafer.wafer_slot"]
+                        )
+                    ]
+                )
             wsufmsband = np.unique(
                 np.column_stack(
                     [
@@ -181,12 +188,12 @@ def load_det_splits(split_dir):
 
 
 def make_det_splits(aman, split_dir, min_dets, det_split_cfg, single_det=False):
-    det_splits = {"full" : RangesMatrix.zeros(aman.signal.shape)}
+    det_splits = {"full": RangesMatrix.zeros(aman.signal.shape)}
     if single_det:
         for i, det_id in enumerate(aman.det_info.det_id):
             rmat = RangesMatrix.ones(aman.signal.shape)
-            rmat.ranges[i] = rmat.ranges[i].complement() 
-            det_splits = {det_id : rmat}
+            rmat.ranges[i] = rmat.ranges[i].complement()
+            det_splits = {det_id: rmat}
         return det_splits
     if "det_id" not in aman.det_info:
         return det_splits
@@ -369,7 +376,9 @@ for i, j in enumerate(joblist):
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
             solved = cast(enmap.ndmap, solved)
         except FileNotFoundError:
-            fail(job, ErrCode.MAP_MISSING, "Missing map files in plot_only mode", logger)
+            fail(
+                job, ErrCode.MAP_MISSING, "Missing map files in plot_only mode", logger
+            )
             continue
 
         obs_plot_dir = os.path.join(
@@ -485,7 +494,9 @@ for i, j in enumerate(joblist):
         )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = lbm.make_cuts(aman, source_flags, min(len(aman.signal), 2 * cfg.n_modes), job, logger, cfg)
+    cuts = lbm.make_cuts(
+        aman, source_flags, min(len(aman.signal), 2 * cfg.n_modes), job, logger, cfg
+    )
     if cuts is None:
         continue
 

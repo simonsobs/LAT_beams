@@ -22,7 +22,7 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 
 from .beam_utils import estimate_cent
-from .utils import LoggerLike, log_lvl, set_tag, ErrCode, fail
+from .utils import ErrCode, LoggerLike, fail, log_lvl, set_tag
 
 
 def make_cuts(
@@ -189,18 +189,18 @@ def make_map(
     with log_lvl(logger, logging.WARNING):
         try:
             out = cp.make_map(
-                    aman.copy(),
-                    thread_algo="domdir",
-                    center_on=src_to_map,
-                    res=res,
-                    cuts=cuts,
-                    source_flags=source_flags,
-                    comps=comps,
-                    filename=filename,
-                    n_modes=n_modes,
-                    info=info,
-                    data_splits=det_splits if len(det_splits) else None,
-                )
+                aman.copy(),
+                thread_algo="domdir",
+                center_on=src_to_map,
+                res=res,
+                cuts=cuts,
+                source_flags=source_flags,
+                comps=comps,
+                filename=filename,
+                n_modes=n_modes,
+                info=info,
+                data_splits=det_splits if len(det_splits) else None,
+            )
         except Exception as e:
             msg = f"Failed to make map with error {e}"
             logger.error("%s", msg)

@@ -11,8 +11,13 @@ import logging
 from typing import Optional, Protocol
 
 import numpy as np
+import scipy.linalg
+import scipy.optimize
 from astropy import units as u
+from healpy.sphtfunc import beam2bl
+from pixell import curvedsky
 from pixell.enmap import ndmap
+from scipy import sparse
 from scipy.interpolate import make_splprep
 from scipy.linalg import lstsq
 from scipy.optimize import minimize, nnls
@@ -20,20 +25,15 @@ from scipy.stats import binned_statistic
 from sotodlib import tod_ops
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
-import scipy.linalg
-import scipy.optimize
-from healpy.sphtfunc import beam2bl
-from pixell import curvedsky
-from scipy import sparse
 
 from .models import (
     bessel_beam,
+    bessel_beam_from_aman,
     bessel_term_cached,
+    fast_wing_transition,
     gaussian2d,
     multipole_decomp,
     multipole_expansion,
-    bessel_beam_from_aman,
-    fast_wing_transition
 )
 
 flog.setLevel(logging.ERROR)
@@ -332,6 +332,7 @@ def fit_multipole_map(
     aman.wrap("amps", amps * map_units, [(0, mp_ax), (1, sc_ax)])
 
     return aman, model
+
 
 def fit_bessel_map(
     imap: ndmap,
@@ -715,10 +716,7 @@ def fit_bessel_map(
     theta = np.arctan2(eta, xi)
     r = np.hypot(xi, eta)
 
-    fwhm = 0.5 * (
-        guess.fwhm_xi.to(u.radian).value
-        + guess.fwhm_eta.to(u.radian).value
-    )
+    fwhm = 0.5 * (guess.fwhm_xi.to(u.radian).value + guess.fwhm_eta.to(u.radian).value)
 
     ivar = ivar.copy()
     ivar[r == 0] = 0
@@ -728,13 +726,19 @@ def fit_bessel_map(
     bessel_ax = IndexAxis("bessel", n_bessel)
     multipole_ax = IndexAxis("multipole", n_multipoles)
     term_ax = LabelAxis("term", ["cos", "sin"])
-    
+
     aman.wrap("ell_max", ell_max * u.dimensionless_unscaled)
     aman.wrap("mask_size", mask_size * u.radian)
     aman.wrap("n_sigma", n_sigma * u.dimensionless_unscaled)
 
     # Full fitting mask.
-    fit_msk = np.isfinite(imap) * np.isfinite(ivar) * (ivar > 0) * (r < 1.5 * mask_size) * (r > 1e-12)
+    fit_msk = (
+        np.isfinite(imap)
+        * np.isfinite(ivar)
+        * (ivar > 0)
+        * (r < 1.5 * mask_size)
+        * (r > 1e-12)
+    )
 
     r_fit = np.asarray(r[fit_msk], dtype=float)
     theta_fit = np.asarray(theta[fit_msk], dtype=float)
@@ -751,9 +755,7 @@ def fit_bessel_map(
     outer_mask = (r > mask_size) * np.isfinite(imap) * np.isfinite(ivar) * (ivar > 0)
 
     if np.any(outer_mask):
-        background = np.median(
-            np.asarray(imap[outer_mask], dtype=float)
-        )
+        background = np.median(np.asarray(imap[outer_mask], dtype=float))
     else:
         background = guess.off.value
 
@@ -769,15 +771,11 @@ def fit_bessel_map(
     triu_indices = np.triu_indices(n_bessel)
 
     # Construct the Bessel basis once for all fitting pixels.
-    b_terms = np.column_stack([
-        bessel_term_cached(r_fit, ell_max, n)
-        for n in range(n_bessel)
-    ])
-
-    base_beams = (
-        b_terms[:, triu_indices[0]]
-        * b_terms[:, triu_indices[1]]
+    b_terms = np.column_stack(
+        [bessel_term_cached(r_fit, ell_max, n) for n in range(n_bessel)]
     )
+
+    base_beams = b_terms[:, triu_indices[0]] * b_terms[:, triu_indices[1]]
 
     base_beams = np.nan_to_num(
         base_beams,
@@ -791,9 +789,7 @@ def fit_bessel_map(
     idx_list = []
     X_cols = []
 
-    for pair_idx, (n0, n1) in enumerate(
-        zip(triu_indices[0], triu_indices[1])
-    ):
+    for pair_idx, (n0, n1) in enumerate(zip(triu_indices[0], triu_indices[1])):
         base_beam = base_beams[:, pair_idx]
 
         for m in range(n_multipoles):
@@ -814,13 +810,19 @@ def fit_bessel_map(
     B = np.column_stack([B_core, np.ones_like(r_fit)])
     n_linear = B.shape[1]
 
-    core_names = [f"n{n0}_n{n1}_m{m}_{'sin' if term else 'cos'}" for n0, n1, m, term in idx_list]
+    core_names = [
+        f"n{n0}_n{n1}_m{m}_{'sin' if term else 'cos'}" for n0, n1, m, term in idx_list
+    ]
     linear_names = core_names + ["offset"]
     core_ax = LabelAxis("core", core_names)
     linear_ax = LabelAxis("linear", linear_names)
     bessel_index_ax = LabelAxis("bessel_index", ["n0", "n1", "m", "term"])
-    wing_names = ["loga_m0"] + [f"loga_m{m}_{t}" for m in range(1, n_fourier + 1) for t in ("cos", "sin")]
-    wing_names += ["logr_m0"] + [f"logr_m{m}_{t}" for m in range(1, n_fourier + 1) for t in ("cos", "sin")]
+    wing_names = ["loga_m0"] + [
+        f"loga_m{m}_{t}" for m in range(1, n_fourier + 1) for t in ("cos", "sin")
+    ]
+    wing_names += ["logr_m0"] + [
+        f"logr_m{m}_{t}" for m in range(1, n_fourier + 1) for t in ("cos", "sin")
+    ]
     wing_names += ["log_p"]
     wing_ax = LabelAxis("wing_param", wing_names)
     fit_ax = LabelAxis("fit_param", linear_names + wing_names)
@@ -840,7 +842,11 @@ def fit_bessel_map(
         F_mat[2 + 2 * idx_f] = sin_m_theta[idx_f]
 
     F_mat_T = F_mat.T.copy()
-    aman.wrap("bessel_idx", np.asarray(idx_list, dtype=int), [(0, core_ax), (1, bessel_index_ax)])
+    aman.wrap(
+        "bessel_idx",
+        np.asarray(idx_list, dtype=int),
+        [(0, core_ax), (1, bessel_index_ax)],
+    )
 
     # Choose optimization pixels.
     if n_opt_pixels is None or n_opt_pixels >= n_pixels:
@@ -848,21 +854,40 @@ def fit_bessel_map(
     else:
         n_rbins = 60
         n_per_bin = max(1, int(np.ceil(n_opt_pixels / n_rbins)))
-        r_edges = np.linspace( np.min(r_fit), np.max(r_fit), n_rbins + 1,)
+        r_edges = np.linspace(
+            np.min(r_fit),
+            np.max(r_fit),
+            n_rbins + 1,
+        )
         opt_chunks = []
         for ibin in range(n_rbins):
-            sel = np.flatnonzero( (r_fit >= r_edges[ibin]) * ( r_fit < r_edges[ibin + 1] if ibin < n_rbins - 1 else r_fit <= r_edges[ibin + 1]))
+            sel = np.flatnonzero(
+                (r_fit >= r_edges[ibin])
+                * (
+                    r_fit < r_edges[ibin + 1]
+                    if ibin < n_rbins - 1
+                    else r_fit <= r_edges[ibin + 1]
+                )
+            )
             if len(sel) == 0:
                 continue
             if len(sel) <= n_per_bin:
                 opt_chunks.append(sel)
                 continue
             order = sel[np.argsort(theta_fit[sel])]
-            take = np.linspace( 0, len(order) - 1, n_per_bin,).astype(int)
+            take = np.linspace(
+                0,
+                len(order) - 1,
+                n_per_bin,
+            ).astype(int)
             opt_chunks.append(order[take])
         opt_idx = np.concatenate(opt_chunks)
         if len(opt_idx) > n_opt_pixels:
-            take = np.linspace( 0, len(opt_idx) - 1, n_opt_pixels,).astype(int)
+            take = np.linspace(
+                0,
+                len(opt_idx) - 1,
+                n_opt_pixels,
+            ).astype(int)
             opt_idx = opt_idx[take]
     opt_idx = np.unique(opt_idx)
 
@@ -878,18 +903,20 @@ def fit_bessel_map(
     # Initial transition radius.
     r0_init = min(0.9 * mask_size, 3.0 * fwhm)
 
-    valid_profile = np.isfinite(map_fit) * np.isfinite(w) * (map_fit != 0) * (r_fit < mask_size) * (r_fit > fwhm)
+    valid_profile = (
+        np.isfinite(map_fit)
+        * np.isfinite(w)
+        * (map_fit != 0)
+        * (r_fit < mask_size)
+        * (r_fit > fwhm)
+    )
 
     if np.any(valid_profile):
         r_prof = r_fit[valid_profile]
         y_prof = map_fit[valid_profile]
 
         sort_r = np.sort(np.unique(r_fit))
-        pixel_size = (
-            np.median(np.diff(sort_r))
-            if len(sort_r) > 1
-            else 0.05 * fwhm
-        )
+        pixel_size = np.median(np.diff(sort_r)) if len(sort_r) > 1 else 0.05 * fwhm
 
         bin_size = 4.0 * pixel_size
         r_min = np.min(r_prof)
@@ -910,7 +937,10 @@ def fit_bessel_map(
         else:
             r_prof_clean = r_prof
             y_prof_clean = y_prof
-        central = np.asarray( imap[(r < fwhm) * np.isfinite(imap)], dtype=float,)
+        central = np.asarray(
+            imap[(r < fwhm) * np.isfinite(imap)],
+            dtype=float,
+        )
         if central.size:
             peak_val = np.max(central)
         else:
@@ -919,10 +949,14 @@ def fit_bessel_map(
         below_threshold = r_prof_clean[y_prof_clean <= threshold]
         if len(below_threshold):
             r0_init = np.min(below_threshold)
-        r0_init = np.clip( r0_init, 1.2 * fwhm, 0.9 * mask_size,)
+        r0_init = np.clip(
+            r0_init,
+            1.2 * fwhm,
+            0.9 * mask_size,
+        )
 
     # Initial wing amplitude.
-    annulus_mask = ( (r_fit >= 0.95 * r0_init) * (r_fit <= 1.05 * r0_init))
+    annulus_mask = (r_fit >= 0.95 * r0_init) * (r_fit <= 1.05 * r0_init)
     if np.any(annulus_mask):
         y_at_r0 = np.median(map_fit[annulus_mask]) - background
         y_at_r0 = max(y_at_r0, 0.0)
@@ -930,7 +964,10 @@ def fit_bessel_map(
         y_at_r0 = 0.0
 
     if y_at_r0 <= 0:
-        central = np.asarray( imap[(r < fwhm) * np.isfinite(imap)], dtype=float,)
+        central = np.asarray(
+            imap[(r < fwhm) * np.isfinite(imap)],
+            dtype=float,
+        )
         if central.size:
             y_at_r0 = max(np.max(central) - background, 0.0) * 1e-3
     a_init = max(y_at_r0 * r0_init**3, 1e-15)
@@ -945,15 +982,20 @@ def fit_bessel_map(
     upper = np.full_like(params0, np.inf)
     lower[n_ang] = np.log(max(1.2 * fwhm, 1e-8))
     if np.isfinite(mask_size):
-        upper[n_ang] = np.log( max(0.9 * mask_size, 1.2 * fwhm))
+        upper[n_ang] = np.log(max(0.9 * mask_size, 1.2 * fwhm))
 
     lower[-1] = np.log(0.5)
     upper[-1] = np.log(20.0)
+
     def solve_linear_opt(params):
         """
         Solve the profiled linear problem on the optimization pixels.
         """
-        loga_coeff, logr_coeff, p_val = params[:n_ang], params[n_ang:2 * n_ang], params[-1]
+        loga_coeff, logr_coeff, p_val = (
+            params[:n_ang],
+            params[n_ang : 2 * n_ang],
+            params[-1],
+        )
 
         pure_wing, wing_weight = fast_wing_transition(
             r_opt, loga_coeff, logr_coeff, p_val, F_mat_T_opt
@@ -978,7 +1020,6 @@ def fit_bessel_map(
 
         return linear, model * w_opt, pure_core, pure_wing, wing_weight
 
-
     def jacobian(params):
         """
         Calculate the analytic Jacobian.
@@ -986,7 +1027,7 @@ def fit_bessel_map(
         _, _, pure_core, pure_wing, wing_weight = solve_linear_opt(params)
 
         loga_coeff = params[:n_ang]
-        logr_coeff = params[n_ang:2 * n_ang]
+        logr_coeff = params[n_ang : 2 * n_ang]
         p_val = params[-1]
 
         n_data = len(r_opt)
@@ -1005,7 +1046,7 @@ def fit_bessel_map(
 
         dsdu = np.zeros_like(u)
         ui = u[inside]
-        dsdu[inside] = 30.0 * ui**2 * (1.0 - ui)**2
+        dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
 
         du_dlogr0 = -(p / 0.3) * ratio
         du_dlogp = (p / 0.3) * (ratio - 1.0)
@@ -1024,23 +1065,19 @@ def fit_bessel_map(
         dmodel_a = wing_weight[:, None] * dwing_dloga
         J[:n_data, :n_ang] = dmodel_a * w_opt[:, None]
 
-        dmodel_r0 = (
-            wing_minus_core[:, None]
-            * dw_dlogr0[:, None]
-            * F_mat_T_opt
-        )
-        J[:n_data, n_ang:2 * n_ang] = dmodel_r0 * w_opt[:, None]
+        dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T_opt
+        J[:n_data, n_ang : 2 * n_ang] = dmodel_r0 * w_opt[:, None]
 
         dmodel_p = wing_minus_core * dw_dlogp
         J[:n_data, -1] = dmodel_p * w_opt
 
         reg_start = n_data
-        J[reg_start:reg_start + n_ang - 1, 1:n_ang] = 0.01 * np.eye(n_ang - 1)
+        J[reg_start : reg_start + n_ang - 1, 1:n_ang] = 0.01 * np.eye(n_ang - 1)
 
         reg_start += n_ang - 1
         J[
-            reg_start:reg_start + n_ang - 1,
-            n_ang + 1:2 * n_ang,
+            reg_start : reg_start + n_ang - 1,
+            n_ang + 1 : 2 * n_ang,
         ] = 0.01 * np.eye(n_ang - 1)
 
         model_no_offset = (1.0 - wing_weight) * pure_core + wing_weight * pure_wing
@@ -1050,17 +1087,15 @@ def fit_bessel_map(
         if neg_norm > 0.0:
             dmodel_no_offset = np.zeros((n_data, n_params), dtype=float)
             dmodel_no_offset[:, :n_ang] = dmodel_a
-            dmodel_no_offset[:, n_ang:2 * n_ang] = dmodel_r0
+            dmodel_no_offset[:, n_ang : 2 * n_ang] = dmodel_r0
             dmodel_no_offset[:, -1] = dmodel_p
 
             active = model_no_offset < 0.0
             weights = np.zeros_like(model_no_offset)
-            weights[active] = negative[active] * w_opt[active]**2
+            weights[active] = negative[active] * w_opt[active] ** 2
 
             J[-1, :] = (
-                -10.0
-                * (weights[:, None] * dmodel_no_offset).sum(axis=0)
-                / neg_norm
+                -10.0 * (weights[:, None] * dmodel_no_offset).sum(axis=0) / neg_norm
             )
 
         return J
@@ -1073,16 +1108,14 @@ def fit_bessel_map(
 
         res = model_weighted - y_opt
         loga_coeff = params[:n_ang]
-        logr_coeff = params[n_ang:2 * n_ang]
+        logr_coeff = params[n_ang : 2 * n_ang]
 
         reg_array = 0.01 * np.concatenate([loga_coeff[1:], logr_coeff[1:]])
 
         model_no_offset = (1.0 - wing_weight) * pure_core + wing_weight * pure_wing
         negative = np.maximum(0.0, -model_no_offset)
 
-        neg_penalty = np.array([
-            10.0 * np.sqrt(np.sum((negative * w_opt) ** 2))
-        ])
+        neg_penalty = np.array([10.0 * np.sqrt(np.sum((negative * w_opt) ** 2))])
 
         return np.nan_to_num(
             np.concatenate([res, reg_array, neg_penalty]),
@@ -1101,7 +1134,7 @@ def fit_bessel_map(
         ftol=1e-5,
         xtol=1e-5,
         gtol=1e-5,
-        jac=jacobian, # type: ignore
+        jac=jacobian,  # type: ignore
     )
 
     def solve_linear_full(params):
@@ -1109,45 +1142,51 @@ def fit_bessel_map(
         Solve the profiled linear problem using all fitting pixels.
         """
         loga_coeff = params[:n_ang]
-        logr_coeff = params[n_ang:2 * n_ang]
+        logr_coeff = params[n_ang : 2 * n_ang]
         p_val = params[-1]
-    
+
         pure_wing, wing_weight = fast_wing_transition(
             r_fit, loga_coeff, logr_coeff, p_val, F_mat_T
         )
         q = 1.0 - wing_weight
-    
+
         X = np.column_stack([Bs[:, :-1] * q[:, None], Bs[:, -1]])
         wing_weighted = pure_wing * wing_weight * w
         rhs = y - wing_weighted
-    
+
         A = X.T @ X
         A[:n_core, :n_core] += 1e-6 * np.eye(n_core)
         b = X.T @ rhs
-    
+
         cho = scipy.linalg.cho_factor(A, lower=True, check_finite=False)
         linear_scaled = scipy.linalg.cho_solve(cho, b, check_finite=False)
-    
+
         linear = linear_scaled / scale
         pure_core = B_core @ linear[:-1]
         global_offset = linear[-1]
         model = q * pure_core + wing_weight * pure_wing + global_offset
-    
+
         return linear, model * w, pure_core, pure_wing, wing_weight, cho
+
     linear, *_ = solve_linear_full(result.x)
     coeff, off = linear, linear[-1]
-    
+
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
-    for idx, value in zip(idx_list, coeff[:-1]): amps[idx] = value
-    
-    aman.wrap("amps", amps * map_unit, [(0, bessel_ax), (1, bessel_ax), (2, multipole_ax), (3, term_ax)])
+    for idx, value in zip(idx_list, coeff[:-1]):
+        amps[idx] = value
+
+    aman.wrap(
+        "amps",
+        amps * map_unit,
+        [(0, bessel_ax), (1, bessel_ax), (2, multipole_ax), (3, term_ax)],
+    )
     aman.wrap("linear_coeffs", coeff * map_unit, [(0, linear_ax)])
     aman.wrap("off", off * map_unit)
     aman.wrap("bessel_off", 0 * map_unit)  # Keep for compatibility.
-    
+
     aman.wrap("wing_params", result.x * u.dimensionless_unscaled, [(0, wing_ax)])
     aman.wrap("wing_p", np.exp(result.x[-1]) * u.dimensionless_unscaled)
-    
+
     aman.wrap("chi2", np.sum(result.fun**2))
     aman.wrap("dof", max(1, len(result.fun) - len(result.x)))
     aman.wrap("wing_success", result.success)
@@ -1162,9 +1201,17 @@ def fit_bessel_map(
         sigma2 = np.sum(result.fun**2) / dof
 
         full_cov = compute_full_covariance(
-            params=result.x, linear=linear, B_core=B_core, w=w,
-            F_mat_T=F_mat_T, r_fit=r_fit, scale=scale, n_core=n_core,
-            n_ang=n_ang, n_pixels=n_pixels, sigma2=sigma2,
+            params=result.x,
+            linear=linear,
+            B_core=B_core,
+            w=w,
+            F_mat_T=F_mat_T,
+            r_fit=r_fit,
+            scale=scale,
+            n_core=n_core,
+            n_ang=n_ang,
+            n_pixels=n_pixels,
+            sigma2=sigma2,
         )
 
         n_linear = n_core + 1
@@ -1180,9 +1227,19 @@ def fit_bessel_map(
         aman.wrap("wing_errors", wing_errors, [(0, wing_ax)])
         aman.wrap("sigma2", sigma2)
 
-    beam_model = bessel_beam( posmap, xi0, eta0, ell_max, amps, 0, result.x, off,)
+    beam_model = bessel_beam(
+        posmap,
+        xi0,
+        eta0,
+        ell_max,
+        amps,
+        0,
+        result.x,
+        off,
+    )
 
     return aman, beam_model
+
 
 def compute_full_covariance(
     params,
@@ -1289,7 +1346,7 @@ def compute_full_covariance(
     """
     # TODO: The regularization and penalization terms have constants that are hardcoded in a few spots, need to fix that
     loga_coeff = params[:n_ang]
-    logr_coeff = params[n_ang:2 * n_ang]
+    logr_coeff = params[n_ang : 2 * n_ang]
     p_val = params[-1]
 
     pure_wing, wing_weight = fast_wing_transition(
@@ -1307,68 +1364,119 @@ def compute_full_covariance(
     n_nonlinear = 2 * n_ang + 1
     n_params = n_linear + n_nonlinear
 
-    X = np.column_stack([ B_core * q[:, None], np.ones(n_pixels), ])
+    X = np.column_stack(
+        [
+            B_core * q[:, None],
+            np.ones(n_pixels),
+        ]
+    )
     X_weighted = X * w[:, None]
 
     logr = F_mat_T @ logr_coeff
     r0 = np.exp(logr)
 
-    p = np.clip( np.exp(p_val), 0.5, 20.0,)
-    rr = np.maximum( r_fit, 1e-5,)
-    r0_safe = np.maximum( r0, 1e-4,)
+    p = np.clip(
+        np.exp(p_val),
+        0.5,
+        20.0,
+    )
+    rr = np.maximum(
+        r_fit,
+        1e-5,
+    )
+    r0_safe = np.maximum(
+        r0,
+        1e-4,
+    )
     ratio = rr / r0_safe
     u = 0.5 + (p / 0.3) * (ratio - 1.0)
 
-    inside = ( (u > 0.0) * (u < 1.0))
+    inside = (u > 0.0) * (u < 1.0)
     dsdu = np.zeros_like(u)
     ui = u[inside]
-    dsdu[inside] = ( 30.0 * ui**2 * (1.0 - ui)**2)
-    du_dlogr0 = ( -(p / 0.3) * ratio)
-    du_dlogp = ( (p / 0.3) * (ratio - 1.0))
-    dw_dlogr0 = ( dsdu * du_dlogr0)
-    dw_dlogp = ( dsdu * du_dlogp)
+    dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
+    du_dlogr0 = -(p / 0.3) * ratio
+    du_dlogp = (p / 0.3) * (ratio - 1.0)
+    dw_dlogr0 = dsdu * du_dlogr0
+    dw_dlogp = dsdu * du_dlogp
     dw_dlogr0[~inside] = 0.0
     dw_dlogp[~inside] = 0.0
-    dwing_dloga = ( pure_wing[:, None] * F_mat_T)
-    wing_minus_core = ( pure_wing - core)
-    dmodel_a = ( wing_weight[:, None] * dwing_dloga)
-    dmodel_r0 = ( wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T)
-    dmodel_p = ( wing_minus_core * dw_dlogp)
-    J_nonlinear = np.column_stack([
-        dmodel_a,
-        dmodel_r0,
-        dmodel_p,
-    ])
+    dwing_dloga = pure_wing[:, None] * F_mat_T
+    wing_minus_core = pure_wing - core
+    dmodel_a = wing_weight[:, None] * dwing_dloga
+    dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
+    dmodel_p = wing_minus_core * dw_dlogp
+    J_nonlinear = np.column_stack(
+        [
+            dmodel_a,
+            dmodel_r0,
+            dmodel_p,
+        ]
+    )
     J_nonlinear *= w[:, None]
 
-    J = np.zeros( ( n_pixels, n_params,), dtype=float,)
+    J = np.zeros(
+        (
+            n_pixels,
+            n_params,
+        ),
+        dtype=float,
+    )
     J[:, :n_linear] = X_weighted
     J[:, n_linear:] = J_nonlinear
     H = J.T @ J
 
-    ridge = 1e-6 / scale[:n_core]**2
-    H[ :n_core, :n_core, ] += np.diag(ridge)
+    ridge = 1e-6 / scale[:n_core] ** 2
+    H[
+        :n_core,
+        :n_core,
+    ] += np.diag(ridge)
     reg = 0.01**2
 
-    H[ n_linear + 1:n_linear + n_ang, n_linear + 1:n_linear + n_ang, ] += reg * np.eye(n_ang - 1)
-    H[ n_linear + n_ang + 1: n_linear + 2 * n_ang, n_linear + n_ang + 1: n_linear + 2 * n_ang, ] += reg * np.eye(n_ang - 1)
+    H[
+        n_linear + 1 : n_linear + n_ang,
+        n_linear + 1 : n_linear + n_ang,
+    ] += reg * np.eye(n_ang - 1)
+    H[
+        n_linear + n_ang + 1 : n_linear + 2 * n_ang,
+        n_linear + n_ang + 1 : n_linear + 2 * n_ang,
+    ] += reg * np.eye(n_ang - 1)
 
-    model_no_offset = ( (1.0 - wing_weight) * core + wing_weight * pure_wing)
-    negative = np.maximum( 0.0, -model_no_offset,)
-    neg_norm = np.sqrt( np.sum( (negative * w)**2))
+    model_no_offset = (1.0 - wing_weight) * core + wing_weight * pure_wing
+    negative = np.maximum(
+        0.0,
+        -model_no_offset,
+    )
+    neg_norm = np.sqrt(np.sum((negative * w) ** 2))
     if neg_norm > 0.0:
-        dmodel = np.zeros( ( n_pixels, n_params,), dtype=float,)
+        dmodel = np.zeros(
+            (
+                n_pixels,
+                n_params,
+            ),
+            dtype=float,
+        )
         dmodel[:, :n_linear] = X_weighted
-        dmodel[ :, n_linear:n_linear + n_nonlinear, ] = J_nonlinear
-        active = ( model_no_offset < 0.0)
-        weights = np.zeros_like( model_no_offset)
-        weights[active] = ( negative[active] * w[active]**2)
-        dpenalty = ( -10.0 / neg_norm * ( weights[:, None] * dmodel).sum(axis=0))
-        H += np.outer( dpenalty, dpenalty,)
+        dmodel[
+            :,
+            n_linear : n_linear + n_nonlinear,
+        ] = J_nonlinear
+        active = model_no_offset < 0.0
+        weights = np.zeros_like(model_no_offset)
+        weights[active] = negative[active] * w[active] ** 2
+        dpenalty = -10.0 / neg_norm * (weights[:, None] * dmodel).sum(axis=0)
+        H += np.outer(
+            dpenalty,
+            dpenalty,
+        )
 
-    covariance = scipy.linalg.pinvh( H, check_finite=False,)
+    covariance = scipy.linalg.pinvh(
+        H,
+        check_finite=False,
+    )
 
     return sigma2 * covariance
+
 
 def bessel_profile_covariance(
     fit,
@@ -1431,7 +1539,9 @@ def bessel_profile_covariance(
     p = np.concatenate([linear, wing_params])
 
     if full_cov.shape != (len(p), len(p)):
-        raise ValueError(f"full_cov has shape {full_cov.shape}, but the reconstructed parameter vector has length {len(p)}.")
+        raise ValueError(
+            f"full_cov has shape {full_cov.shape}, but the reconstructed parameter vector has length {len(p)}."
+        )
 
     evals, evecs = np.linalg.eigh(full_cov)
     order = np.argsort(evals)[::-1]
@@ -1475,9 +1585,29 @@ def bessel_profile_covariance(
             amps_plus[tuple(ind)] = a
         for a, ind in zip(p_minus[:n_core], idx):
             amps_minus[tuple(ind)] = a
-        model_plus = bessel_beam(posmap, xi0, eta0, ell_max, amps_plus, 0.0, p_plus[n_core + 1:], p_plus[n_core])
-        model_minus = bessel_beam(posmap, xi0, eta0, ell_max, amps_minus, 0.0, p_minus[n_core + 1:], p_minus[n_core])
-        J_mode[:, i] = (np.asarray(model_plus).ravel() - np.asarray(model_minus).ravel()) / (2.0 * sigma)
+        model_plus = bessel_beam(
+            posmap,
+            xi0,
+            eta0,
+            ell_max,
+            amps_plus,
+            0.0,
+            p_plus[n_core + 1 :],
+            p_plus[n_core],
+        )
+        model_minus = bessel_beam(
+            posmap,
+            xi0,
+            eta0,
+            ell_max,
+            amps_minus,
+            0.0,
+            p_minus[n_core + 1 :],
+            p_minus[n_core],
+        )
+        J_mode[:, i] = (
+            np.asarray(model_plus).ravel() - np.asarray(model_minus).ravel()
+        ) / (2.0 * sigma)
 
     J_profile_mode = R @ J_mode
 
@@ -1495,26 +1625,38 @@ def bessel_profile_covariance(
     bl_mode = np.empty((len(ell), n_modes_actual), dtype=float)
 
     for i, (mode, eval_i) in enumerate(zip(J_profile_mode.T, evals)):
-        bl_mode[:, i] = 0.0 if eval_i <= 0 else np.asarray(
-            beam2bl(mode, radial_centers, lmax=lmax)
+        bl_mode[:, i] = (
+            0.0 if eval_i <= 0 else np.asarray(beam2bl(mode, radial_centers, lmax=lmax))
         )
 
     bl_cov = (bl_mode * evals[None, :]) @ bl_mode.T
     bl_sigma = np.sqrt(np.maximum(np.diag(bl_cov), 0.0))
 
-    axes = [ IndexAxis("r", n_radial), IndexAxis("ell", len(ell)), IndexAxis("mode", n_modes_actual), IndexAxis("param", len(p)), ]
+    axes = [
+        IndexAxis("r", n_radial),
+        IndexAxis("ell", len(ell)),
+        IndexAxis("mode", n_modes_actual),
+        IndexAxis("param", len(p)),
+    ]
     out = AxisManager(*axes)
-
 
     out.wrap("r", 3600 * np.rad2deg(radial_centers), [(0, "r")])
     out.wrap("profile", profile, [(0, "r")])
     out.wrap("profile_sigma", profile_sigma, [(0, "r")])
     out.wrap("profile_cov", profile_cov, [(0, "r"), (1, "r")])
-    out.wrap( "profile_modes", J_profile_mode * np.sqrt(evals)[None, :], [(0, "r"), (1, "mode")],)
+    out.wrap(
+        "profile_modes",
+        J_profile_mode * np.sqrt(evals)[None, :],
+        [(0, "r"), (1, "mode")],
+    )
     out.wrap("ell", ell, [(0, "ell")])
     out.wrap("bl", bl, [(0, "ell")])
     out.wrap("bl_sigma", bl_sigma, [(0, "ell")])
-    out.wrap( "bl_modes", bl_mode * np.sqrt(evals)[None, :], [(0, "ell"), (1, "mode")],)
+    out.wrap(
+        "bl_modes",
+        bl_mode * np.sqrt(evals)[None, :],
+        [(0, "ell"), (1, "mode")],
+    )
     out.wrap("cov_eigenvalues", evals, [(0, "mode")])
     out.wrap("cov_eigenvectors", evecs, [(0, "param"), (1, "mode")])
     out.wrap("profile_norm", profile_norm)
@@ -1581,11 +1723,7 @@ def radial_profile_lin(
 
     edges = np.r_[0.0, r[1:] - dr / 2, r[-1] + dr / 2]
     bin_idx = np.digitize(rmap, edges) - 1
-    valid = (
-        (bin_idx >= 0)
-        & (bin_idx < len(r))
-        & np.isfinite(data)
-    )
+    valid = (bin_idx >= 0) & (bin_idx < len(r)) & np.isfinite(data)
 
     pix = np.flatnonzero(valid)
     bins = bin_idx[valid]

@@ -19,7 +19,7 @@ from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
 from .utils import LoggerLike
-from .utils.jobs import set_tag, fail, ErrCode
+from .utils.jobs import ErrCode, fail, set_tag
 
 
 def solid_angle(
@@ -366,7 +366,7 @@ def process_model(
             print(f"{msg}")
         elif job is None:
             logger.error("%s", msg)
-        if job is not None: 
+        if job is not None:
             fail(job, ErrCode.SNR_LOW, msg, logger)
         return None
 
@@ -390,7 +390,7 @@ def process_model(
 
 
 def load_beam_fits_from_jobs(
-        fpath: str, joblist: list[jobdb.Job] , jdb : Optional[jobdb.JobManager] = None
+    fpath: str, joblist: list[jobdb.Job], jdb: Optional[jobdb.JobManager] = None
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
@@ -452,7 +452,7 @@ def load_beam_fits_from_jobs(
     #     ]
     # )
     amans = []
-    for job, o, u, b, m in zip(joblist, obs_ids,  arrays, bands, splits):
+    for job, o, u, b, m in zip(joblist, obs_ids, arrays, bands, splits):
         try:
             aman = AxisManager.load(f[os.path.join(o, u, b, m)])
             amans += [aman]
@@ -583,7 +583,7 @@ def get_split_vec(
         second should be a list of values to match. In the output split_vec
         anything that matches will have `name` in the split and anything
         that does not match will have `NOMATCH`.
-        If you want to match against a numeric range instaed then 
+        If you want to match against a numeric range instaed then
         the `list` should be a two element float list that defines the range
         `[low, high)`.
 
@@ -605,7 +605,10 @@ def get_split_vec(
             split_vec = split_vec.astype(
                 f"U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}"
             )
-            if len(metasplits[spl][1]) == 2 and np.array(metasplits[spl][1]).dtype == float:
+            if (
+                len(metasplits[spl][1]) == 2
+                and np.array(metasplits[spl][1]).dtype == float
+            ):
                 svf = split_vec.astype(float)
                 msk = (svf >= metasplits[spl][1][0]) * (svf < metasplits[spl][1][1])
             else:

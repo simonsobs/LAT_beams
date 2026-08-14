@@ -1,13 +1,15 @@
 import astropy.units as u
+import numba
 import numpy as np
 from joblib import Memory
 from numba import njit
-import numba
-from scipy.special import factorial, jv
 from numpy.typing import NDArray
 from pixell.enmap import ndmap
+from scipy.special import factorial, jv
+
 try:
     from mpi4py import MPI
+
     comm = MPI.COMM_WORLD
     myrank = comm.Get_rank()
 except ImportError:
@@ -152,6 +154,7 @@ def bessel_term(r, ell_max, i):
 
 bessel_term_cached = memory.cache(bessel_term)
 
+
 @numba.jit(nopython=True, fastmath=True, cache=True)
 def fast_wing_transition(
     r_fit: NDArray,
@@ -258,8 +261,6 @@ def fast_wing_transition(
     return pure_wing, wing_weight
 
 
-
-
 def bessel_beam(
     posmap: ndmap,
     xi0: float,
@@ -269,7 +270,7 @@ def bessel_beam(
     bessel_off: float,
     wing_params: NDArray[np.floating],
     off: float,
-    ) -> ndmap: 
+) -> ndmap:
     r"""
     Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing model.
 
@@ -314,7 +315,7 @@ def bessel_beam(
 
     Returns
     -------
-    bessel_beam : ndmap 
+    bessel_beam : ndmap
         Model evaluated on the same two-dimensional grid as `posmap`.
     """
 
@@ -383,7 +384,7 @@ def bessel_beam(
     _, wing_weight = fast_wing_transition(
         r_flat,
         wing_params[:n_ang],
-        wing_params[n_ang:2 * n_ang],
+        wing_params[n_ang : 2 * n_ang],
         wing_params[-1],
         F_mat_T,
     )
@@ -398,7 +399,9 @@ def bessel_beam(
         neginf=0.0,
     )
 
-    model = ((1.0 - wing_weight) * core_flat + wing_weight * pure_wing + off).reshape(orig_shape)
+    model = ((1.0 - wing_weight) * core_flat + wing_weight * pure_wing + off).reshape(
+        orig_shape
+    )
     return ndmap(model.reshape(orig_shape), posmap.wcs)
 
 
@@ -413,6 +416,7 @@ def bessel_beam_from_aman(posmap, aman):
         aman.bessel.wing_params.value,
         aman.bessel.off.value,
     )
+
 
 def gaussian2d_from_aman(posmap, aman):
     if "gaussian" in aman._fields:

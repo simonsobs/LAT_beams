@@ -31,14 +31,14 @@ from lat_beams.fitting.map import (
 )
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
+    ErrCode,
+    fail,
     get_args_cfg,
     init_log,
     set_tag,
     setup_cfg,
     setup_jobs,
     setup_paths,
-    ErrCode,
-    fail
 )
 
 comm = MPI.COMM_WORLD
@@ -59,7 +59,9 @@ def get_jobit(jdb, det_splits):
     maplist = np.array_split(maplist, nproc)[myrank]
     to_ret = []
     for info in maplist:
-        to_ret += [(info, ds) for ds in info.tags["splits"].split(",") if ds in det_splits]
+        to_ret += [
+            (info, ds) for ds in info.tags["splits"].split(",") if ds in det_splits
+        ]
     return to_ret
 
 
@@ -234,8 +236,12 @@ for i, j in enumerate(joblist):
     set_tag(job, "comps", comps)
 
     # Figure out paths
-    map_path = os.path.join(data_dir, map_job.tags["solved"].format(split=job.tags["split"]))
-    ivar_path = os.path.join(data_dir, map_job.tags["weights"].format(split=job.tags["split"]))
+    map_path = os.path.join(
+        data_dir, map_job.tags["solved"].format(split=job.tags["split"])
+    )
+    ivar_path = os.path.join(
+        data_dir, map_job.tags["weights"].format(split=job.tags["split"])
+    )
     # Load the maps
     try:
         solved = enmap.read_map(map_path)[0]
@@ -387,7 +393,7 @@ for i, j in enumerate(joblist):
             cfg.aperature,
             const.c / (float(band[1:]) * u.GHz),
             band_mask_size,
-            np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac)/np.log(10),
+            np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
             cfg.skip_multipoles,
         )
         if bessel_beam_params is None or model is None:

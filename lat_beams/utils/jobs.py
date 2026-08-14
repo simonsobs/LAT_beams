@@ -7,24 +7,25 @@ TODO: Add some quick tools for inspecting the jobdb here.
 import os
 import sys
 import time
-from typing import Any, Callable, Iterable, Optional, Sequence, cast
 from enum import Enum
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, cast
 
 import sqlalchemy as sqy
 from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 
 from .log import LoggerLike
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mpi4py.MPI import Comm
 
 try:
     from mpi4py import MPI
+
     comm = MPI.COMM_WORLD
 except ImportError:
     comm = None
+
 
 class ErrCode(Enum):
     NO_ERR = 0
@@ -44,6 +45,7 @@ class ErrCode(Enum):
     NO_MAPS = 14
     NO_JOB = 15
 
+
 def set_tag(job, key, new_val):
     # This should be provided by the Job class but it's not...
     for _t in job._tags:
@@ -54,7 +56,7 @@ def set_tag(job, key, new_val):
         raise ValueError(f'No tag called "{key}"')
 
 
-def fail(job : jobdb.Job, errcode : ErrCode, msg : str, logger : Optional[LoggerLike]):
+def fail(job: jobdb.Job, errcode: ErrCode, msg: str, logger: Optional[LoggerLike]):
     """
     Mark and job as failed.
 
@@ -76,8 +78,9 @@ def fail(job : jobdb.Job, errcode : ErrCode, msg : str, logger : Optional[Logger
         set_tag(job, "errcode", errcode.value)
     job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
 
+
 def make_jobdb(
-        comm: Optional["Comm"], data_dir: str, append: str = ""
+    comm: Optional["Comm"], data_dir: str, append: str = ""
 ) -> jobdb.JobManager:
     """
     Create or load a `JobDB` at `{data_dir}/jobdb{append}.db`.
@@ -298,10 +301,10 @@ def setup_jobs(
                 for job in jobs_to_open:
                     merged_job = session.merge(job)
                     updated_jobs.append(merged_job)
-                
+
                 # Single commit for all jobs in this rank
                 session.commit()
-                
+
                 for job in updated_jobs:
                     jid = job.id
                     refreshed_job = session.get(jobdb.Job, jid)

@@ -10,7 +10,7 @@ from sotodlib.core import AxisManager
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 
-from .jobs import set_tag, ErrCode, fail
+from .jobs import ErrCode, fail, set_tag
 from .log import LoggerLike, log_lvl
 
 

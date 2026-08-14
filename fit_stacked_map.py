@@ -7,22 +7,30 @@ from typing import cast
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
+import sqlalchemy as sqy
 from astropy import constants as const
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
 from pixell import enmap
+from pixell.mpi import FakeCommunicator as Comm
 from scipy.interpolate import PchipInterpolator
 from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
-import sqlalchemy as sqy
 
 import lat_beams.fitting.models as bm
 from lat_beams.beam_utils import get_fwhm_radial_bins, radial_profile
-from lat_beams.fitting.map import fit_bessel_map, fit_gauss_map, make_guess, bessel_profile_covariance, radial_profile_lin
+from lat_beams.fitting.map import (
+    bessel_profile_covariance,
+    fit_bessel_map,
+    fit_gauss_map,
+    make_guess,
+    radial_profile_lin,
+)
 from lat_beams.plotting import auto_relplot, plot_map_complete
-from lat_beams.utils import get_args_cfg, setup_cfg, setup_paths
 from lat_beams.utils import (
+    ErrCode,
+    fail,
     get_args_cfg,
     init_log,
     make_jobdb,
@@ -30,10 +38,8 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
-    ErrCode,
-    fail,
 )
-from pixell.mpi import FakeCommunicator as Comm
+
 
 def get_jobdict(jdb):
     jobdict = {
@@ -48,7 +54,15 @@ def get_jobit(jdb, cfg):
     epoch_strings = [f"{start}-{end}" for start, end in cfg.epochs]
     splits = cfg.split_by
     maplist = jdb.get_jobs(jclass="stack_maps", jstate="done", locked=False)
-    to_ret = [job for job in maplist if (job.tags["det_split"] in det_splits and job.tags['split'] in splits and f"{job.tags['epoch_start']}-{job.tags['epoch_end']}" in epoch_strings)]
+    to_ret = [
+        job
+        for job in maplist
+        if (
+            job.tags["det_split"] in det_splits
+            and job.tags["split"] in splits
+            and f"{job.tags['epoch_start']}-{job.tags['epoch_end']}" in epoch_strings
+        )
+    ]
     return to_ret
 
 
@@ -75,6 +89,7 @@ def get_tags(info):
     }
     return tags
 
+
 def view_TQU(imap):
     padded = imap
     if len(imap) == 1:
@@ -82,12 +97,14 @@ def view_TQU(imap):
         padded[0][:] = imap[0][:]
     return padded
 
+
 def downsample(x, *ys, max_points=2000):
     x = np.asarray(x)
     if len(x) <= max_points:
         return (x, *[np.asarray(y) for y in ys])
     idx = np.linspace(0, len(x) - 1, max_points).astype(int)
     return (x[idx], *[np.asarray(y)[idx] for y in ys])
+
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -152,12 +169,17 @@ jdb, all_jobs = setup_jobs(
     args.plot_only,
     logger,
 )
-stack_jobs = { f"{job.tags['split']}-{job.tags['split_str']}-{job.tags['det_split']}-{job.tags['epoch_start']}-{job.tags['epoch_end']}": job for job in jdb.get_jobs(jclass="stack_maps") }
+stack_jobs = {
+    f"{job.tags['split']}-{job.tags['split_str']}-{job.tags['det_split']}-{job.tags['epoch_start']}-{job.tags['epoch_end']}": job
+    for job in jdb.get_jobs(jclass="stack_maps")
+}
 
 # Structure here is split -> spl_str -> epoch -> det_split
-jobdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict))) 
+jobdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
 for job in all_jobs:
-    jobdict[job.tags["split"]][job.tags["split_str"]][(job.tags["epoch_start"], job.tags["epoch_end"])][job.tags["det_split"]] = job
+    jobdict[job.tags["split"]][job.tags["split_str"]][
+        (job.tags["epoch_start"], job.tags["epoch_end"])
+    ][job.tags["det_split"]] = job
 
 
 # Profiler setup
@@ -170,7 +192,9 @@ if args.profile:
     profiler.start()
 
 if args.plot_only:
-    logger.info("Running in plot only mode. Profiles and windows will be loaded and replotted. Model and residuals will not.")
+    logger.info(
+        "Running in plot only mode. Profiles and windows will be loaded and replotted. Model and residuals will not."
+    )
 
 # Loop through splits
 for split in jobdict.keys():
@@ -200,7 +224,8 @@ for split in jobdict.keys():
         band = spl.split("+")[band_idx]
         fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
-        if i > 0: continue
+        if i > 0:
+            continue
         for epoch in jobdict[split][spl].keys():
             plot_dir_epc = os.path.join(plot_dir_spl, f"{epoch[0]}_{epoch[1]}")
             for det_split in jobdict[split][spl][epoch].keys():
@@ -217,9 +242,14 @@ for split in jobdict.keys():
                 if args.plot_only:
                     logger.info("Loading %s", jobstr)
                     prof_dir = os.path.join(data_dir, "stack_profiles", split, spl)
-                    h5_file = os.path.join( prof_dir, f"beam_profiles_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.h5",)
+                    h5_file = os.path.join(
+                        prof_dir,
+                        f"beam_profiles_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.h5",
+                    )
                     if not os.path.isfile(h5_file):
-                        logger.warning("Missing saved beam profile %s. Skipping.", h5_file)
+                        logger.warning(
+                            "Missing saved beam profile %s. Skipping.", h5_file
+                        )
                         continue
                     prof = AxisManager.load(h5_file)
 
@@ -245,9 +275,15 @@ for split in jobdict.keys():
                         profile_sigma[mmsk].tolist() + np.zeros(np.sum(dmsk)).tolist()
                     )
                     to_plot_r["epoch"] += [epoch_name] * (np.sum(mmsk) + np.sum(dmsk))
-                    to_plot_r["dataset"] += ["model"] * np.sum(mmsk) + ["data"] * np.sum(dmsk)
+                    to_plot_r["dataset"] += ["model"] * np.sum(mmsk) + [
+                        "data"
+                    ] * np.sum(dmsk)
 
-                    plot_ell, plot_mbl, plot_bl = downsample( ells, mbl, bl,)
+                    plot_ell, plot_mbl, plot_bl = downsample(
+                        ells,
+                        mbl,
+                        bl,
+                    )
                     n = len(plot_ell)
 
                     to_plot_l["ell"] += plot_ell.tolist() + plot_ell.tolist()
@@ -314,7 +350,7 @@ for split in jobdict.keys():
                     msg = "Gauss fit failed!"
                     fail(job, ErrCode.FIT_FAILED, msg, logger)
                     continue
-                if abs(gauss_params.amp.value - 1) >= 0.2: # type: ignore
+                if abs(gauss_params.amp.value - 1) >= 0.2:  # type: ignore
                     msg = "Gauss fit looks bad!"
                     fail(job, ErrCode.FIT_FAILED, msg, logger)
                     continue
@@ -324,7 +360,8 @@ for split in jobdict.keys():
 
                 # Get FWHM from data
                 c = np.unravel_index(
-                    np.argmin(posmap[0] ** 2 + posmap[1] ** 2, axis=None), posmap[0].shape
+                    np.argmin(posmap[0] ** 2 + posmap[1] ** 2, axis=None),
+                    posmap[0].shape,
                 )
                 cent = (int(c[1]), int(c[0]))
                 rprof = radial_profile(imap, cent)
@@ -337,7 +374,7 @@ for split in jobdict.keys():
                 )
                 if np.isnan(data_fwhm):
                     msg = "Data FWHM is bad! Skipping!"
-                    fail(job, ErrCode.FWHM_TOL , msg, logger)
+                    fail(job, ErrCode.FWHM_TOL, msg, logger)
                     continue
                 aman.wrap("data_fwhm", data_fwhm)
                 aman.wrap("r", r * u.arcsec)
@@ -357,7 +394,7 @@ for split in jobdict.keys():
                     band_mask_size,
                     cfg.bessel_wing_n_sigma,
                     cfg.skip_multipoles,
-                    calc_cov=True
+                    calc_cov=True,
                 )
                 if bessel_beam_params is None or model is None:
                     msg = "Bessel fit failed!"
@@ -370,34 +407,68 @@ for split in jobdict.keys():
                 # Make and save a higher resolution profile
                 prof_dir = os.path.join(data_dir, "stack_profiles", split, spl)
                 os.makedirs(prof_dir, exist_ok=True)
-                prof_cov, model_highres = bessel_profile_covariance( aman.bessel, posmap_highres, cfg.lmax, cfg.cov_modes, pix_extent // 2,)
+                prof_cov, model_highres = bessel_profile_covariance(
+                    aman.bessel,
+                    posmap_highres,
+                    cfg.lmax,
+                    cfg.cov_modes,
+                    pix_extent // 2,
+                )
                 logger.info("Bessel cov complete")
                 mr = np.asarray(prof_cov.r)
                 mprof = np.asarray(prof_cov.profile)
                 profile_modes = np.asarray(prof_cov.profile_modes)
                 mprofile = np.column_stack((mr, mprof, profile_modes))
-                path = os.path.join( prof_dir, f"model_profile_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt",)
-                np.savetxt( path, mprofile,)
+                path = os.path.join(
+                    prof_dir,
+                    f"model_profile_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt",
+                )
+                np.savetxt(
+                    path,
+                    mprofile,
+                )
                 set_tag(job, "model_profile", path)
 
                 ells = np.asarray(prof_cov.ell)
                 mbl = np.asarray(prof_cov.bl)
                 bl_modes = np.asarray(prof_cov.bl_modes)
                 mwindow = np.column_stack((ells, mbl, bl_modes))
-                path = os.path.join( prof_dir, f"model_window_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt",)
-                np.savetxt( path, mwindow, header="ell bl " + " ".join( f"error_mode_{i}" for i in range(bl_modes.shape[1])),)
+                path = os.path.join(
+                    prof_dir,
+                    f"model_window_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt",
+                )
+                np.savetxt(
+                    path,
+                    mwindow,
+                    header="ell bl "
+                    + " ".join(f"error_mode_{i}" for i in range(bl_modes.shape[1])),
+                )
                 set_tag(job, "model_window", path)
 
-                path = os.path.join(prof_dir, f"model_profile_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt")
-                np.savetxt( path, mprofile)
+                path = os.path.join(
+                    prof_dir,
+                    f"model_profile_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt",
+                )
+                np.savetxt(path, mprofile)
                 set_tag(job, "model_profile", path)
-                mwindow = np.column_stack((prof_cov["ell"], prof_cov["bl"], prof_cov["bl_modes"]))
-                path = os.path.join(prof_dir, f"model_window_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt")
-                np.savetxt( path, mwindow)
+                mwindow = np.column_stack(
+                    (prof_cov["ell"], prof_cov["bl"], prof_cov["bl_modes"])
+                )
+                path = os.path.join(
+                    prof_dir,
+                    f"model_window_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt",
+                )
+                np.savetxt(path, mwindow)
                 set_tag(job, "model_window", path)
 
                 # Add data profile and window
-                data_r, data_profile, _ = radial_profile_lin( imap, posmap, xi0=aman.bessel.xi0.value, eta0=aman.bessel.eta0.value, r=np.deg2rad(mr[mr <= r.max()]/3600))
+                data_r, data_profile, _ = radial_profile_lin(
+                    imap,
+                    posmap,
+                    xi0=aman.bessel.xi0.value,
+                    eta0=aman.bessel.eta0.value,
+                    r=np.deg2rad(mr[mr <= r.max()] / 3600),
+                )
                 data_r = 3600 * np.rad2deg(data_r)
                 rprofile = np.column_stack(
                     (
@@ -406,16 +477,20 @@ for split in jobdict.keys():
                         np.interp(data_r, r, rerr),
                     )
                 )
-                path = os.path.join(prof_dir, f"profile_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt")
-                np.savetxt( path, rprofile)
+                path = os.path.join(
+                    prof_dir, f"profile_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt"
+                )
+                np.savetxt(path, rprofile)
                 set_tag(job, "data_profile", path)
                 bl = beam2bl(
                     rprofile[:, 1], np.deg2rad(rprofile[:, 0] / 3600), cfg.lmax
                 )
                 ells = np.arange(cfg.lmax + 1)
                 window = np.column_stack((ells, bl))
-                path = os.path.join(prof_dir, f"window_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt")
-                np.savetxt( path, window)
+                path = os.path.join(
+                    prof_dir, f"window_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.txt"
+                )
+                np.savetxt(path, window)
                 set_tag(job, "data_window", path)
 
                 prof_cov.wrap("data_r", rprofile[:, 0])
@@ -425,22 +500,39 @@ for split in jobdict.keys():
                 prof_cov.wrap("data_ell", ells)
 
                 # Save file
-                h5_file = os.path.join( prof_dir, f"beam_profiles_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.h5",)
-                prof_cov.save(h5_file, overwrite=True,)
+                h5_file = os.path.join(
+                    prof_dir,
+                    f"beam_profiles_{spl}_{det_split}_{epoch[0]}_{epoch[1]}.h5",
+                )
+                prof_cov.save(
+                    h5_file,
+                    overwrite=True,
+                )
 
                 # Save for plots
                 mmsk = mr < 1.2 * 3600 * np.rad2deg(band_mask_size)
                 dmsk = data_r < 3600 * np.rad2deg(band_mask_size)
-                
+
                 to_plot_r["r"] += mr[mmsk].tolist() + data_r[dmsk].tolist()
                 to_plot_r["rprof"] += mprof[mmsk].tolist() + rprofile[dmsk, 1].tolist()
-                to_plot_r["rprof_err"] += np.asarray(prof_cov.profile_sigma)[mmsk].tolist() + np.zeros(np.sum(dmsk)).tolist()
-                to_plot_r["epoch"] += [f"{det_split}_{epoch[0]}_{epoch[1]}"] * ( np.sum(mmsk) + np.sum(dmsk))
-                to_plot_r["dataset"] += ["model"] * np.sum(mmsk) + ["data"] * np.sum( dmsk)
+                to_plot_r["rprof_err"] += (
+                    np.asarray(prof_cov.profile_sigma)[mmsk].tolist()
+                    + np.zeros(np.sum(dmsk)).tolist()
+                )
+                to_plot_r["epoch"] += [f"{det_split}_{epoch[0]}_{epoch[1]}"] * (
+                    np.sum(mmsk) + np.sum(dmsk)
+                )
+                to_plot_r["dataset"] += ["model"] * np.sum(mmsk) + ["data"] * np.sum(
+                    dmsk
+                )
 
-                plot_ell, plot_mbl, plot_bl = downsample( ells, mbl, window[:, 1],)
+                plot_ell, plot_mbl, plot_bl = downsample(
+                    ells,
+                    mbl,
+                    window[:, 1],
+                )
                 n = len(plot_ell)
-                
+
                 to_plot_l["ell"] += plot_ell.tolist() + plot_ell.tolist()
                 to_plot_l["window"] += plot_mbl.tolist() + plot_bl.tolist()
                 to_plot_l["window_err"] += np.zeros(2 * n).tolist()
@@ -464,14 +556,35 @@ for split in jobdict.keys():
                     (model - aman.bessel.off.value, "model"),
                     (resid, "model_resi"),
                 ]:
-                    data_dir_spl = os.path.join(data_dir, "stacks", job.tags["split"], job.tags["split_str"], job.tags["det_split"], f"{job.tags['epoch_start']}_{job.tags['epoch_end']}")
-                    plot_dir_spl = os.path.join(plot_dir, "stacks", job.tags["split"], job.tags["split_str"], job.tags["det_split"], f"{job.tags['epoch_start']}_{job.tags['epoch_end']}")
+                    data_dir_spl = os.path.join(
+                        data_dir,
+                        "stacks",
+                        job.tags["split"],
+                        job.tags["split_str"],
+                        job.tags["det_split"],
+                        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+                    )
+                    plot_dir_spl = os.path.join(
+                        plot_dir,
+                        "stacks",
+                        job.tags["split"],
+                        job.tags["split_str"],
+                        job.tags["det_split"],
+                        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+                    )
                     os.makedirs(data_dir_spl, exist_ok=True)
                     os.makedirs(plot_dir_spl, exist_ok=True)
 
-                    path = os.path.join(data_dir_spl, 
-                    f"{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}_{name}.fits")
-                    enmap.write_map( path, omap, "fits", allow_modify=True,)
+                    path = os.path.join(
+                        data_dir_spl,
+                        f"{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}_{name}.fits",
+                    )
+                    enmap.write_map(
+                        path,
+                        omap,
+                        "fits",
+                        allow_modify=True,
+                    )
                     plot_map_complete(
                         omap,
                         posmap,
@@ -498,7 +611,7 @@ for split in jobdict.keys():
     # Plot profiles and windows
     logger.info("Plotting %s", split)
     plt.close()
-    to_plot_r = {str(key) : np.array(value) for key, value in to_plot_r.items()}
+    to_plot_r = {str(key): np.array(value) for key, value in to_plot_r.items()}
     plot = auto_relplot(
         to_plot_r,
         x="r",
@@ -524,7 +637,7 @@ for split in jobdict.keys():
     )
 
     plt.close()
-    to_plot_l = {str(key) : np.array(value) for key, value in to_plot_l.items()}
+    to_plot_l = {str(key): np.array(value) for key, value in to_plot_l.items()}
     plot = auto_relplot(
         to_plot_l,
         x="ell",

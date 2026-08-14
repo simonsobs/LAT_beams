@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pixell import enmap, reproject
 from scipy.ndimage import rotate
+from scipy.optimize import minimize
 from sotodlib.core import Context
 from sotodlib.io import hkdb
 from tqdm import tqdm
-from scipy.optimize import minimize
 
 from lat_beams import beam_utils as bu
-from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 from lat_beams.fitting.models import bessel_beam_from_aman
+from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 
 # Get settings
 args, cfg_dict = get_args_cfg()
@@ -60,14 +60,18 @@ templates = {}
 stack_dir = os.path.join(data_dir, "stacks_c", "band")
 for epoch in cfg.epochs:
     for band in np.unique(all_fits["band"]):
-        map_path = os.path.join(stack_dir, band, f"{band}_{epoch[0]}_{epoch[1]}_stack_resid.fits")
+        map_path = os.path.join(
+            stack_dir, band, f"{band}_{epoch[0]}_{epoch[1]}_stack_resid.fits"
+        )
         templates[band] = enmap.read_map(map_path)
     break
+
 
 def objective(x, imap, ivar, template):
     amp, theta = x
     model = amp * rotate(template, theta, reshape=False)
-    return np.sum(ivar * (imap - model)**2)
+    return np.sum(ivar * (imap - model) ** 2)
+
 
 # Load, recenter, and normalize each map before fitting
 ext_rad = np.deg2rad(cfg.mask_size)
@@ -77,7 +81,9 @@ idx = np.arange(len(all_fits))
 for epoch in cfg.epochs:
     times = all_fits["time"]
     tmsk = (times >= epoch[0]) * (times < epoch[1])
-    for i, fit, fjob in tqdm(zip(idx[tmsk], all_fits[tmsk], fjobs[tmsk]), total=np.sum(tmsk)):
+    for i, fit, fjob in tqdm(
+        zip(idx[tmsk], all_fits[tmsk], fjobs[tmsk]), total=np.sum(tmsk)
+    ):
         jobstr = f"{fjob.tags['obs_id']}-{fjob.tags['wafer_slot']}-{fjob.tags['stream_id']}-{fjob.tags['band']}"
         mjob = mjobdict[jobstr]
         map_path = os.path.join(data_dir, mjob.tags["solved"])
@@ -117,10 +123,18 @@ for epoch in cfg.epochs:
         fscale_fac = 90.0 / float(fit["band"][1:])
         band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
         posmap = ivar.posmap()
-        r = np.sqrt(posmap[0]**2 + posmap[1]**2)
+        r = np.sqrt(posmap[0] ** 2 + posmap[1] ** 2)
         ivar[r > band_mask_size] = 0
-        bessel = (bessel_beam_from_aman(posmap, fit["aman"]) - fit["aman"].gauss.off.value)/fit["aman"].gauss.amp.value
-        res = minimize(objective, (0, 0), args=(imap - bessel, ivar, tmap), bounds=[(0, 100), (0, 360)], method="Powell")
+        bessel = (
+            bessel_beam_from_aman(posmap, fit["aman"]) - fit["aman"].gauss.off.value
+        ) / fit["aman"].gauss.amp.value
+        res = minimize(
+            objective,
+            (0, 0),
+            args=(imap - bessel, ivar, tmap),
+            bounds=[(0, 100), (0, 360)],
+            method="Powell",
+        )
         cross_amp[i], cross_ang[i] = res.x
 
 # Kill obvious outliers
@@ -161,7 +175,9 @@ if air_temp:
         )
         result = hkdb.load_hk(lspec)
         if "env-vantage.weather_data.temp_outside" in result.data:
-            temps[i] = np.nanmean(result.data["env-vantage.weather_data.temp_outside"][1])
+            temps[i] = np.nanmean(
+                result.data["env-vantage.weather_data.temp_outside"][1]
+            )
         else:
             temps[i] = np.nan
 
@@ -200,7 +216,8 @@ for split in cfg.split_by:
             plt.xlabel("Time (s)")
             plt.ylabel(f"Octopole {name}")
             plt.savefig(
-                os.path.join(plot_dir_spl, f"time_scatter_{spl}.png"), bbox_inches="tight"
+                os.path.join(plot_dir_spl, f"time_scatter_{spl}.png"),
+                bbox_inches="tight",
             )
             plt.close()
 
@@ -255,14 +272,13 @@ for split in cfg.split_by:
                 # Scatter vs interesting things
                 for sname, xax, dat in to_scatter:
                     plt.scatter(dat[smsk], tamps[smsk], alpha=0.4)
-                    plt.title(
-                        f"{spl} Octopole {name} {sname.title()} ({start}, {end})"
-                    )
+                    plt.title(f"{spl} Octopole {name} {sname.title()} ({start}, {end})")
                     plt.xlabel(xax)
                     plt.ylabel(f"Octopole {name}")
                     plt.savefig(
                         os.path.join(
-                            plot_dir_spl, f"{sname.lower()}_scatter_{spl}_{start}_{end}.png"
+                            plot_dir_spl,
+                            f"{sname.lower()}_scatter_{spl}_{start}_{end}.png",
                         ),
                         bbox_inches="tight",
                     )
@@ -274,6 +290,6 @@ for split in cfg.split_by:
                 plt.ylabel(f"Octopole {name}")
                 plt.savefig(
                     os.path.join(plot_dir_spl, f"hist_{spl}_{start}_{end}.png"),
-                bbox_inches="tight",
+                    bbox_inches="tight",
                 )
                 plt.close()
