@@ -1,3 +1,48 @@
+## 4.0.0 (2026-08-14)
+
+### Feat
+
+- switch to wing projection type fit for bessel functions and add covariance terms
+- errorbar plotting
+- better MPI handling
+- stacking refactor
+- add basic LF support
+- add option to not apply fscale_fac
+- add single det mode
+- add numeric metasplit
+- first pass of bessel cov
+- add cross template script
+- job opening
+- add option to open jobs without loadable amans
+- add error codes
+- add left right split
+- handle splits in jobdb
+
+### Fix
+
+- modernize splits amd loading
+- more robust cuts
+- use new sotodlib logger
+- new relcal naming
+- update logger colors to function
+- disable oversampling
+- allow metasplits and fix ordering
+- handle lf ws
+- less stringet ptp cut
+- ws meta
+- cft -> cfg typo
+- add missing config options
+- split left right into two splits
+- backwards compat
+- open missing jobs
+- dont error on old jobs without split
+- update comment
+- skip splits not in config
+- splits bugs
+- splits paths
+- append padded dets
+- get splits from config
+
 ## 3.3.1 (2026-06-23)
 
 ### Fix
