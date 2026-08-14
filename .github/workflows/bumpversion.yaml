@@ -44,3 +44,23 @@ jobs:
         run: |
           mike deploy --push --update-aliases ${{ env.REVISION }} latest
           mike set-default --push latest
+      - name: Add root redirect
+        run: |
+          git fetch origin gh-pages
+          git checkout gh-pages
+          cat > index.html <<EOF
+          <!doctype html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=latest/">
+            <link rel="canonical" href="latest/">
+            <title>Redirecting...</title>
+          </head>
+          <body>
+            Redirecting to <a href="latest/">latest documentation</a>.
+          </body>
+          </html>
+          EOF
+          git add index.html
+          git commit -m "docs: add root redirect" || true
+          git push origin gh-pages
