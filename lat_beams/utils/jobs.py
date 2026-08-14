@@ -15,14 +15,16 @@ from sotodlib.site_pipeline import jobdb
 from sqlalchemy.pool import NullPool
 
 from .log import LoggerLike
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mpi4py.MPI import Comm
 
 try:
     from mpi4py import MPI
-
-    Comm = MPI.Comm
-except:
-    from pixell.mpi import FakeCommunicator
-    Comm = FakeCommunicator
+    comm = MPI.COMM_WORLD
+except ImportError:
+    comm = None
 
 class ErrCode(Enum):
     NO_ERR = 0
@@ -40,6 +42,7 @@ class ErrCode(Enum):
     FWHM_TOL = 12
     DET_SECS = 13
     NO_MAPS = 14
+    NO_JOB = 15
 
 def set_tag(job, key, new_val):
     # This should be provided by the Job class but it's not...
@@ -74,7 +77,7 @@ def fail(job : jobdb.Job, errcode : ErrCode, msg : str, logger : Optional[Logger
     job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
 
 def make_jobdb(
-    comm: Optional[Comm], data_dir: str, append: str = ""
+        comm: Optional["Comm"], data_dir: str, append: str = ""
 ) -> jobdb.JobManager:
     """
     Create or load a `JobDB` at `{data_dir}/jobdb{append}.db`.
@@ -112,7 +115,8 @@ def make_jobdb(
         jdb.clear_locks(jobs="all")
         if comm is None:
             return jdb
-    comm.barrier()
+    if comm is not None:
+        comm.barrier()
     if myrank != 0:
         engine = sqy.create_engine(
             f"sqlite:///{path}",
@@ -124,7 +128,7 @@ def make_jobdb(
 
 
 def setup_jobs(
-    comm: Comm,
+    comm: Optional["Comm"],
     data_dir: str,
     jclass: str,
     get_jobdict: Callable[[jobdb.JobManager], dict[str, jobdb.Job]],
@@ -157,7 +161,7 @@ def setup_jobs(
 
     Parameters
     ----------
-    comm : Comm
+    comm : Optional[Comm]
         MPI communicator used to prevent deadlock between processes.
     data_dir : str
         Directory containing the job database.
@@ -204,8 +208,10 @@ def setup_jobs(
     jobs : list[jobdb.Job]
         Complete list of jobs selected for processing across all MPI ranks.
     """
-    myrank = comm.Get_rank()
-    nproc = comm.Get_size()
+    myrank, nproc = 0, 1
+    if comm is not None:
+        myrank = comm.Get_rank()
+        nproc = comm.Get_size()
     # Get the jobs, make them if we need to
     now = time.time()
     logger.info("Setting up jobdb")
@@ -217,7 +223,10 @@ def setup_jobs(
     jobdict = None
     if myrank == 0:
         jobdict = get_jobdict(jdb)
-    jobdict = comm.bcast(jobdict)
+    if comm is not None:
+        jobdict = comm.bcast(jobdict)
+    if jobdict is None:
+        raise ValueError("jobdict is None!")
     logger.info("Getting potential jobs")
     it = get_jobit(jdb)
     logger.info("Processing possible jobs")
@@ -264,15 +273,18 @@ def setup_jobs(
                 joblist += [job]
         elif replot and job.jstate.name == "done":
             joblist += [job]
-    comm.barrier()
+    if comm is not None:
+        comm.barrier()
 
     # Make the missing jobs
     # Doing this serially so that we don't lock up the db
     tot_missing = 0
-    tot_missing = comm.reduce(len(jobs_to_make), root=0)
+    if comm is not None:
+        tot_missing = comm.reduce(len(jobs_to_make), root=0)
     logger.info("Adding %s new jobs", tot_missing)
     tot_opening = 0
-    tot_opening = comm.reduce(len(jobs_to_open), root=0)
+    if comm is not None:
+        tot_opening = comm.reduce(len(jobs_to_open), root=0)
     logger.info("Opening %s old jobs", tot_opening)
     t0 = time.time()
     for i in range(nproc):
@@ -282,20 +294,30 @@ def setup_jobs(
             jdb.clear_locks(jobs=joblist)
             if len(jobs_to_open) > 0:
                 with jdb.session_scope() as session:
-                    for job in jobs_to_open:
-                        jid = job.id
-                        session.merge(job)
-                        session.commit()
-                        job = session.get(jobdb.Job, jid)
-                        session.expunge(job)
-                        joblist += [job]
-        comm.barrier()
+                    updated_jobs = []
+                for job in jobs_to_open:
+                    merged_job = session.merge(job)
+                    updated_jobs.append(merged_job)
+                
+                # Single commit for all jobs in this rank
+                session.commit()
+                
+                for job in updated_jobs:
+                    jid = job.id
+                    refreshed_job = session.get(jobdb.Job, jid)
+                    session.expunge(refreshed_job)
+                    joblist.append(refreshed_job)
+        if comm is not None:
+            comm.barrier()
     t1 = time.time()
     logger.info("Took %s seconds to add", t1 - t0)
 
     # Get the final job list
-    all_jobs = comm.allgather(joblist)
-    all_jobs = [job for jobs in all_jobs for job in jobs]
+    if comm is not None:
+        all_jobs = comm.allgather(joblist)
+        all_jobs = [job for jobs in all_jobs for job in jobs]
+    else:
+        all_jobs = joblist
     logger.info("%s jobs to run!", len(all_jobs))
 
     return jdb, all_jobs
