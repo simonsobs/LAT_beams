@@ -22,7 +22,7 @@ from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 
 from .beam_utils import estimate_cent
-from .utils import LoggerLike, log_lvl, set_tag
+from .utils import ErrCode, LoggerLike, fail, log_lvl, set_tag
 
 
 def make_cuts(
@@ -183,14 +183,11 @@ def make_map(
     logger.debug("%s detector seconds on source in %s mask", det_secs, map_str)
     if det_secs < min_det_secs:
         msg = f"Not enough time on source in {map_str} mask."
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.DET_SECS, msg, logger)
         return None, None
 
     with log_lvl(logger, logging.WARNING):
         try:
-            # Full map
             out = cp.make_map(
                 aman.copy(),
                 thread_algo="domdir",
@@ -202,44 +199,31 @@ def make_map(
                 filename=filename,
                 n_modes=n_modes,
                 info=info,
+                data_splits=det_splits if len(det_splits) else None,
             )
-
-            # Splits, being a litte inefficient by fitering again here
-            if len(det_splits):
-                _ = cp.make_map(
-                    aman.copy(),
-                    thread_algo="domdir",
-                    center_on=src_to_map,
-                    res=res,
-                    cuts=cuts,
-                    source_flags=source_flags,
-                    comps=comps,
-                    filename=filename,
-                    n_modes=n_modes,
-                    info=info,
-                    data_splits=det_splits,
-                )
         except Exception as e:
-            msg = f"Failed to load metadata with error {e}"
+            msg = f"Failed to make map with error {e}"
             logger.error("%s", msg)
             return None, None
 
     # Smooth and find the center
-    cent = estimate_cent(out["solved"][0], fwhm_nom / pixsize, cfg.buf)
+    if len(det_splits) == 0:
+        omap = out["solved"][0]
+    else:
+        omap = out["splits"]["full"]["solved"][0]
+    cent = estimate_cent(omap, fwhm_nom / pixsize, cfg.buf)
 
     # Estimate SNR
-    peak = out["solved"][0][cent]
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(out["solved"][0].ravel()), ds=1)[0]
+    peak = omap[cent]
+    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
     logger.debug("%s map SNR approximately %s", map_str.title(), snr)
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.SNR_LOW, msg, logger)
         if cfg.del_map and filename is not None:
             logger.debug("Deleting map files")
-            glob_path = os.path.splitext(filename)[0] + "*.*"
+            glob_path = filename.format(map="*.*", **info)[:-5]
             flist = glob.glob(glob_path)
             for fname in flist:
                 if os.path.isfile(fname):

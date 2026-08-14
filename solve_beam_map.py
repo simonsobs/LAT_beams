@@ -105,6 +105,9 @@ ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
 
+if cfg.single_det:
+    raise ValueError("No single detector mode implemented!")
+
 # Setup folders
 plot_dir, data_dir_root = setup_paths(
     cfg.root_dir,
@@ -161,7 +164,7 @@ if myrank == 0:
     sang_exp = (2 * np.pi * (fwhm_exp.to(u.radian) / 2.355) ** 2).to(u.sr)
     data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
     solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
-    msk = snr > 100
+    msk = snr > cfg.min_stack_snr
     msk *= solid_angle > 0
     all_fits = all_fits[msk]
     all_fjobs = np.array(all_fjobs)[msk]

@@ -6,8 +6,8 @@ context_file: '/global/homes/s/skh/code/LAT_beams/contexts/nersc_pointing_model_
 plot_dir: '/so/site-pipeline/lat/preprocess/'
 
 subobs:
-  use: ['wafer_slot', 'wafer.bandpass']
-  label: wafer_slot
+  use: ['wafer.array', 'wafer.bandpass']
+  label: "wafer.array" 
 
 archive:
   # index: '/global/cfs/cdirs/sobs/metadata/lat/manifests/preprocess/lat_preprocess_planet_251103m/process_archive.sqlite'
@@ -75,9 +75,16 @@ process_pipe:
         use_pca: False
         modes: 1
 
+    - name: "flag_turnarounds"
+      process:
+        method: "scanspeed"
+      calc:
+        method: "scanspeed"
+      save: True
+
     - name : "combine_flags"
       process:
-        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps']
+        flag_labels: ['jumps_2pi.jump_flag', 'smurfgaps.smurfgaps', 'turnaround_flags.turnarounds']
         total_flags_label: 'glitch_flags'
         method: 'union'
 
@@ -95,7 +102,7 @@ process_pipe:
       skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
       process:
         kind: "array"
-        cal_array: "relcal.relcal"
+        cal_array: "relcal.rel_factor"
 
     - name: "psd"
       wrap: "psdT"

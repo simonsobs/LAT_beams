@@ -10,7 +10,7 @@ from sotodlib.core import AxisManager
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 
-from .jobs import set_tag
+from .jobs import ErrCode, fail, set_tag
 from .log import LoggerLike, log_lvl
 
 
@@ -71,15 +71,11 @@ def load_aman(
             )
     except Exception as e:
         msg = f"Failed to load or preprocess with error {e}"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
+        fail(job, ErrCode.PREPROC, msg, logger)
         return None
     if aman is None:
         msg = f"Preprocess failed with error {err}"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
+        fail(job, ErrCode.PREPROC, msg, logger)
         return None
 
     if fp_flag:
@@ -92,8 +88,6 @@ def load_aman(
 
     if aman.dets.count < min_dets:
         msg = f"Only {aman.dets.count} dets!"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = "failed"
+        fail(job, ErrCode.MIN_DETS, msg, logger)
         return None
     return aman

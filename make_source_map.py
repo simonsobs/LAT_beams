@@ -22,6 +22,8 @@ import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
+    ErrCode,
+    fail,
     get_args_cfg,
     init_log,
     load_aman,
@@ -37,12 +39,10 @@ comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
-band_names = {"m": ["f090", "f150"], "u": ["f220", "f280"]}
-
 
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
         for job in jdb.get_jobs(jclass="beam_map")
     }
     return jobdict
@@ -97,8 +97,6 @@ def get_jobit(
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
         for obs in obslist:
-            # if obs["tube_slot"] in ["o6"]:
-            #     continue
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
@@ -107,38 +105,53 @@ def get_jobit(
             wafers = np.unique(
                 [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]] + forced_ws
             )
+            ws = det_info["wafer_slot"]
+            if "wafer.wafer_slot" in det_info.keys:
+                ws = np.array(
+                    [
+                        ws1 if ws1 != "ws." else ws2
+                        for ws1, ws2 in zip(
+                            det_info["wafer_slot"], det_info["wafer.wafer_slot"]
+                        )
+                    ]
+                )
             wsufmsband = np.unique(
                 np.column_stack(
                     [
-                        det_info["wafer_slot"],
+                        ws,
                         det_info["stream_id"],
+                        det_info["wafer.array"],
                         det_info["wafer.bandpass"],
                     ]
                 ),
                 axis=0,
             )
-            for ws, ufm, band in wsufmsband:
+            for ws, sid, ufm, band in wsufmsband:
                 if band[0] != "f":
+                    continue
+                if ws == "ws.":
                     continue
                 if ws not in wafers and "all" not in obs["tags"]:
                     continue
-                obsit += [(obs, ws, ufm, band)]
+                obsit += [(obs, ws, sid, ufm, band)]
     return obsit
 
 
 def get_jobstr(info):
-    obs, ws, ufm, band = info
-    job_str = f"{obs['obs_id']}-{ws}-{ufm}-{band}"
+    obs, ws, sid, ufm, band = info
+    job_str = f"{obs['obs_id']}-{ws}-{sid}-{ufm}-{band}"
     return job_str
 
 
 def get_tags(info):
-    obs, ws, ufm, band = info
+    obs, ws, sid, ufm, band = info
     tags = {
         "obs_id": obs["obs_id"],
         "wafer_slot": ws,
-        "stream_id": ufm,
+        "stream_id": sid,
+        "array": ufm,
         "band": band,
+        "errcode": 0,
         "message": "",
         "binned": "",
         "detweights": "",
@@ -153,13 +166,14 @@ def get_tags(info):
         "config": "",
         "context": "",
         "preprocess": "",
+        "splits": "",
     }
     return tags
 
 
 @cache
 def load_det_splits(split_dir):
-    det_splits = []
+    det_splits = {}
     for fname in glob(os.path.join(split_dir, "*.txt")):
         name = os.path.splitext(os.path.basename(fname))[0]
         dets = np.genfromtxt(
@@ -169,22 +183,38 @@ def load_det_splits(split_dir):
                 0,
             ],
         )
-        det_splits += [(name, dets)]
+        det_splits[name] = dets
     return det_splits
 
 
-def make_det_splits(aman, split_dir, min_dets):
-    det_splits = {}
+def make_det_splits(aman, split_dir, min_dets, det_split_cfg, single_det=False):
+    det_splits = {"full": RangesMatrix.zeros(aman.signal.shape)}
+    if single_det:
+        for i, det_id in enumerate(aman.det_info.det_id):
+            rmat = RangesMatrix.ones(aman.signal.shape)
+            rmat.ranges[i] = rmat.ranges[i].complement()
+            det_splits = {det_id: rmat}
+        return det_splits
     if "det_id" not in aman.det_info:
         return det_splits
-    for name, dets in load_det_splits(split_dir):
-        msk = np.isin(aman.det_info.det_id, dets)
-        if np.sum(msk) < min_dets / 2:
-            continue
-        rmat = RangesMatrix.from_mask(
-            np.broadcast_to(~msk[..., None], aman.signal.shape)
-        )
-        det_splits[name] = rmat
+    det_split_files = load_det_splits(split_dir)
+    for det_split in det_split_cfg:
+        if det_split in det_split_files:
+            dets = det_split_files[det_split]
+            msk = np.isin(aman.det_info.det_id, dets)
+            if np.sum(msk) < min_dets / 2:
+                continue
+            rmat = RangesMatrix.from_mask(
+                np.broadcast_to(~msk[..., None], aman.signal.shape)
+            )
+            det_splits[det_split] = rmat
+        elif det_split == "left":
+            det_splits["left"] = aman.preprocess.turnaround_flags.left_scan
+        elif det_split == "right":
+            det_splits["right"] = aman.preprocess.turnaround_flags.right_scan
+        else:
+            raise ValueError(f"Unknown det_split: {det_split}")
+
     return det_splits
 
 
@@ -216,6 +246,9 @@ if cfg.preprocess_cfg is None:
 with open(cfg.preprocess_cfg) as f:
     preprocess_cfg = yaml.safe_load(f)
     preprocess_str = yaml.dump(preprocess_cfg)
+if cfg.single_det:
+    logger.info("Running in single det mode, changing comps from %s to T", cfg.comps)
+    cfg.comps = "T"
 
 # Check pointing_type
 if cfg.pointing_type not in ["pointing_model", "per_obs", "raw"]:
@@ -229,7 +262,7 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}{(cfg.single_det)*'_single_det'}",
 )
 
 # Get context
@@ -329,7 +362,8 @@ for i, j in enumerate(joblist):
 
     job.mark_visited()
     obs_id = job.tags["obs_id"]
-    ufm = job.tags["stream_id"]
+    sid = job.tags["stream_id"]
+    ufm = job.tags["array"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
     sub_id = f"{obs_id}:{ws}:{band}"
@@ -342,10 +376,9 @@ for i, j in enumerate(joblist):
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
             solved = cast(enmap.ndmap, solved)
         except FileNotFoundError:
-            msg = "Missing map files in plot_only mode"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(
+                job, ErrCode.MAP_MISSING, "Missing map files in plot_only mode", logger
+            )
             continue
 
         obs_plot_dir = os.path.join(
@@ -384,26 +417,20 @@ for i, j in enumerate(joblist):
             meta = ctx.get_meta(obs_id)
         except Exception as e:
             msg = f"Failed to load metadata with error {e}"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(job, ErrCode.META, msg, logger)
             continue
     if meta.dets.count == 0:
         msg = "Looks like we don't have real metadata for this observation!"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.META, msg, logger)
         continue
-    fscale_fac = 90.0 / float(band[1:])
+    fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
 
     src_names = list(source_list & set(obs["tags"]))
     if len(src_names) > 1:
         logger.warning("\tObservation tagged for multiple sources!")
     elif len(src_names) == 0:
         msg = "Observation somehow not tagged for any sources in source_list! Skipping!"
-        logger.error("t%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.SRC_TAG, msg, logger)
         logger.debug("Tags were: %s", obs["tags"])
         continue
     src_name = "_".join(src_names)
@@ -413,9 +440,7 @@ for i, j in enumerate(joblist):
         meta.restrict("dets", meta.focal_plane.hits >= cfg.min_hits)
         if meta.dets.count < cfg.min_dets:
             msg = f"Only {meta.dets.count} detectors with good pointing fits!"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(job, ErrCode.MIN_DETS, msg, logger)
             continue
 
     obs_plot_dir = os.path.join(
@@ -438,7 +463,7 @@ for i, j in enumerate(joblist):
     aman = load_aman(
         obs["obs_id"],
         preprocess_cfg,
-        {"wafer_slot": ws, "wafer.bandpass": band},
+        {"wafer.array": ufm, "wafer.bandpass": band},
         job,
         cfg.min_dets,
         logger,
@@ -452,8 +477,8 @@ for i, j in enumerate(joblist):
     if "relcal" in aman._fields:
         aman.restrict(
             "dets",
-            (aman.relcal.relcal >= cfg.relcal_range[0])
-            * (aman.relcal.relcal <= cfg.relcal_range[1]),
+            (aman.relcal.rel_factor >= cfg.relcal_range[0])
+            * (aman.relcal.rel_factor <= cfg.relcal_range[1]),
         )
 
     # Get initial source_flags
@@ -469,7 +494,9 @@ for i, j in enumerate(joblist):
         )
 
     # Do an aggressive filter and flag dets without the source
-    cuts = lbm.make_cuts(aman, source_flags, 2 * cfg.n_modes, job, logger, cfg)
+    cuts = lbm.make_cuts(
+        aman, source_flags, min(len(aman.signal), 2 * cfg.n_modes), job, logger, cfg
+    )
     if cuts is None:
         continue
 
@@ -482,7 +509,7 @@ for i, j in enumerate(joblist):
         cuts,
         source_flags,
         "T",
-        cfg.n_modes,
+        min(len(aman.signal), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         None,
@@ -520,7 +547,8 @@ for i, j in enumerate(joblist):
         )
 
     # Make splits
-    det_splits = make_det_splits(aman, cfg.det_split_dir, cfg.min_dets)
+    det_splits = make_det_splits(aman, cfg.det_split_dir, cfg.min_dets, cfg.det_splits)
+    set_tag(job, "splits", ",".join(det_splits.keys()))
 
     # Make final map
     out, cent = lbm.make_map(
@@ -530,7 +558,7 @@ for i, j in enumerate(joblist):
         cuts,
         source_flags,
         cfg.comps,
-        cfg.n_modes,
+        min(len(aman.signal), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
@@ -546,40 +574,44 @@ for i, j in enumerate(joblist):
         continue
 
     # Add paths to job
-    for name, ext in [
-        ("binned", "fits"),
-        ("detweights", "h5"),
-        ("solved", "fits"),
-        ("weights", "fits"),
+    for name, fname, ext in [
+        ("detweights", "detweights", "h5"),
+        ("solved", "{split}_map", "fits"),
+        ("weights", "{split}_weights", "fits"),
     ]:
         set_tag(
             job,
             name,
             os.path.relpath(
-                os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_{name}.{ext}"),
+                os.path.join(obs_data_dir, f"{obs_id}_{ufm}_{band}_{fname}.{ext}"),
                 data_dir,
             ),
         )
 
     # Plot
-    os.makedirs(os.path.join(obs_plot_dir, ufm), exist_ok=True)
-    try:
-        posmap = out["solved"].posmap()
-        posmap = np.rad2deg(posmap) * 3600
-        plot_map_complete(
-            out["solved"],
-            posmap,
-            out["solved"].wcs.wcs.cdelt[1] * (60 * 60),
-            cfg.extent,
-            (posmap[1][cent], posmap[0][cent]),
-            os.path.join(obs_plot_dir, ufm),
-            f"{obs_id} {ufm} {band}",
-            comps=cfg.comps,
-            log_thresh=cfg.log_thresh,
-            lognorm=1.0 / out["solved"][0][cent],
-        )
-    except Exception as e:
-        logger.warning("Plotting failed with error: %s", e)
+    for spl in out["splits"].keys():
+        try:
+            omap = out["splits"][spl]["solved"]
+            if omap[0][cent] == 0:
+                continue
+            os.makedirs(os.path.join(obs_plot_dir, ufm, spl), exist_ok=True)
+            posmap = omap.posmap()
+            posmap = np.rad2deg(posmap) * 3600
+            plot_map_complete(
+                omap,
+                posmap,
+                omap.wcs.wcs.cdelt[1] * (60 * 60),
+                cfg.extent,
+                (posmap[1][cent], posmap[0][cent]),
+                os.path.join(obs_plot_dir, ufm, spl),
+                f"{obs_id} {ufm} {band} {spl}",
+                comps=cfg.comps,
+                log_thresh=cfg.log_thresh,
+                lognorm=1.0 / omap[0][cent],
+            )
+        except Exception as e:
+            logger.warning("Plotting for %s failed with error: %s", spl, e)
+    omap = out["splits"]["full"]["solved"]
 
     # In case we don't want to make ML maps
     if cfg.mlpass < 1 or cfg.cgiters < 1:
@@ -591,20 +623,18 @@ for i, j in enumerate(joblist):
     outmap, (mlmap_path, rhs_path, div_path, bin_path) = lbm.make_ml_map(
         {sub_id: (aman, out["P"])},
         passes,
-        out["solved"].shape,
-        out["solved"].wcs,
+        omap.shape,
+        omap.wcs,
         f"{obs_id}_{ufm}_{band}_",
         obs_data_dir,
         l_comm,
         logger,
         cfg,
-        guess=out["solved"],
+        guess=omap,
     )
     if mlmap_path == "" or outmap is None:
         msg = "Failed to make ML map"
-        logger.error(msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.ML_MAP, msg, logger)
         continue
 
     # Add paths to job

@@ -1,7 +1,6 @@
 import os
 import sys
 from functools import partial
-from glob import glob
 from typing import cast
 
 import h5py
@@ -32,6 +31,8 @@ from lat_beams.fitting.map import (
 )
 from lat_beams.plotting import plot_map_complete
 from lat_beams.utils import (
+    ErrCode,
+    fail,
     get_args_cfg,
     init_log,
     set_tag,
@@ -45,27 +46,28 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 
-# Adding splits support here in a jank way until I rerun make_source_map with splits in the jobdb
 def get_jobdict(jdb):
     jobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}-{job.tags['comps']}-{job.tags['split']}": job
         for job in jdb.get_jobs(jclass="fit_map")
     }
     return jobdict
 
 
-def get_jobit(jdb, det_split_names):
+def get_jobit(jdb, det_splits):
     maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
     maplist = np.array_split(maplist, nproc)[myrank]
     to_ret = []
     for info in maplist:
-        to_ret += [(info, ds) for ds in det_split_names]
+        to_ret += [
+            (info, ds) for ds in info.tags["splits"].split(",") if ds in det_splits
+        ]
     return to_ret
 
 
 def get_jobstr(mjob, ctx, start_time, stop_time):
     mjob, split = mjob
-    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
+    job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['array']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
     obs = ctx.obsdb.get(mjob.tags["obs_id"])
     if args.obs_ids is None and (
         obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
@@ -82,10 +84,12 @@ def get_tags(mjob):
         "obs_id": mjob.tags["obs_id"],
         "wafer_slot": mjob.tags["wafer_slot"],
         "stream_id": mjob.tags["stream_id"],
+        "array": mjob.tags["array"],
         "band": mjob.tags["band"],
         "comps": mjob.tags["comps"],
         "source": mjob.tags["source"],
         "message": "",
+        "errcode": 0,
         "resid": "",
         "resid_weights": "",
         "config": "",
@@ -118,19 +122,14 @@ plot_dir, data_dir = setup_paths(
     cfg.root_dir,
     "beams",
     cfg.tel,
-    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}",
+    f"{cfg.pointing_type}{(cfg.append!='')*'_'}{cfg.append}{(cfg.single_det)*'_single_det'}",
 )
 outfile = None
 if myrank == 0:
     outfile = h5py.File(os.path.join(data_dir, f"beam_pars{cfg.fit_append}.h5"), "a")
 
 # Get det splits
-det_split_names = [""]
-if cfg.det_split_dir != "":
-    det_split_names += [
-        os.path.splitext(os.path.basename(fname))[0]
-        for fname in glob(os.path.join(cfg.det_split_dir, "*.txt"))
-    ]
+det_split_names = ["full"] + cfg.det_splits
 
 # Get the jobs, make them if we need to
 ctx = Context(cfg.ctx_path)
@@ -141,7 +140,7 @@ jdb, all_jobs = setup_jobs(
     data_dir,
     "fit_map",
     get_jobdict,
-    partial(get_jobit, det_split_names=det_split_names),
+    partial(get_jobit, det_splits=det_split_names),
     partial(get_jobstr, ctx=ctx, start_time=cfg.start_time, stop_time=cfg.stop_time),
     get_tags,
     cfg.source_list,
@@ -173,7 +172,7 @@ if args.profile:
 to_save = (None, None)
 map_jobs = jdb.get_jobs(jclass="beam_map", jstate="done")
 map_jobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['band']}": job
+    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
     for job in map_jobs
 }
 job = None
@@ -210,7 +209,8 @@ for i, j in enumerate(joblist):
 
     job.mark_visited()
     obs_id = job.tags["obs_id"]
-    ufm = job.tags["stream_id"]
+    sid = job.tags["stream_id"]
+    ufm = job.tags["array"]
     ws = job.tags["wafer_slot"]
     band = job.tags["band"]
     split = job.tags["split"]
@@ -220,7 +220,7 @@ for i, j in enumerate(joblist):
     logger.log(25, "Fitting")
 
     # Get map job
-    job_str = f"{obs_id}-{ws}-{ufm}-{band}"
+    job_str = f"{obs_id}-{ws}-{sid}-{ufm}-{band}"
     if job_str not in map_jobdict:
         msg = "No map job"
         logger.debug("%s", msg)
@@ -235,12 +235,13 @@ for i, j in enumerate(joblist):
     set_tag(job, "config", cfg_str)
     set_tag(job, "comps", comps)
 
-    # Figure out paths, this won't need to happen once make_source_map is fixed
-    map_path = os.path.join(data_dir, map_job.tags["solved"])
-    ivar_path = os.path.join(data_dir, map_job.tags["weights"])
-    if split != "":
-        map_path = map_path.replace("solved.fits", f"{split}_map.fits")
-        ivar_path = map_path.replace("map.fits", "weights.fits")
+    # Figure out paths
+    map_path = os.path.join(
+        data_dir, map_job.tags["solved"].format(split=job.tags["split"])
+    )
+    ivar_path = os.path.join(
+        data_dir, map_job.tags["weights"].format(split=job.tags["split"])
+    )
     # Load the maps
     try:
         solved = enmap.read_map(map_path)[0]
@@ -249,9 +250,7 @@ for i, j in enumerate(joblist):
         weights = cast(enmap.ndmap, weights)
     except FileNotFoundError:
         msg = "Missing map files"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.MAP_MISSING, msg, logger)
         to_save = (None, None)
         continue
     if solved.wcs is None:
@@ -261,9 +260,7 @@ for i, j in enumerate(joblist):
     # Check if this is a bogus map
     if np.sum(~(weights == 0)) == 0:
         msg = "Weights all 0"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.ZERO_IVAR, msg, logger)
         to_save = (None, None)
         continue
 
@@ -282,9 +279,7 @@ for i, j in enumerate(joblist):
 
     if snr < cfg.min_snr:
         msg = "Data SNR too low"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.SNR_LOW, msg, logger)
         to_save = (None, None)
         continue
 
@@ -292,7 +287,7 @@ for i, j in enumerate(joblist):
     solved, weights = crop_maps([solved, weights], cent, int(cfg.extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
     cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
-    fscale_fac = 90.0 / float(band[1:])
+    fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
     band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
 
     # Make weights and zero things out
@@ -325,10 +320,8 @@ for i, j in enumerate(joblist):
         1000,
     )
     if gauss_params is None or model is None:
-        msg = "Fit failed"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        msg = "Gauss fit failed"
+        fail(job, ErrCode.FIT_FAILED, msg, logger)
         to_save = (None, None)
         continue
 
@@ -340,9 +333,7 @@ for i, j in enumerate(joblist):
     min_c_dist = np.min(np.hstack((c, np.array(solved.shape) - np.array(c)))) * pixsize
     if min_c_dist < 120 * cfg.nominal_fwhm[band]:
         msg = "Source too close to edge of map"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.CLOSE_TO_EDGE, msg, logger)
         to_save = (None, None)
         continue
 
@@ -361,9 +352,7 @@ for i, j in enumerate(joblist):
         or abs(1 - data_fwhm.value / (60 * cfg.nominal_fwhm[band])) > cfg.fwhm_tol
     ):
         msg = "Data FWHM out of tolerance"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+        fail(job, ErrCode.FWHM_TOL, msg, logger)
         to_save = (None, None)
         continue
 
@@ -386,38 +375,10 @@ for i, j in enumerate(joblist):
         to_save = (None, None)
         continue
     aman.wrap("gauss", gauss_params)
+    off = gauss_params.off.value
     for to_parent in ["amp", "off", "xi0", "eta0"]:
         aman.wrap(to_parent, gauss_params[to_parent])
     aman.wrap("final_model", "gauss")
-
-    # Get gauss multipoles if we want them
-    if cfg.gauss_multipole:
-        base_beam = (model - gauss_params.off.value) / gauss_params.amp.value
-        gauss_multipole_params, model = fit_multipole_map(
-            solved - gauss_params.off.value,
-            weights,
-            posmap,
-            gauss_params,
-            "pW",
-            base_beam,
-            cfg.n_multipoles,
-        )
-        gauss_multipole_params = process_model(
-            gauss_multipole_params,
-            solved,
-            model,
-            noise,
-            cfg.min_snr,
-            c,
-            u.pW,
-            pixsize,
-            data_fwhm,
-            cfg.min_sigma,
-            job,
-            logger,
-        )
-        aman.wrap("gauss_multipole", gauss_multipole_params)
-        aman.final_model = "gauss_multipole"
 
     # Get bessel beam if we want
     if cfg.bessel_beam:
@@ -432,18 +393,16 @@ for i, j in enumerate(joblist):
             cfg.aperature,
             const.c / (float(band[1:]) * u.GHz),
             band_mask_size,
-            cfg.bessel_wing_n_sigma,
+            np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
             cfg.skip_multipoles,
-            band in cfg.bessel_powell_bands,
         )
         if bessel_beam_params is None or model is None:
-            msg = "Fit failed"
-            logger.error("%s", msg)
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            msg = "Bessel fit failed"
+            fail(job, ErrCode.FIT_FAILED, msg, logger)
             to_save = (None, None)
             continue
 
+        off = bessel_beam_params.off.value
         bessel_beam_params = process_model(
             bessel_beam_params,
             solved - bessel_beam_params.off.value,
@@ -498,7 +457,8 @@ for i, j in enumerate(joblist):
         job.tags["source"],
         str(obs["timestamp"])[:5],
         obs_id,
-        job.tags["stream_id"],
+        job.tags["array"],
+        split,
     )
     os.makedirs(ufm_plot_dir, exist_ok=True)
     [[dec_min, ra_min], [dec_max, ra_max]] = 3600 * np.rad2deg(
@@ -507,7 +467,7 @@ for i, j in enumerate(joblist):
     plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
     norm = float(1.0 / aman.amp.value)
     posmap = np.rad2deg(posmap) * 3600
-    for dat, label in [(model, "model"), (resid, "resid")]:
+    for dat, label in [(model - off, "model"), (resid, "resid")]:
         plot_map_complete(
             dat,
             posmap,
@@ -515,7 +475,7 @@ for i, j in enumerate(joblist):
             cfg.extent,
             plt_cent,
             ufm_plot_dir,
-            f"{obs_id} {ufm} {band}{' '*bool(split)}{split}",
+            f"{obs_id} {ufm} {band} {split}",
             comps="T",
             log_thresh=cfg.log_thresh,
             append=label,

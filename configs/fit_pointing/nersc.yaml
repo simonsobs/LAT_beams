@@ -11,13 +11,8 @@ preprocess_cfg: "preproc/preproc_fit_point.yaml"
 nominal_path: '/global/cfs/cdirs/sobs/users/skh/data/pointing/lat/nominal/ID9/focal_plane.h5'
 
 start_time: 1739923200 # First light 
-# start_time: 1744848000 # Everything aligned
-# start_time: 1745150000
-# stop_time: 1746187200 # Corotator moved
-# start_time: 1748476800 # Autoschedular
-# start_time: 1756699200
-# start_time: 1767243600 
-stop_time: 1780340932 # 20000000000
+# start_time: 1749600000 # 1769922000
+stop_time: 20000000000
 
 ds: 1
 
@@ -31,15 +26,15 @@ nominal_fwhm: # arcmin LAT; change per platform
     
 try_all: True 
 
-hp_fc: 1
-lp_fc: 30
+hp_fc: 3
+lp_fc: 20
 
 min_hits: 1
 svd_modes: 10
 min_dets: 10
 
-src_msk: True # False
-blind_search: True # False
+src_msk: False
+blind_search: False
 pointing_mask:
   shape: "circle"
   xyr:
@@ -52,3 +47,5 @@ fit_pars:
   min_snr: 3
 
 fwhm_tol_pointing: .6
+n_std: 10
+n_med: 10

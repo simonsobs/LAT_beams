@@ -100,6 +100,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["root_dir"] = os.path.expanduser(cfg.get("root_dir", "~"))
     cfg["append"] = cfg.get("append", "")
     cfg["det_split_dir"] = cfg.get("det_split_dir", "")
+    cfg["det_splits"] = cfg.get("det_splits", [])
     cfg["fit_append"] = cfg.get("fit_append", "")
 
     # Source masking and projection settings
@@ -143,6 +144,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["buf"] = cfg.get("buf", 30)
     cfg["buf_cropped"] = cfg.get("buf_cropped", 10)
     cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
+    cfg["apply_fscale"] = cfg.get("apply_fscale", True)
 
     # Mapping
     cfg["n_modes"] = cfg.get("n_modes", 10)
@@ -151,6 +153,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["cgiters_full"] = cfg.get("cgiters_full", 400)
     cfg["mlpass"] = cfg.get("mlpass", 3)
     cfg["comps"] = cfg.get("comps", "TQU")
+    cfg["single_det"] = cfg.get("single_det", False)
 
     # Map fits
     cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
@@ -162,6 +165,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["sym_gauss"] = cfg.get("sym_gauss", True)
     cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
     cfg["bessel_powell_bands"] = cfg.get("bessel_powell_bands", ["f090", "f150"])
+    cfg["cov_modes"] = cfg.get("cov_modes", 20)
 
     # Hardware info
     cfg["nominal_fwhm"] = cfg.get(
@@ -195,6 +199,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["r_step"] = cfg.get("r_step", 1)
+    cfg["min_stack_snr"] = cfg.get("min_stack_snr", 100)
 
     # Rename for our scope
     for o, n in replace.items():

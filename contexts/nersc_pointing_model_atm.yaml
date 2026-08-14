@@ -17,11 +17,11 @@ metadata:
     name: 'smurf'
     det_info: true
     on_missing: trim
-  - db: '{manifestdir}/det_match/lat_det_match_250516m/assignment_local.sqlite'
+  - db: '{manifestdir}/det_match/lat_det_match_260520m/assignment_local.sqlite'
     label: assignment
     det_info: true
     on_missing: trim
-  - db: '{manifestdir}/wafer_info/lat_wafer_info_250128r1/wafer_info_local.sqlite'
+  - db: '{manifestdir}/wafer_info/lat_wafer_info_260301r1/wafer_info_local.sqlite'
     label: wafer_info
     det_info: true
     on_missing: fail
@@ -30,16 +30,20 @@ metadata:
     unpack: det_cal
     # on_missing: fail  ## work-around for variable mask
     on_missing: trim
-  # - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_251110r1/db.sqlite'
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_260208r1/db.sqlite'
+  - db: '{manifestdir}/det_match/lat_det_match_260520m/det_match_local.sqlite'
+    label: det_info
+    det_info: True
+    load_fields:
+      - 'dets:readout_id'
+      - 'wafer_slot': 'dets:wafer.wafer_slot'
+  - db: '{manifestdir}/pointing_model/lat_pointing_model_260423r1/db_local.sqlite'
     label: pointing_model
     unpack: pointing_model
-  # - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r2/db.sqlite'
-  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r4/db.sqlite'
+  - db: '/global/homes/s/skh/data/pointing/lat/finalize_focal_plane/results/combined/db.sqlite'
     label: focal_plane
     unpack: focal_plane
-    on_missing: fail
-  - db: '/global/cfs/cdirs/sobs/users/twmorris/shared/lat/relcal/20260129/lat_relcal_20260129.sqlite'
+    on_missing: trim 
+  - db: '{manifestdir}/relcal/lat_relcal_260804/db_local.sqlite'
     label: relcal
     unpack: relcal
     on_missing: trim

@@ -19,7 +19,7 @@ from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
 from .utils import LoggerLike
-from .utils.jobs import set_tag
+from .utils.jobs import ErrCode, fail, set_tag
 
 
 def solid_angle(
@@ -364,11 +364,10 @@ def process_model(
         msg = "Model SNR too low"
         if logger is None:
             print(f"{msg}")
-        else:
+        elif job is None:
             logger.error("%s", msg)
         if job is not None:
-            set_tag(job, "message", msg)
-            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+            fail(job, ErrCode.SNR_LOW, msg, logger)
         return None
 
     # Get model profile
@@ -391,7 +390,7 @@ def process_model(
 
 
 def load_beam_fits_from_jobs(
-    fpath: str, joblist: list[jobdb.Job]  # , jdb
+    fpath: str, joblist: list[jobdb.Job], jdb: Optional[jobdb.JobManager] = None
 ) -> Shaped[np.ndarray, "nfits"]:
     """
     Load beam fits from a list of jobs.
@@ -413,6 +412,7 @@ def load_beam_fits_from_jobs(
         * obs_id : str, the obs_id of the fit data
         * wafer_slot : str, the wafer slot of the fit data
         * stream_id : str, the stream id of the fit data
+        * array : str, the array of the fit data
         * band : str, the band (ie. f090) of the fit data
         * split: str, the split that was run for this map
         * source : str, the source that was fit
@@ -430,7 +430,8 @@ def load_beam_fits_from_jobs(
     times = np.array([float(o.split("_")[1]) for o in obs_ids])
     wafer_slots = np.array([job.tags["wafer_slot"] for job in joblist])
     stream_ids = np.array([job.tags["stream_id"] for job in joblist])
-    splits = np.array([job.tags["split"] for job in joblist])
+    arrays = np.array([job.tags["array"] for job in joblist])
+    splits = np.array([job.tags.get("split", "") for job in joblist])
     bands = np.array([job.tags["band"] for job in joblist])
     sources = np.array([job.tags["source"] for job in joblist])
     dates = np.array([dt.date.fromtimestamp(ct) for ct in times])
@@ -444,23 +445,25 @@ def load_beam_fits_from_jobs(
         / 3600
     )
 
-    amans = np.array(
-        [
-            AxisManager.load(f[os.path.join(o, s, b, m)])
-            for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
-        ]
-    )
-    # amans = []
-    # for job, o, s, b, m in zip(joblist, obs_ids, stream_ids, bands, splits):
-    #     try:
-    #         aman = AxisManager.load(f[os.path.join(o, s, b, m)])
-    #         amans += [aman]
-    #     except:
-    #         with jdb.session_scope() as session:
-    #             job.jstate = "open"
-    #             session.merge(job)
-    #             session.commit()
-    #         print(os.path.join(o, s, b, m))
+    # amans = np.array(
+    #     [
+    #         AxisManager.load(f[os.path.join(o, s, b, m)])
+    #         for o, s, b, m in zip(obs_ids, stream_ids, bands, splits)
+    #     ]
+    # )
+    amans = []
+    for job, o, u, b, m in zip(joblist, obs_ids, arrays, bands, splits):
+        try:
+            aman = AxisManager.load(f[os.path.join(o, u, b, m)])
+            amans += [aman]
+        except:
+            print(os.path.join(o, u, b, m))
+            if jdb is None:
+                continue
+            with jdb.session_scope() as session:
+                job.jstate = "open"
+                session.merge(job)
+                session.commit()
     # check that all fits have the same pars
     par_list = np.sort(list(amans[0]._fields.keys()))
     for aman in amans:
@@ -472,6 +475,7 @@ def load_beam_fits_from_jobs(
         ("obs_id", obs_ids.dtype),
         ("wafer_slot", wafer_slots.dtype),
         ("stream_id", stream_ids.dtype),
+        ("array", arrays.dtype),
         ("band", bands.dtype),
         ("split", splits.dtype),
         ("source", sources.dtype),
@@ -484,6 +488,7 @@ def load_beam_fits_from_jobs(
             obs_ids,
             wafer_slots,
             stream_ids,
+            arrays,
             bands,
             splits,
             sources,
@@ -570,7 +575,7 @@ def get_split_vec(
         Context used to lookup values from the obsdb.
     round_to : int
         How many decimal places to round numeric collumns to.
-    metasplits : dict[str, tuple[str, list[str]]]
+    metasplits : dict[str, tuple[str, list[str | float]]]
         A method of defining a collumn that matches against values
         from a normal split collumn. Each entry should have some `name`
         as the key, which then maps to a tuple. The first element of
@@ -578,6 +583,9 @@ def get_split_vec(
         second should be a list of values to match. In the output split_vec
         anything that matches will have `name` in the split and anything
         that does not match will have `NOMATCH`.
+        If you want to match against a numeric range instaed then
+        the `list` should be a two element float list that defines the range
+        `[low, high)`.
 
     Returns
     -------
@@ -597,7 +605,14 @@ def get_split_vec(
             split_vec = split_vec.astype(
                 f"U{max(len(spl), 7, int(split_vec.dtype.itemsize/4))}"
             )
-            msk = np.isin(split_vec, metasplits[spl][1])
+            if (
+                len(metasplits[spl][1]) == 2
+                and np.array(metasplits[spl][1]).dtype == float
+            ):
+                svf = split_vec.astype(float)
+                msk = (svf >= metasplits[spl][1][0]) * (svf < metasplits[spl][1][1])
+            else:
+                msk = np.isin(split_vec, metasplits[spl][1])
             split_vec[msk] = spl
             split_vec[~msk] = "NOMATCH"
         else:

@@ -5,21 +5,23 @@ map_source_list:
   - "uranus"
   - "3c279"
   - "taua"
+  - "jupiter"
 fit_source_list:
   - "mars"
+  - "saturn"
   - "neptune"
   - "uranus"
   - "3c279"
-  - "saturn"
+  - "jupiter"
 pointing_type: "pointing_model" 
 preprocess_cfg: "preproc/preproc.yaml"
-min_det_secs: 300
-min_dets: 50
+min_det_secs: 100
+min_dets: 20
 min_hits: 1
 min_snr: 1
 ctx_path: 'contexts/nersc_aso_prelim.yaml'
 start_time: 1777213800 
-stop_time: 1780657200 
+stop_time: 20000000000 
 n_med: 3
 map_mask_size: .2
 search_mask:
@@ -30,7 +32,8 @@ search_mask:
     - .5
 epochs:
     - [1777213800, 1780657200]
-append: "template_bs_relcal"
+    - [1780682400, 20000000000]
+append: "bs_relcal"
 cgiters_single: 0
 cgiters_full: 200
 mlpass: 3
@@ -49,6 +52,11 @@ split_by:
   - "band"
   - "tube_slot+band"
   - "source+band"
-  - "nosaturn+band"
   - "source+tube_slot+band"
-  - "nosaturn+tube_slot+band"
+  # - "nosaturn+band"
+  # - "nosaturn+tube_slot+band"
+# det_splits:
+#   - inout0
+#   - inout1
+#   - left
+#   - right
