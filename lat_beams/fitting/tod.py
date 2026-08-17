@@ -1,3 +1,18 @@
+"""
+Tools for fitting detector pointing from source-observation TODs.
+
+The main fitting routine, `fit_tod_pointing`, estimates each detector's
+offset, beam width, and amplitude by fitting a symmetric 2D Gaussian to
+the source response in source-centered (xi, eta) coordinates. The TOD
+residuals are filtered before fitting, and optional binned priors are
+used to improve the initial pointing estimate.
+
+The module also provides helpers for converting boresight coordinates
+to source-centered coordinates, constructing binned position priors,
+and filtering TOD residuals. See the individual function docstrings for
+details.
+"""
+
 import logging
 import sys
 import warnings
@@ -26,7 +41,7 @@ from sotodlib.tod_ops.fft_ops import (
     find_superior_integer,
 )
 from sotodlib.tod_ops.filters import (
-    Filter,
+    FilterChain,
     fourier_filter,
     high_pass_sine2,
     identity_filter,
@@ -238,7 +253,7 @@ def _bin_priors_2d(
 
 def filter_tod(
     am: AxisManager,
-    filt: Filter,
+    filt: FilterChain,
     signal_name: str = "resid",
     rfft: Optional[RFFTObj] = None,
 ) -> AxisManager:
@@ -249,8 +264,8 @@ def filter_tod(
     ----------
     am : AxisManager
         AxisManager containing the signal and time axes.
-    filt : Filter
-        Sotodlib Fourier filter to apply.
+    filt : FilterChain
+        sotodlib Fourier filter to apply.
     signal_name : str, default="resid"
         Name of the signal field to filter.
     rfft : RFFTObj, optional
