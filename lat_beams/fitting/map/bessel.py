@@ -10,13 +10,14 @@ M(r,\theta)
 \left[
 b_{\rm core}
 +
-\sum_{n_0\leq n_1}
+\sum_{n_0 = 0}{n_{bessel}}
+\sum_{n_1 = 0}{n_0}
 \frac{J_{n_0}(\ell_{\max}r)}{\ell_{\max}r}
 \frac{J_{n_1}(\ell_{\max}r)}{\ell_{\max}r}
 \left(
 a_{n_0,n_1,0}
 +
-\sum_{m>0}
+\sum_{m=1}_{n_{multipole}}
 \left[
 a_{n_0,n_1,m,c}\cos(m\theta)
 +
@@ -371,7 +372,7 @@ def fit_bessel_map(
     n_opt_pixels: int = 6000,
 ) -> tuple[AxisManager, Float[ndmap, "nx ny"]]:
     r"""
-    Fit a Bessel/multipole core plus a smooth positive r^-3 wing.
+    Fit a Bessel+multipole core plus a smooth positive $r^{-3}$ wing.
 
     The detailed model definition is implemented by `bessel_beam`; this
     function is mainly concerned with setting up and solving the fit.
