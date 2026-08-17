@@ -1,15 +1,15 @@
 """
-Functions for fitting beam models to a map.
+Interfaces and helpers for fitting beam models to maps.
 
-All functions will have the following standardized interface
-which is defined by the `FitMap` protocol in this module.
-Fitting functions should follow the naming convention `fit_{MODEL}_map`
-where `{MODEL}` is a one word description of the model being fit.
+Beam-fitting functions follow the `fit_{MODEL}_map` naming convention and
+the `FitMap` interface defined below. See individual fitting functions
+for details of each beam model.
 """
 
 import logging
 from typing import Optional, Protocol
 
+from jaxtyping import Float
 from pixell.enmap import ndmap
 from sotodlib.core import AxisManager
 from sotodlib.tod_ops.filters import logger as flog
@@ -20,46 +20,41 @@ flog.setLevel(logging.ERROR)
 class FitMap(Protocol):
     def __call__(
         self,
-        imap: ndmap,
-        ivar: ndmap,
-        posmap: ndmap,
+        imap: Float[ndmap, "ny nx"],
+        ivar: Float[ndmap, "ny nx"],
+        posmap: Float[ndmap, "2 ny nx"],
         guess: AxisManager,
         map_units: str = "pW",
-        **kwargs,
-    ) -> tuple[Optional[AxisManager], Optional[ndmap]]:
-        """
-        Function to fit a beam model to a map.
+        **kwargs: object,
+    ) -> tuple[Optional[AxisManager], Optional[Float[ndmap, "ny nx"]]]:
+        """Fit a beam model to a map.
 
-        Arguments
-        ---------
-        imap : ndmap
-            Input map to fit with shape `(nx, ny)`.
-        ivar : ndmap
-            Inverse-variance map for `imap` with shape `(nx, ny)`.
-        posmap : ndmap
-            Position map in radians for `imap`.
-            First element is eta and the second is xi.
-            Should have shape `(2, nx, ny)`.
+        Parameters
+        ----------
+        imap : Float[ndmap, "ny nx"]
+            Input beam map.
+        ivar : Float[ndmap, "ny nx"]
+            Inverse-variance map for `imap`.
+        posmap : Float[ndmap, "2 ny nx"]
+            Position map in radians. The first component is `eta` and the
+            second is `xi`.
         guess : AxisManager
-            `AxisManager` containing parameters that are useful as a starting point.
-            See `make_guess` for the expected parameters.
-        map_units : str, default: 'pW'
-            The units of the map.
-            Should be a string that astromy units understands.
-        **kwargs
+            Initial parameter values useful for starting the fit. See
+            :func:`make_guess` for the standard parameters.
+        map_units : str, default: "pW"
+            Units of the input map.
+        **kwargs : object
             Additional arguments for the specific fitting function.
 
         Returns
         -------
         fit_params : Optional[AxisManager]
-            The fit parameters.
-            See individual function docstrings for detail.
-            Returns `None` if the fit failed.
-        model : Optional[NDArray]
-            The model evaluated with the fit parameters.
-            Returns `None` if the fit failed.
+            Fitted model parameters. Returns `None` if the fit fails.
+        model : Optional[Float[ndmap, "ny nx"]]
+            Model evaluated with the fitted parameters. Returns `None` if
+            the fit fails.
         """
-        pass
+        ...
 
 
 def make_guess(
@@ -71,32 +66,30 @@ def make_guess(
     phi: float = 0,
     off: float = 0,
 ) -> AxisManager:
-    """
-    Helper function to make the initial guess `AxisManager`.
-    Note that all arguments will be scalars in the output
-    and all positional parameters are in radians.
+    """Make an initial beam-fitting parameter guess.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     amp : float, default: 1
-        Amplitude of the beam.
-    fwhm_xi : float, default: 2/60
-        FWHM in xi.
-    fwhm_eta : float, default: 2/60
-        FWHM in eta.
+        Initial beam amplitude.
+    fwhm_xi : float, default: 2 / 60
+        Initial FWHM in `xi`.
+    fwhm_eta : float, default: 2 / 60
+        Initial FWHM in `eta`.
     xi0 : float, default: 0
-        Center of beam in xi.
+        Initial beam center in `xi`.
     eta0 : float, default: 0
-        Center of beam in eta.
+        Initial beam center in `eta`.
     phi : float, default: 0
-        Rotation of the beam.
+        Initial beam rotation angle.
     off : float, default: 0
-        DC offset of the beam.
+        Initial DC offset.
 
     Returns
     -------
     guess : AxisManager
-        `AxisManager` with the guess parameters.
+        `AxisManager` containing the initial parameters. All values are scalar
+        and positional parameters are in radians.
     """
     guess_dict = locals()
     guess = AxisManager()

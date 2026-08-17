@@ -1,6 +1,7 @@
 import logging
 import sys
 import warnings
+from typing import Optional, cast
 
 import numpy as np
 import so3g
@@ -11,6 +12,7 @@ from astropy.convolution import (
     convolve,
     convolve_fft,
 )
+from jaxtyping import Float
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 from scipy.signal import detrend
@@ -23,7 +25,12 @@ from sotodlib.tod_ops.fft_ops import (
     find_inferior_integer,
     find_superior_integer,
 )
-from sotodlib.tod_ops.filters import fourier_filter, high_pass_sine2, identity_filter
+from sotodlib.tod_ops.filters import (
+    Filter,
+    fourier_filter,
+    high_pass_sine2,
+    identity_filter,
+)
 from sotodlib.tod_ops.filters import logger as flog
 from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
@@ -35,33 +42,38 @@ flog.setLevel(logging.ERROR)
 
 
 def get_xieta_src_centered(
-    ctime: NDArray[np.floating],
-    az: NDArray[np.floating],
-    el: NDArray[np.floating],
-    roll: NDArray[np.floating],
+    ctime: Float[NDArray, "n"],
+    az: Float[NDArray, "n"],
+    el: Float[NDArray, "n"],
+    roll: Float[NDArray, "n"],
     sso_name: str,
-) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
-    """
-    Get xieta in source centered coordinates.
-    Here we get the source trajectory at the center of the ctime array,
-    for a slow source this is a fairly good approximation but you may get bad results
-    if you are spanning a very large ctime or a ctime that spans both sides of a transit.
+) -> tuple[Float[NDArray, "n"], Float[NDArray, "n"]]:
+    """Get source-centered xi and eta coordinates.
 
-    Arguments:
+    The source position is evaluated using the center of the input time
+    range. This is a good approximation for a slowly moving source, but
+    can become inaccurate for a long time range or one spanning both sides
+    of a transit.
 
-        ctime: Array of times to get the source at. See docstring for caveat on this.
+    Parameters
+    ----------
+    ctime : Float[NDArray, "n"]
+        Observation times.
+    az : Float[NDArray, "n"]
+        Boresight azimuth angles in radians.
+    el : Float[NDArray, "n"]
+        Boresight elevation angles in radians.
+    roll : Float[NDArray, "n"]
+        Boresight roll angles in radians.
+    sso_name : str
+        Name of the solar-system object.
 
-        az: Array of azimuth angles in radians to get the source at. Should be the same size as ctime.
-
-        el: Array of elevation angles in radians to get the source at. Should be the same size as ctime.
-
-        roll: Array of roll angles in radians to get the source at. Should be the same size as ctime.
-
-    Returns:
-
-        xi: The xi angles centered on the source in radians.
-
-        eta: The eta angles centered on the source in radians.
+    Returns
+    -------
+    xi : Float[NDArray, "n"]
+        Source-centered xi coordinates in radians.
+    eta : Float[NDArray, "n"]
+        Source-centered eta coordinates in radians.
     """
     csl = so3g.proj.CelestialSightLine.az_el(
         ctime, az, el, roll=roll, weather="typical"
@@ -80,34 +92,76 @@ def get_xieta_src_centered(
 
 
 def _empty_fp(aman: AxisManager) -> AxisManager:
+    """
+    Create an empty focal-plane result for an observation.
+
+    Parameters
+    ----------
+    aman : AxisManager
+        Input observation containing the detector and boresight axes.
+
+    Returns
+    -------
+    focal_plane : AxisManager
+        Empty focal-plane ``AxisManager`` with one entry per detector.
+    """
+    ndet = cast(int, aman.dets.count)
     focal_plane = core.AxisManager(aman.dets)
-    focal_plane.wrap("xi", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("eta", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("gamma", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("fwhm", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("amp", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("dist", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("hits", np.zeros(len(aman.dets.vals), dtype=int), [(0, "dets")])
-    focal_plane.wrap("az", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
-    focal_plane.wrap("el", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
+
+    focal_plane.wrap("xi", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("eta", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("gamma", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("fwhm", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("amp", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("dist", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("hits", np.zeros(ndet, dtype=int), [(0, "dets")])
+    focal_plane.wrap("az", np.zeros(ndet, dtype=float), [(0, "dets")])
+    focal_plane.wrap("el", np.zeros(ndet, dtype=float), [(0, "dets")])
     focal_plane.wrap(
         "roll",
-        np.zeros(len(aman.dets.vals), dtype=float) + np.mean(aman.boresight.roll),
+        np.zeros(ndet, dtype=float)
+        + np.mean(cast(Float[np.ndarray, "ndet"], aman.boresight.roll)),
         [(0, "dets")],
     )
     focal_plane.wrap(
-        "reduced_chisq", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")]
+        "reduced_chisq",
+        np.zeros(ndet, dtype=float),
+        [(0, "dets")],
     )
-    focal_plane.wrap("R2", np.zeros(len(aman.dets.vals), dtype=float), [(0, "dets")])
+    focal_plane.wrap("R2", np.zeros(ndet, dtype=float), [(0, "dets")])
 
     return focal_plane
 
 
 def _bin_priors_1d(
-    fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
+    fit_am: AxisManager,
+    xi0: float,
+    eta0: float,
+    fwhm: float,
 ) -> tuple[float, float]:
-    xi = np.array(fit_am.xi)
-    eta = np.array(fit_am.eta)
+    """
+    Estimate the beam center by independently binning xi and eta.
+
+    Parameters
+    ----------
+    fit_am : AxisManager
+        Detector TOD containing `xi`, `eta`, and filtered residual data.
+    xi0 : float
+        Initial xi position in radians.
+    eta0 : float
+        Initial eta position in radians.
+    fwhm : float
+        Approximate beam FWHM in radians.
+
+    Returns
+    -------
+    xi0 : float
+        Estimated xi center in radians.
+    eta0 : float
+        Estimated eta center in radians.
+    """
+    xi = np.asarray(fit_am.xi)
+    eta = np.asarray(fit_am.eta)
     xi_binned, edges, _ = binned_statistic(
         xi, fit_am.resid_filt[0], bins=int(np.ptp(xi) / (1 * fwhm))
     )
@@ -131,10 +185,34 @@ def _bin_priors_1d(
 
 
 def _bin_priors_2d(
-    fit_am: AxisManager, xi0: float, eta0: float, fwhm: float
+    fit_am: AxisManager,
+    xi0: float,
+    eta0: float,
+    fwhm: float,
 ) -> tuple[float, float]:
-    xi = np.array(fit_am.xi)
-    eta = np.array(fit_am.eta)
+    """
+    Estimate the beam center from a smoothed 2D binned TOD.
+
+    Parameters
+    ----------
+    fit_am : AxisManager
+        Detector TOD containing `xi`, `eta`, and filtered residual data.
+    xi0 : float
+        Initial xi position in radians.
+    eta0 : float
+        Initial eta position in radians.
+    fwhm : float
+        Approximate beam FWHM in radians.
+
+    Returns
+    -------
+    xi0 : float
+        Estimated xi center in radians.
+    eta0 : float
+        Estimated eta center in radians.
+    """
+    xi = np.asarray(fit_am.xi)
+    eta = np.asarray(fit_am.eta)
     binned, x_edges, y_edges, _ = binned_statistic_2d(
         xi,
         eta,
@@ -158,7 +236,33 @@ def _bin_priors_2d(
     return xi0, eta0
 
 
-def filter_tod(am, filt, signal_name="resid", rfft=None):
+def filter_tod(
+    am: AxisManager,
+    filt: Filter,
+    signal_name: str = "resid",
+    rfft: Optional[RFFTObj] = None,
+) -> AxisManager:
+    """
+    Apply a Fourier-domain filter to a signal in an AxisManager.
+
+    Parameters
+    ----------
+    am : AxisManager
+        AxisManager containing the signal and time axes.
+    filt : Filter
+        Sotodlib Fourier filter to apply.
+    signal_name : str, default="resid"
+        Name of the signal field to filter.
+    rfft : RFFTObj, optional
+        Precomputed FFT configuration. If `None`, the filter constructs
+        the required configuration.
+
+    Returns
+    -------
+    AxisManager
+        The input AxisManager with `{signal_name}_filt` containing the
+        filtered signal.
+    """
     sig_filt_name = f"{signal_name}_filt"
     am[sig_filt_name] = am[signal_name].copy()
     filt_kw = dict(
@@ -169,7 +273,7 @@ def filter_tod(am, filt, signal_name="resid", rfft=None):
         time_name="timestamps",
         rfft=rfft,
     )
-    am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)
+    am[sig_filt_name] = fourier_filter(am, filt, **filt_kw)  # type: ignore
     return am
 
 
@@ -181,56 +285,66 @@ def fit_tod_pointing(
     source: str = "mars",
     bin_priors: bool = True,
     bin_2d: bool = True,
-    pos_priors: Optional[NDArray[np.floating]] = None,
+    pos_priors: Optional[Float[NDArray, "ndets 2"]] = None,
     show_tqdm: bool = False,
     min_snr: float = 5.0,
 ) -> AxisManager:
-    """
-    Fit detector offsets from a TOD of a source observation. Assumes that TOD has been trimmed to just the time source is in TOD.
+    """Fit detector beam positions from a source-observation TOD.
 
-    Arguments:
+    Each detector is fit independently with a symmetric 2D Gaussian. The
+    source-centered xi/eta trajectory is used as the detector position,
+    and the TOD is filtered before fitting. Initial positions can optionally
+    be estimated from binned TOD data or supplied as positional priors.
 
-        aman: AxisManager containing at minimum a source TOD and boresight TOD.
-              For best performance please fft trim ahead of time.
+    Parameters
+    ----------
+    aman : AxisManager
+        Observation containing detector TOD and boresight data. Must contain
+        `dets`, `samps`, `timestamps`, `signal`, and `boresight` fields.
+        The boresight must contain `az`, `el`, and `roll`.
+    bandpass_range : tuple[Optional[float], Optional[float]], default: (None, None)
+        Low and high frequency cutoffs in Hz. A value of `None` disables
+        the corresponding cutoff.
+    fwhm : float, default: np.deg2rad(0.5)
+        Initial beam FWHM in radians.
+    max_rad : float, optional
+        Maximum radius in radians around the initial beam position to include
+        in the fit. If `None`, uses `20 * fwhm`.
+    source : str, default: "mars"
+        Solar-system source being observed.
+    bin_priors : bool, default: True
+        If `True`, estimate detector positions by binning and smoothing the
+        TOD unless a positional prior is supplied.
+    bin_2d : bool, default: True
+        If `True`, estimate the position from a 2D binned map. Otherwise,
+        estimate xi and eta independently.
+    pos_priors : Float[NDArray, "ndets 2"], optional
+        Initial positional priors in radians. Each row contains `(xi, eta)`
+        for one detector. A row of `(nan, nan)` disables the prior for that
+        detector.
+    show_tqdm : bool, default: False
+        If `True`, display a progress bar while fitting detectors.
+    min_snr : float, default: 5.0
+        Signal-to-noise threshold used when calculating the number of hits.
 
-        bandpass_range: A tuple specifying the (low, high) cuttoffs for a bandpass filter in Hz.
-                        Set a cutoff to None to not use it.
+    Returns
+    -------
+    focal_plane : AxisManager
+        Fitted detector parameters. Fields include:
 
-        max_rad: The maximum radius around the initial guess of the detector offset to use.
-                 This is in radians, if None then 20  times the input fwhm is used.
-
-        source: The name of the source to fit.
-
-        bin_priors: If True try to guess the detector offsets by binning and smoothing the TODs.
-                    If a positional prior is provided for a given detector it is used instead of this.
-
-        bin_2d: If True the binned prior is done by binning the TOD into a naive map.
-                If False xi and eta are binned seperately.
-
-        pos_priors: Positional priors. Pass None to not use.
-                    If using pass in a (ndets, 2) array where each row is the (xi, eta) to
-                    start the fit for that detector at. To disable for only some detectors set
-                    the row to (nan, nan).
-
-        show_tqdm: If True show a progress bar.
-
-        min_snr: Calculates hits out to min_snr compared to white noise level.
-
-    Returns:
-
-        focal_plane: An AxisManager with the same detectors as the input aman.
-                     This contains the following fields:
-
-                     * xi (in radians)
-                     * eta (in radians)
-                     * gamma (all 0 placeholder)
-                     * fwhm (in radians)
-                     * amp (in units of aman.signal)
-                     * dist (in radians), distance between fit offset and the initial guess
-                     * az (in radians), the azimuth at the detector crossing
-                     * el (in radians), the elevation at the detector crossing
-                     * roll (in radians), the roll at the detector crossing
-                     * reduced_chisq
+        - `xi`: fitted xi position in radians.
+        - `eta`: fitted eta position in radians.
+        - `gamma`: placeholder rotation angle, currently zero.
+        - `fwhm`: fitted symmetric beam FWHM in radians.
+        - `amp`: fitted beam amplitude in the units of `aman.signal`.
+        - `dist`: distance between the fitted position and initial position
+          in radians.
+        - `az`: azimuth at the detector beam crossing in radians.
+        - `el`: elevation at the detector beam crossing in radians.
+        - `roll`: roll at the detector beam crossing in radians.
+        - `reduced_chisq`: reduced chi-squared of the fit.
+        - `R2`: coefficient of determination for the fitted TOD.
+        - `hits`: number of scan samples above `min_snr`.
     """
     # TODO: Can use full detector map to fit the array at once. This hasnt been written.
     # Right now det maps for LAT not good; SAT will be ok to test with though. Should provide both options here,
@@ -247,21 +361,21 @@ def fit_tod_pointing(
         max_rad = 20 * fwhm
 
     focal_plane = _empty_fp(aman)
-    mean_el = np.mean(np.array(aman.boresight.el))
+    mean_el = np.mean(np.asarray(aman.boresight.el))
 
     # getting xi eta in a coordinate system where (0, 0) is the planet youre fitting. Expecting trimmed TOD for source.
     # Cannot include both rising and setting (ie a sign change). Note that a transit is flat -- so is ok.
     xi, eta = get_xieta_src_centered(
-        np.array(aman.timestamps),
-        np.array(aman.boresight.az),
-        np.array(aman.boresight.el),
-        np.array(aman.boresight.roll),
+        np.asarray(aman.timestamps),
+        np.asarray(aman.boresight.az),
+        np.asarray(aman.boresight.el),
+        np.asarray(aman.boresight.roll),
         source,
     )
     aman.wrap("xi", xi, [(0, "samps")])
     aman.wrap("eta", eta, [(0, "samps")])
 
-    az_d = detrend(aman.boresight.az)
+    az_d = detrend(np.asarray(aman.boresight.az))
     az_v = np.diff(az_d, prepend=az_d[0])
     d_az = np.sign(az_v)
     scan_samps = np.ptp(az_d) / (np.median(np.abs(az_v)))
@@ -280,17 +394,19 @@ def fit_tod_pointing(
     def fit_func(x, fit_am, filt, rfft, scales):
         xi0, eta0, amp, fwhm, offset = x * scales
         model = gaussian2d(
-            (fit_am.eta, fit_am.xi), amp, xi0, eta0, fwhm, fwhm, 0, offset
+            np.asarray((fit_am.eta, fit_am.xi)), amp, xi0, eta0, fwhm, fwhm, 0, offset
         )
         fit_am.resid = (fit_am.signal.ravel() - model).reshape(fit_am.resid.shape)
         fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
-        return np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
+        return (
+            np.sum(np.asarray(fit_am.resid) * np.asarray(fit_am.resid_filt)) * fit_am.wn
+        )
 
     # Loop through all detectors and fit them one at a time.
-    it = np.array(aman.dets.vals)
+    it = np.asarray(aman.dets.vals)
     if show_tqdm:
-        it = tqdm(np.array(aman.dets.vals))
-    aman.signal = aman.signal.astype(np.float32)
+        it = tqdm(np.asarray(aman.dets.vals))
+    aman.signal = np.asarray(aman.signal, dtype=np.float32)
     for i, det in enumerate(it):
         if show_tqdm:
             sys.stderr.flush()
@@ -303,7 +419,7 @@ def fit_tod_pointing(
         )
         # Estimateing white noise by taking the standard deviation of the filtered TOD.
         fit_am = filter_tod(fit_am, filt)
-        std = np.std(np.array(fit_am.resid_filt))
+        std = np.std(np.asarray(fit_am.resid_filt))
         if std == 0:
             focal_plane.amp[i] = -np.inf
             continue
@@ -311,7 +427,7 @@ def fit_tod_pointing(
 
         # Get starting guess for where the detector is looking. Bad guess = bad pointing final fit. Descends into a local instead of global minima.
         # Get xi, eta at maximum sample, but this is not a very good guess.
-        max_idx = np.argmax(np.array(fit_am.resid_filt[0]))
+        max_idx = np.argmax(np.asarray(fit_am.resid_filt[0]))
         xi_max = xi[max_idx]
         eta_max = eta[max_idx]
         xi0, eta0 = float(xi_max), float(eta_max)
@@ -350,17 +466,18 @@ def fit_tod_pointing(
         if start < 0:
             stop += start
             start = 0
-        if stop > fit_am.samps.count:
-            start -= fit_am.samps.count - stop
-            stop = fit_am.samps.count
+        if stop > cast(int, fit_am.samps.count):
+            start -= cast(int, fit_am.samps.count) - stop
+            stop = cast(int, fit_am.samps.count)
         sl = slice(
             start + cast(int, fit_am.samps.offset),
             stop + cast(int, fit_am.samps.offset),
         )
+
         fit_am.restrict("samps", sl)
         rfft = RFFTObj.for_shape(1, cast(int, fit_am.samps.count), "BOTH")
 
-        ptp = np.ptp(np.array(fit_am.resid_filt))
+        ptp = np.ptp(np.asarray(fit_am.resid_filt))
         init_pars = [xi0, eta0, ptp, fwhm, 0]
         scales = np.array([fwhm, fwhm, ptp, fwhm, ptp])
         bounds = [
@@ -402,31 +519,35 @@ def fit_tod_pointing(
         if not res.success:
             focal_plane.R2[i] = 0.0
         else:
-            fit_am.resid = (fit_am.signal.ravel() - np.mean(fit_am.signal)).reshape(
-                fit_am.resid.shape
-            )
+            fit_am.resid = (
+                np.asarray(fit_am.signal).ravel() - np.mean(np.asarray(fit_am.signal))
+            ).reshape(fit_am.resid.shape)
             fit_am = filter_tod(fit_am, filt, signal_name="resid", rfft=rfft)
-            ss_tot = np.sum(fit_am.resid * fit_am.resid_filt) * fit_am.wn
+            ss_tot = (
+                np.sum(np.asarray(fit_am.resid) * np.asarray(fit_am.resid_filt))
+                * fit_am.wn
+            )
             focal_plane.R2[i] = 1 - (res.fun / ss_tot)
 
         focal_plane.dist[i] = np.sqrt(
-            (np.array(focal_plane.xi[i]) - xi0) ** 2
-            + (np.array(focal_plane.eta[i]) - eta0) ** 2
+            (np.asarray(focal_plane.xi[i]) - xi0) ** 2
+            + (np.asarray(focal_plane.eta[i]) - eta0) ** 2
         )
-        delta_xi = xi - np.array(focal_plane.xi[i])
-        delta_eta = eta - np.array(focal_plane.eta[i])
+        delta_xi = xi - np.asarray(focal_plane.xi[i])
+        delta_eta = eta - np.asarray(focal_plane.eta[i])
 
         # Lets calculate hits
         model = gaussian2d(
-            (eta, xi),
-            focal_plane.amp[i],
-            focal_plane.xi[i],
-            focal_plane.eta[i],
-            focal_plane.fwhm[i],
-            focal_plane.fwhm[i],
+            np.asarray([eta, xi]),
+            cast(float, focal_plane.amp[i]),
+            cast(float, focal_plane.xi[i]),
+            cast(float, focal_plane.eta[i]),
+            cast(float, focal_plane.fwhm[i]),
+            cast(float, focal_plane.fwhm[i]),
             0,
             0,
         )
+
         hits = Ranges.from_mask(model / std >= min_snr) * turnarounds
         focal_plane.hits[i] = len(hits.ranges())
 
