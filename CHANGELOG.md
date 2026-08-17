@@ -1,3 +1,14 @@
+## 5.1.0 (2026-08-17)
+
+### Feat
+
+- integrate soma beam modes
+
+### Fix
+
+- more robust gauss fit
+- dont blow up at 0
+
 ## 5.0.0 (2026-08-14)
 
 
