@@ -565,23 +565,6 @@ def auto_relplot(
                     alpha=0.7,
                 )
 
-        # for ax in plot.axes.flat:
-        #     ymax = -np.inf
-        #     ymin_data = np.inf
-        #
-        #     for line in ax.lines:
-        #         ydata = np.asarray(line.get_ydata(), dtype=float)
-        #         good = np.isfinite(ydata) & (ydata > 0)
-        #         if np.any(good):
-        #             ymax = max(ymax, np.max(ydata[good]))
-        #             ymin_data = min(ymin_data, np.min(ydata[good]))
-        #
-        #     if np.isfinite(ymax):
-        #         ymin = ax.get_ylim()[0]
-        #         if not np.isfinite(ymin) or ymin <= 0:
-        #             ymin = ymin_data
-        #         ax.set_ylim(ymin, 1.2 * ymax)
-
     for ax in plot.axes.flat:
         ax.label_outer()
 
