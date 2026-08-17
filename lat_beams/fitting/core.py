@@ -1,15 +1,16 @@
 """
-Shared building blocks for various models and fitting routines
+Shared building blocks for beam models and fitting routines.
 """
 
-import astropy.units as u
-import numba
+from typing import overload
+
 import numpy as np
+from jaxtyping import Float
 from joblib import Memory
 from numba import njit
 from numpy.typing import NDArray
 from pixell.enmap import ndmap
-from scipy.special import factorial, jv
+from scipy.special import jv
 
 try:
     from mpi4py import MPI
@@ -23,29 +24,71 @@ location = f"/tmp/lat_beams_{myrank}"
 memory = Memory(location, verbose=0)
 
 
+@overload
+def gaussian2d(
+    posmap: Float[ndmap, "2 ny nx"],
+    a: float,
+    xi0: float,
+    eta0: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+) -> Float[ndmap, "ny nx"]: ...
+
+
+@overload
+def gaussian2d(
+    posmap: Float[NDArray, "2 ny nx"],
+    a: float,
+    xi0: float,
+    eta0: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+) -> Float[NDArray, "ny nx"]: ...
+
+
 @njit
-def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
+def gaussian2d(
+    posmap: Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"],
+    a: float,
+    xi0: float,
+    eta0: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+) -> Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"]:
     """
-    Stolen from analyze_bright_ptsrc
+    Evaluate a rotated 2D Gaussian beam.
 
-    Simulate a time stream with an Gaussian beam model
-    Args
-    ------
-    pixmap:
-        (eta, xi) of model.
-    a: float
-        amplitude of the Gaussian beam model
-    xi0, eta0: float, float
-        center position of the Gaussian beam model
-    fwhm_xi, fwhm_eta, phi: float, float, float
-        fwhm along the xi, eta axis (rotated)
-        and the rotation angle (in radians)
-    off: offset to add to beam
+    Parameters
+    ----------
+    posmap : Float[ndmap, "2 ny nx"] | Float[NDArray, "2 ny nx"]
+        Position map in radians. The first element is eta and the second
+        is xi.
+    a : float
+        Beam amplitude.
+    xi0 : float
+        Beam center along xi, in radians.
+    eta0 : float
+        Beam center along eta, in radians.
+    fwhm_xi : float
+        FWHM along the xi axis, in radians.
+    fwhm_eta : float
+        FWHM along the eta axis, in radians.
+    phi : float
+        Rotation angle of the beam, in radians.
+    off : float
+        Constant offset added to the beam.
 
-    Ouput:
-    ------
-    sim_data: 1d array of float
-        Time stream at sampling points given by xieta
+    Returns
+    -------
+    gauss : Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"]
+        Gaussian beam evaluated at `posmap`, with the same array type as
+        `posmap`.
     """
     eta, xi = posmap
     model = np.empty_like(eta)
@@ -74,10 +117,80 @@ def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     return model
 
 
-def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
+@overload
+def gaussian2d_deriv(
+    posmap: Float[ndmap, "2 ny nx"],
+    a: float,
+    xi0: float,
+    eta0: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+) -> tuple[Float[ndmap, "ny nx"], Float[ndmap, "7 ny nx"]]: ...
+
+
+@overload
+def gaussian2d_deriv(
+    posmap: Float[NDArray, "2 ny nx"],
+    a: float,
+    xi0: float,
+    eta0: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+) -> tuple[Float[NDArray, "ny nx"], Float[NDArray, "7 ny nx"]]: ...
+
+
+def gaussian2d_deriv(
+    posmap: Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"],
+    a: float,
+    xi0: float,
+    eta0: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+) -> (
+    tuple[Float[ndmap, "ny nx"], Float[ndmap, "7 ny nx"]]
+    | tuple[Float[NDArray, "ny nx"], Float[NDArray, "7 ny nx"]]
+):
+    """
+    Evaluate a Gaussian beam and its parameter derivatives.
+
+    Parameters
+    ----------
+    posmap : Float[ndmap, "2 ny nx"] | Float[NDArray, "2 ny nx"]
+        Position map in radians. The first element is xi and the second
+        is eta.
+    a : float
+        Beam amplitude.
+    xi0 : float
+        Beam center along xi, in radians.
+    eta0 : float
+        Beam center along eta, in radians.
+    fwhm_xi : float
+        FWHM along xi, in radians.
+    fwhm_eta : float
+        FWHM along eta, in radians.
+    phi : float
+        Rotation angle of the beam, in radians.
+    off : float
+        Constant offset of the beam.
+
+    Returns
+    -------
+    gauss : Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"]
+        Gaussian beam evaluated at `posmap`, with the same array type as
+        the input.
+    dgauss : Float[ndmap, "7 ny nx"] | Float[NDArray, "7 ny nx"]
+        Derivatives with respect to amplitude, xi center, eta center,
+        xi FWHM, eta FWHM, rotation angle, and offset.
+    """
     factor = 2 * np.sqrt(2 * np.log(2))
-    xi, eta = xieta
-    gauss = gaussian2d(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
+    xi, eta = posmap
+    gauss = gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off)
     xi_sft = xi - xi0
     eta_sft = eta - eta0
 
@@ -132,30 +245,155 @@ def gaussian2d_deriv(xieta, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     return gauss, dgauss
 
 
+@overload
 def gaussian2d_wing(
-    posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off, wing_r0, wing_amp
-):
+    posmap: Float[ndmap, "ny nx"],
+    amp: float,
+    dx: float,
+    dy: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+    wing_r0: float,
+    wing_amp: float,
+) -> Float[ndmap, "ny nx"]: ...
+
+
+@overload
+def gaussian2d_wing(
+    posmap: Float[NDArray, "2 ny nx"],
+    amp: float,
+    dx: float,
+    dy: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+    wing_r0: float,
+    wing_amp: float,
+) -> Float[NDArray, "ny nx"]: ...
+
+
+def gaussian2d_wing(
+    posmap: Float[ndmap, "ny nx"] | Float[NDArray, "2 ny nx"],
+    amp: float,
+    dx: float,
+    dy: float,
+    fwhm_xi: float,
+    fwhm_eta: float,
+    phi: float,
+    off: float,
+    wing_r0: float,
+    wing_amp: float,
+) -> Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"]:
+    """
+    Evaluate a Gaussian beam with a $r^{-3}$ power-law wing.
+
+    Parameters
+    ----------
+    posmap : Float[ndmap, "ny nx"] | Float[NDArray, "2 ny nx"]
+        Position map in radians. The first component is eta and the
+        second is xi.
+    amp : float
+        Amplitude of the Gaussian core.
+    dx : float
+        Beam center in xi.
+    dy : float
+        Beam center in eta.
+    fwhm_xi : float
+        FWHM of the Gaussian core along xi.
+    fwhm_eta : float
+        FWHM of the Gaussian core along eta.
+    phi : float
+        Rotation angle of the Gaussian core in radians.
+    off : float
+        Constant offset added to the beam.
+    wing_r0 : float
+        Radius beyond which the Gaussian is replaced by the power-law wing.
+    wing_amp : float
+        Amplitude of the power-law wing.
+
+    Returns
+    -------
+    Float[ndmap, "ny nx"] | Float[NDArray, "ny nx"]
+        Beam model evaluated at `posmap`. The return type matches the
+        type of `posmap`.
+    """
     gauss = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, 0)
     r = np.sqrt((posmap[0] - dy) ** 2 + (posmap[1] - dx) ** 2)
     r_msk = r > wing_r0
     gauss[r_msk] = wing_amp * np.power(r[r_msk], -3)
+    gauss += off
+    return gauss
 
-    return gauss + off
 
+def multipole(
+    theta: Float[NDArray, "ny nx"], mp: int, sin: int
+) -> Float[NDArray, "ny nx"]:
+    """
+    Evaluate a cosine or sine multipole basis function.
 
-def multipole(theta, mp, sin):
-    order = mp
-    if mp > 0:
-        order = 2 ** (mp - 1)
-    elif mp < 0:
-        raise ValueError("Negetive multipole orders not allowed!")
-    order = mp
-    return np.cos(theta * order - sin * np.pi / 2)
+    Parameters
+    ----------
+    theta : Float[NDArray, "ny nx"]
+        Polar angle map in radians.
+    mp : int
+        Multipole order. Must be non-negative.
+    sin : int
+        Selects the cosine (`0`) or sine (`1`) term.
+
+    Returns
+    -------
+    Float[NDArray, "ny nx"]
+        Multipole basis evaluated at `theta`.
+
+    Raises
+    ------
+    ValueError
+        If `mp` is negative.
+    """
+    if mp < 0:
+        raise ValueError("Negative multipole orders not allowed!")
+    return np.cos(theta * mp - sin * np.pi / 2)
 
 
 def multipole_decomp(
-    base_beam, imap, sigma, n_multipoles, theta, gs=False, check_chisq=False
-):
+    base_beam: Float[ndmap, "ny nx"],
+    imap: Float[ndmap, "ny nx"],
+    sigma: Float[ndmap, "ny nx"],
+    n_multipoles: int,
+    theta: Float[ndmap, "ny nx"],
+    gs: bool = False,
+    check_chisq: bool = False,
+) -> Float[NDArray, "n_multipoles 2"]:
+    """
+    Decompose a map into multipoles of a base beam.
+
+    Parameters
+    ----------
+    base_beam : Float[ndmap, "ny nx"]
+        Base beam used for every multipole term.
+    imap : Float[ndmap, "ny nx"]
+        Input map to decompose.
+    sigma : Float[ndmap, "ny nx"]
+        Inverse-variance weights for `imap`.
+    n_multipoles : int
+        Number of multipoles to fit.
+    theta : Float[ndmap, "ny nx"]
+        Polar angle map in radians.
+    gs : bool, default=False
+        If `True`, iteratively subtract fitted multipoles before fitting
+        the next term.
+    check_chisq : bool, default=False
+        If `True`, reject terms that increase the weighted chi-squared.
+
+    Returns
+    -------
+    Float[NDArray, "n_multipoles 2"]
+        Fitted amplitudes. The second dimension contains the cosine and
+        sine amplitudes.
+    """
     amps = np.zeros((n_multipoles, 2))
     beam_model = imap
     _multi_mod = beam_model
@@ -199,7 +437,28 @@ def multipole_decomp(
     return amps
 
 
-def multipole_expansion(base_beam, amps, theta):
+def multipole_expansion(
+    base_beam: Float[ndmap, "ny nx"],
+    amps: Float[NDArray, "n_multipoles 2"],
+    theta: Float[ndmap, "ny nx"],
+) -> Float[ndmap, "ny nx"]:
+    """
+    Evaluate a multipole expansion of a base beam.
+
+    Parameters
+    ----------
+    base_beam : Float[ndmap, "ny nx"]
+        Base beam used for every multipole term.
+    amps : Float[NDArray, "n_multipoles 2"]
+        Cosine and sine amplitudes for each multipole.
+    theta : Float[ndmap, "ny nx"]
+        Polar angle map in radians.
+
+    Returns
+    -------
+    Float[ndmap, "ny nx"]
+        Beam model evaluated using the multipole expansion.
+    """
     beam = np.zeros_like(base_beam)
     for n in range(len(amps)):
         for i in (0, 1):
@@ -209,15 +468,32 @@ def multipole_expansion(base_beam, amps, theta):
 
 
 def bessel_term(
-    r: NDArray[np.float64],
+    r: Float[NDArray, "ny nx"],
     ell_max: float,
     i: int,
-) -> NDArray[np.float64]:
-    """
-    Evaluate the normalized Bessel basis function.
-    Computes
-        J_i(r * ell_max) / (r * ell_max)
-    with the limiting value at `r = 0` handled explicitly.
+) -> Float[NDArray, "ny nx"]:
+    r"""
+    Evaluate the normalized Bessel basis function:
+
+    $$
+    \frac{J_i(r * \ell_{max})}{(r * \ell_{max})}
+    $$
+
+    Parameters
+    ----------
+    r : Float[NDArray, "ny nx"]
+        Radial coordinate.
+    ell_max : float
+        Maximum multipole scale.
+    i : int
+        Bessel function order.
+
+    Returns
+    -------
+    Float[NDArray, "ny nx"]
+        Bessel basis function
+        At `r = 0`, the limiting value is used: `1` for `i = 0`
+        and `0` otherwise.
     """
     x = r * ell_max
     out = np.empty_like(x, dtype=float)
@@ -231,3 +507,11 @@ def bessel_term(
 
 
 bessel_term_cached = memory.cache(bessel_term)
+bessel_term_cached.__doc__ = """
+Cached version of `bessel_term`.
+
+Results are cached on disk using `joblib.Memory`. The cache is stored in
+`/tmp/lat_beams_{myrank}`, where `{myrank}` is the MPI rank of the current
+process. Calls with the same arguments reuse the previously computed result
+instead of evaluating the Bessel function again.
+"""

@@ -1,10 +1,20 @@
+"""
+Gaussian and multipole expansion beam fitting utilities.
+
+The Gaussian beam model is fit directly to a map using weighted least squares.
+A fitted Gaussian can then be used as the base beam for a multipole expansion,
+whose amplitudes are obtained by a weighted linear decomposition.  See the
+individual fitting and model-conversion functions for details.
+"""
+
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 import numpy as np
 from astropy import units as u
+from jaxtyping import Float
 from pixell.enmap import ndmap
-from scipy.optimize import least_squares, minimize
+from scipy.optimize import least_squares  # , minimize
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
 
@@ -14,76 +24,79 @@ flog.setLevel(logging.ERROR)
 
 
 def fit_gauss_map(
-    imap: ndmap,
-    ivar: ndmap,
-    posmap: ndmap,
+    imap: Float[ndmap, "ny nx"],
+    ivar: Float[ndmap, "ny nx"],
+    posmap: Float[ndmap, "2 ny nx"],
     guess: AxisManager,
     map_units: str = "pW",
     force_sym: bool = False,
     mask_size: float = -1,
-):
-    """
-    Fit 2d Gaussian to input map.
-    Note that only keywod arguments are shown below.
-    See `FitMap` for the rest.
+) -> tuple[Optional[AxisManager], Optional[Float[ndmap, "ny nx"]]]:
+    """Fit a 2D Gaussian beam to a map.
 
-    Arguments
-    ---------
-    force_sym: bool, default: False
-        It true fit a symmetric beam.
-        Both FWHMs will still be in the output,
-        but they will have the same value.
+    The fit minimizes the inverse-variance-weighted residual between `imap`
+    and a Gaussian beam. The Gaussian can optionally be constrained to be
+    symmetric, and the fit can optionally be restricted to a circular region
+    around the initial beam center.
+
+    Parameters
+    ----------
+    imap : Float[ndmap, "ny nx"]
+        Input beam map.
+    ivar : Float[ndmap, "ny nx"]
+        Inverse-variance map.
+    posmap : Float[ndmap, "2 ny nx"]
+        Beam coordinates. The first component is `eta` and the second is
+        `xi`.
+    guess : AxisManager
+        Initial Gaussian parameters. Must contain `xi0`, `eta0`, `off`,
+        `amp`, `fwhm_xi`, `fwhm_eta`, and `phi`.
+    map_units : str, default: "pW"
+        Unit of the map amplitude and offset parameters.
+    force_sym : bool, default: False
+        If `True`, constrain the fitted Gaussian to have equal FWHM in
+        `xi` and `eta` and zero rotation angle.
     mask_size : float, default: -1
-        If this is >0 then a mask will be applies to ivar
-        such that only data within `mask_size`
-        of `(guess.xi0, guess.eta0)` is used in the fit.
+        If positive, only pixels within this radius of the initial beam center
+        are included in the fit.
 
     Returns
     -------
     fit_params : Optional[AxisManager]
-        Parameters are:
-
-        - `amp`: Amplitude of the beam
-        - `fwhm_xi`: FWHM in xi
-        - `fwhm_eta`: FWHM in eta
-        - `xi0`: Center of beam in xi
-        - `eta0`: Center of beam in eta
-        - `phi`: Rotation of the beam
-        - `off`: DC offset of the beam
-
-        Note that all positional parameters are in radians.
-        Returns `None` if the fit failed.
-    model : Optional[NDArray]
-        The model evaluated with the fit parameters.
-        Returns `None` if the fit failed.
+        Fitted Gaussian parameters. Positional parameters are stored in
+        radians. `None` if the fit fails.
+    model : Optional[Float[ndmap, "ny nx"]]
+        The fitted Gaussian evaluated on `posmap`. `None` if the fit
+        fails.
     """
+
     y, x = posmap
     x0 = [
-        guess.xi0,
-        guess.eta0,
-        guess.off,
-        guess.amp,
-        guess.fwhm_xi,
-        guess.fwhm_eta,
-        guess.phi,
+        cast(float, guess.xi0),
+        cast(float, guess.eta0),
+        cast(float, guess.off),
+        cast(float, guess.amp),
+        cast(float, guess.fwhm_xi),
+        cast(float, guess.fwhm_eta),
+        cast(float, guess.phi),
     ]
     bounds = [
         [
-            np.min(x) - guess.fwhm_xi,
-            np.min(y) - guess.fwhm_eta,
+            np.min(x) - cast(float, guess.fwhm_xi),
+            np.min(y) - cast(float, guess.fwhm_eta),
             -5 * np.max(np.abs(imap)),
             0,
-            guess.fwhm_xi / 3,
-            guess.fwhm_eta / 3,
+            cast(float, guess.fwhm_xi) / 3,
+            cast(float, guess.fwhm_eta) / 3,
             0,
         ],
         [
-            np.max(x) + guess.fwhm_xi,
-            np.max(y) + guess.fwhm_eta,
+            np.max(x) + cast(float, guess.fwhm_xi),
+            np.max(y) + cast(float, guess.fwhm_eta),
             5 * np.max(imap),
             5 * np.max(imap),
-            guess.fwhm_xi * 3,
-            guess.fwhm_eta * 3,
+            cast(float, guess.fwhm_xi) * 3,
+            cast(float, guess.fwhm_eta) * 3,
             2 * np.pi,
         ],
     ]
@@ -173,60 +186,82 @@ def fit_gauss_map(
 
 
 def fit_multipole_map(
-    imap: ndmap,
-    ivar: ndmap,
-    posmap: ndmap,
+    imap: Float[ndmap, "ny nx"],
+    ivar: Float[ndmap, "ny nx"],
+    posmap: Float[ndmap, "2 ny nx"],
     guess: AxisManager,
     map_units: str = "pW",
-    base_beam: Optional[ndmap] = None,
+    base_beam: Optional[Float[ndmap, "ny nx"]] = None,
     n_multipoles: int = 5,
-):
+) -> tuple[AxisManager, Float[ndmap, "ny nx"]]:
     """
-    Fit the multipole expansion of a input model to a map.
+    Fit a multipole expansion of a beam model to a map.
 
-    Arguments
-    ---------
-    base_beam : Optional[ndmap], default: None
-        The base beam model to take the multipole expansion of.
-        If `None` then this will be computend by passing the `guess` parameters to
-        `guassian2d` (but with the amplitude set to 1).
+    The input map is modeled as a multipole expansion of `base_beam`.
+    If no base beam is provided, a unit-amplitude Gaussian is constructed
+    from `guess`. The multipole amplitudes are fit using inverse-variance
+    weighting.
+
+    Parameters
+    ----------
+    imap : Float[ndmap, "ny nx"]
+        Input beam map.
+    ivar : Float[ndmap, "ny nx"]
+        Inverse-variance map.
+    posmap : Float[ndmap, "2 ny nx"]
+        Beam coordinates. The first component is `eta` and the second is
+        `xi`.
+    guess : AxisManager
+        Initial Gaussian beam parameters used to construct `base_beam` when
+        it is not provided.
+    map_units : str, default: "pW"
+        Unit of the fitted multipole amplitudes.
+    base_beam : Optional[Float[ndmap, "ny nx"]], default: None
+        Base beam whose angular dependence is expanded. If `None`, a
+        unit-amplitude Gaussian is constructed from `guess`.
     n_multipoles : int, default: 5
-        The number of multipoles to fit.
-        0 will just be the monopole, 1 the dipole, and so on.
+        Number of multipoles to fit. `0` fits only the monopole, `1` adds
+        the dipole, and so on.
+
     Returns
     -------
     fit_params : AxisManager
-        The only element is an array called `amps` with shape
-        `(n_multipoles, 2)` where each row containes the amplitudes
-        for a given multipole, the first collumn is the `cos` terms,
-        and the second `collumn` is the `sin` terms.
-        The `AxisManager` will contain axes called `multipoles` and `term`
-        for this array.
-    model : NDArray
-        The model evaluated with the fit parameters.
+        Fitted multipole amplitudes stored in `amps` with shape
+        `(n_multipoles, 2)`. The second dimension contains the cosine and
+        sine amplitudes. The `AxisManager` also contains `multipoles` and
+        `term` axes.
+    model : Float[ndmap, "ny nx"]
+        Beam model evaluated with the fitted multipole amplitudes.
     """
+
     if base_beam is None:
         base_beam = gaussian2d(
             posmap,
             1,
-            guess.xi0,
-            guess.eta0,
-            guess.fwhm_xi,
-            guess.fwhm_eta,
-            guess.phi,
-            guess.off,
+            cast(u.Quantity, guess.xi0).value,
+            cast(u.Quantity, guess.eta0).value,
+            cast(u.Quantity, guess.fwhm_xi).value,
+            cast(u.Quantity, guess.fwhm_eta).value,
+            cast(u.Quantity, guess.phi).value,
+            0,
         )
     y, x = posmap
     theta = np.arctan2(
-        y - guess.eta0.to(u.radian).value, x - guess.eta0.to(u.radian).value
+        y - cast(u.Quantity, guess.eta0).to(u.radian).value,
+        x - cast(u.Quantity, guess.xi0).to(u.radian).value,
     )
 
     # Compute model
     if n_multipoles == 0:
-        amps = np.array([[guess.amp.value, 0]])
+        amps = np.array([[cast(u.Quantity, guess.amp).value, 0]])
     else:
         amps = multipole_decomp(base_beam, imap, ivar, n_multipoles, theta, True)
-    model = multipole_expansion(base_beam, amps, theta)
+    model = imap.copy()
+    model[...] = multipole_expansion(base_beam, amps, theta)
+    model = cast(
+        ndmap,
+        multipole_expansion(base_beam, amps, theta),
+    )
 
     # Convert to aman
     m_units = u.Unit(map_units)
@@ -238,28 +273,76 @@ def fit_multipole_map(
     return aman, model
 
 
-def gaussian2d_from_aman(posmap, aman):
+def gaussian2d_from_aman(
+    posmap: Float[ndmap, "2 ny nx"],
+    aman: AxisManager,
+) -> Float[ndmap, "ny nx"]:
+    """Evaluate a Gaussian beam from an AxisManager.
+
+    Parameters
+    ----------
+    posmap : Float[ndmap, "2 ny nx"]
+        Beam coordinates. The first component is `eta` and the second is
+        `xi`.
+    aman : AxisManager
+        AxisManager containing the Gaussian parameters. If it contains a
+        `gaussian` field, that field is used. Otherwise the parameters are
+        read directly from `aman`.
+
+    Returns
+    -------
+    beam : Float[ndmap, "ny nx"]
+        Gaussian beam evaluated at `posmap`.
+    """
     if "gaussian" in aman._fields:
         aman = aman.gaussian
+
     return gaussian2d(
         posmap,
-        aman.amp.value,
-        aman.xi0.to(u.radian).value,
-        aman.eta0.to(u.radian).value,
-        aman.fwhm_xi.to(u.radian).value,
-        aman.fwhm_eta.to(u.radian).value,
-        aman.phi.to(u.radian).value,
-        aman.off.value,
+        cast(u.Quantity, aman.amp).value,
+        cast(u.Quantity, aman.xi0).to(u.radian).value,
+        cast(u.Quantity, aman.eta0).to(u.radian).value,
+        cast(u.Quantity, aman.fwhm_xi).to(u.radian).value,
+        cast(u.Quantity, aman.fwhm_eta).to(u.radian).value,
+        cast(u.Quantity, aman.phi).to(u.radian).value,
+        cast(u.Quantity, aman.off).value,
     )
 
 
-def gaussian2d_multipoles_from_aman(posmap, aman):
+def gaussian2d_multipoles_from_aman(
+    posmap: Float[ndmap, "2 ny nx"],
+    aman: AxisManager,
+) -> Float[ndmap, "ny nx"]:
+    """Evaluate a Gaussian multipole beam from an AxisManager.
+
+    Parameters
+    ----------
+    posmap : Float[ndmap, "2 ny nx"]
+        Beam coordinates. The first component is `eta` and the second is
+        `xi`.
+    aman : AxisManager
+        AxisManager containing `gaussian` and `gauss_multipole` fields.
+        `gaussian` contains the base Gaussian parameters and
+        `gauss_multipole.amps` contains the multipole amplitudes.
+
+    Returns
+    -------
+    beam : Float[ndmap, "ny nx"]
+        Gaussian multipole beam evaluated at `posmap`.
+    """
     base_beam = gaussian2d_from_aman(posmap, aman.gaussian)
-    base_beam -= aman.gaussian.off.value
-    base_beam /= aman.gaussian.amp.value
+    base_beam -= cast(u.Quantity, aman.gaussian.off).value
+    base_beam /= cast(u.Quantity, aman.gaussian.amp).value
+
     y, x = posmap
     theta = np.arctan2(
-        y - aman.gaussian.eta0.to(u.radian).value,
-        x - aman.gaussian.eta0.to(u.radian).value,
+        y - cast(u.Quantity, aman.gaussian.eta0).to(u.radian).value,
+        x - cast(u.Quantity, aman.gaussian.xi0).to(u.radian).value,
     )
-    return multipole_expansion(base_beam, aman.gauss_multipole.amps.value, theta)
+    amps = (np.array(aman.gauss_multipole.amps.value),)
+
+    model = posmap[0].copy()
+    model[...] = multipole_expansion(base_beam, amps, theta)
+    model = cast(ndmap, multipole_expansion(base_beam, amps, theta))
+
+    return model

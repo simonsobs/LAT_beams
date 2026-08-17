@@ -1,3 +1,93 @@
+r"""
+Fit and evaluate a Bessel+multipole beam model with an $r^{-3}$ wing.
+
+The full beam model is:
+
+$$
+M(r,\theta)
+=
+[1-w(r,\theta)]
+\left[
+b_{\rm core}
++
+\sum_{n_0\leq n_1}
+\frac{J_{n_0}(\ell_{\max}r)}{\ell_{\max}r}
+\frac{J_{n_1}(\ell_{\max}r)}{\ell_{\max}r}
+\left(
+a_{n_0,n_1,0}
++
+\sum_{m>0}
+\left[
+a_{n_0,n_1,m,c}\cos(m\theta)
++
+a_{n_0,n_1,m,s}\sin(m\theta)
+\right]
+\right)
+\right]
++
+w(r,\theta)
+\frac{\exp[F(\theta)c_a]}{r^3}
++
+b,
+$$
+
+where
+
+$$
+F(\theta)
+=
+\left[
+1,\,
+\cos\theta,\,
+\sin\theta,\,
+\ldots,\,
+\cos(N\theta),\,
+\sin(N\theta)
+\right],
+$$
+
+and
+
+$$
+r_0(\theta)=\exp[F(\theta)c_{r_0}]
+$$
+
+The wing transition is
+
+$$
+w(r,\theta)
+=
+\begin{cases}
+0, & r \leq r_0-\delta/2,\\
+10u^3-15u^4+6u^5,
+    & r_0-\delta/2 < r < r_0+\delta/2,\\
+1, & r \geq r_0+\delta/2,
+\end{cases}
+$$
+
+with
+
+$$
+\delta=\frac{0.3r_0}{p},
+\qquad
+u=\frac{r-(r_0-\delta/2)}{\delta}.
+$$
+
+`fit_bessel_map` fits the model using variable projection. For
+fixed wing parameters, the Bessel-core coefficients and offsets are
+solved with a weighted linear least-squares problem, while the wing
+parameters are optimized nonlinearly. The nonlinear fit uses an
+analytic Jacobian, Fourier regularization, and a penalty against
+negative model values.
+
+If requested, the fit covariance is computed from the joint
+Gauss-Newton Hessian, including the linear-nonlinear cross-covariance.
+`bessel_profile_covariance` propagates this covariance to radial
+profiles and beam window functions.
+
+See the individual function docstrings for details.
+"""
+
 from typing import cast
 
 import numba
@@ -6,6 +96,7 @@ import scipy.linalg
 import scipy.optimize
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
+from jaxtyping import Float
 from numpy.typing import NDArray
 from pixell.enmap import ndmap
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
@@ -16,76 +107,39 @@ from ..core import bessel_term_cached
 
 @numba.jit(nopython=True, fastmath=True, cache=True)
 def fast_wing_transition(
-    r_fit: NDArray,
-    loga_coeff: NDArray,
-    logr_coeff: NDArray,
+    r_fit: Float[NDArray, "n_pixels"],
+    loga_coeff: Float[NDArray, "n_ang"],
+    logr_coeff: Float[NDArray, "n_ang"],
     p_val: float,
-    F_mat_T: NDArray,
-) -> tuple[NDArray, NDArray]:
+    F_mat_T: Float[NDArray, "n_pixels n_ang"],
+) -> tuple[Float[NDArray, "n_pixels"], Float[NDArray, "n_pixels"]]:
     r"""
-    Evaluate the positive $r^{-3}$ wing and smooth core-to-wing transition.
+    The wing parameterization and transition equations are given in the
+    module docstring. This function evaluates them at the supplied radial
+    coordinates and Fourier design matrix.
 
-    The wing amplitude and transition radius are Fourier expansions in
-    angle:
-
-    $$
-    a(\theta) = \exp[F(\theta)\,c_a], \qquad
-    r_0(\theta) = \exp[F(\theta)\,c_{r_0}]
-    $$
-
-    giving the asymptotic wing
-    ;
-
-    $$
-    W(r,\theta) = \frac{a(\theta)}{r^3}
-    $$
-
-    The mixing weight is 0 below
-
-    $$
-    r_{\rm lo} = r_0 - \frac{\delta}{2}
-    $$
-
-    and 1 above
-
-    $$
-    r_{\rm hi} = r_0 + \frac{\delta}{2}
-    $$
-
-    and a quintic smoothstep within the transition region.
-    Where
-
-    $$
-    \delta = \frac{0.3\,r_0}{p}
-    $$
-
-    and
-
-    $$
-    w(u) = 10u^3 - 15u^4 + 6u^5
-    $$
-
-    The sharpness parameter is constrained to $0.5 \leq p \leq 20$.
+    The transition sharpness is clipped to $0.5 \leq p \leq 20$, and the
+    radius and amplitude are floored/capped as needed for numerical stability.
 
     Parameters
     ----------
-    r_fit : NDArray
+    r_fit : Float[NDArray, "n_pixels"]
         Radial coordinates of the fitted pixels, in radians.
-    loga_coeff : NDArray
+    loga_coeff : Float[NDArray, "n_ang"]
         Fourier coefficients of $\log a(\theta)$.
-    logr_coeff : NDArray
+    logr_coeff : Float[NDArray, "n_ang"]
         Fourier coefficients of $\log r_0(\theta)$.
     p_val : float
         Logarithm of the transition sharpness, $\log p$.
-    F_mat_T : NDArray
+    F_mat_T : Float[NDArray, "n_pixels n_ang"]
         Transposed Fourier design matrix with shape
         `(n_pixels, n_fourier)`.
 
     Returns
     -------
-    pure_wing : NDArray
+    pure_wing : Float[NDArray, "n_pixels"]
         Unblended wing model $a(\theta)/r^3$ at each fitted pixel.
-    wing_weight : NDArray
+    wing_weight : Float[NDArray, "n_pixels"]
         Core-to-wing mixing weight, ranging from 0 to 1.
     """
     loga = F_mat_T @ loga_coeff
@@ -121,61 +175,56 @@ def fast_wing_transition(
 
 
 def bessel_beam(
-    posmap: ndmap,
+    posmap: Float[ndmap, "2 nx ny"],
     xi0: float,
     eta0: float,
     ell_max: float,
-    amps: NDArray[np.floating],
+    amps: Float[NDArray, "n_bessel n_bessel n_multipoles 2"],
     bessel_off: float,
-    wing_params: NDArray[np.floating],
+    wing_params: Float[NDArray, "n_wing_params"],
     off: float,
-) -> ndmap:
+) -> Float[ndmap, "nx ny"]:
     r"""
-    Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing model.
+    Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing beam model.
 
-    The model is
+    The full model and its parameterization are described in the module
+    docstring. In particular, the Bessel core is evaluated using the
+    normalized terms
 
     $$
-    M(r,\theta) =
-    [1-w(r,\theta)]\,C(r,\theta)
-    + w(r,\theta)\,W(r,\theta)
-    + b,
+    \frac{J_n(\ell_{\max}r)}{\ell_{\max}r}
     $$
 
-    where $C$ is the Bessel/multipole core, $W$ is the positive
-    asymptotic wing, $w$ is the smooth transition weight, and $b$ is
-    the global offset.
+    which are then summed up as the multipole expansion of the pairwise products
+    of the Bessel terms.
 
-    The wing transition and its parameterization are defined by
-    `fast_wing_transition`. See that function for details.
+    The wing and transition is evaluated by `fast_wing_transition`
+    using the same implementation as the fitting code.
 
     Parameters
     ----------
-    posmap : ndmap, ndmap
-        Two-dimensional coordinate maps `(eta, xi)` in radians.
+    posmap : Float[ndmap, "2 nx ny"]
+        Two-dimensional coordinate maps ``(eta, xi)`` in radians.
     xi0 : float
-        Beam center in the `xi` coordinate, in radians.
+        Beam center in the ``xi`` coordinate, in radians.
     eta0 : float
-        Beam center in the `eta` coordinate, in radians.
+        Beam center in the ``eta`` coordinate, in radians.
     ell_max : float
         Maximum multipole used to construct the Bessel basis.
-    amps : NDArray[np.floating]
-        Bessel/multipole coefficients with shape
-        `(n_bessel, n_bessel, n_multipoles, 2)`. The final axis
-        contains cosine and sine coefficients.
+    amps : Float[NDArray, "n_bessel n_bessel n_multipoles 2"]
+        Bessel/multipole coefficients. The final axis contains cosine and
+        sine coefficients.
     bessel_off : float
         Additive offset applied to the Bessel core.
-    wing_params : NDArray[np.floating]
-        Nonlinear wing parameters containing the Fourier coefficients
-        of $\log a$, the Fourier coefficients of $\log r_0$, and
-        $\log p$, in that order.
+    wing_params : Float[NDArray, "n_params"]
+        Nonlinear wing parameters passed to `fast_wing_transition`.
     off : float
         Global additive model offset.
 
     Returns
     -------
-    bessel_beam : ndmap
-        Model evaluated on the same two-dimensional grid as `posmap`.
+    ndmap
+        Model evaluated on the same two-dimensional grid as ``posmap``.
     """
 
     n_bessel = amps.shape[0]
@@ -265,23 +314,50 @@ def bessel_beam(
     return ndmap(model.reshape(orig_shape), posmap.wcs)
 
 
-def bessel_beam_from_aman(posmap, aman):
+def bessel_beam_from_aman(
+    posmap: Float[ndmap, "2 nx ny"],
+    aman: AxisManager,
+) -> Float[ndmap, "nx ny"]:
+    """
+    Evaluate a fitted Bessel beam from an `AxisManager`.
+
+    Parameters
+    ----------
+    posmap : Float[ndmap, "2 nx ny"]
+        Two-dimensional beam-coordinate maps `(eta, xi)` in radians.
+    aman : AxisManager
+        Fitted parameter container produced by `fit_bessel_map`.
+
+    Returns
+    -------
+    beam_model : Float[ndmap, "nx ny"]
+        Beam model evaluated on `posmap` using the fitted parameters.
+    """
+    xi0 = cast(u.Quantity, aman.gauss.xi0)
+    eta0 = cast(u.Quantity, aman.gauss.eta0)
+
+    ell_max = cast(float, aman.bessel.ell_max.value)
+    amps = cast(NDArray[np.floating], aman.bessel.amps.value)
+    bessel_off = cast(float, aman.bessel.bessel_off.value)
+    wing_params = cast(NDArray[np.floating], aman.bessel.wing_params.value)
+    off = cast(float, aman.bessel.off.value)
+
     return bessel_beam(
         posmap,
-        aman.gauss.xi0.to(u.radian).value,
-        aman.gauss.eta0.to(u.radian).value,
-        aman.bessel.ell_max.value,
-        aman.bessel.amps.value,
-        aman.bessel.bessel_off.value,
-        aman.bessel.wing_params.value,
-        aman.bessel.off.value,
+        float(xi0.to(u.radian).value),
+        float(eta0.to(u.radian).value),
+        ell_max,
+        amps,
+        bessel_off,
+        wing_params,
+        off,
     )
 
 
 def fit_bessel_map(
-    imap: ndmap,
-    ivar: ndmap,
-    posmap: ndmap,
+    imap: Float[ndmap, "nx ny"],
+    ivar: Float[ndmap, "nx ny"],
+    posmap: Float[ndmap, "2 nx ny"],
     guess: AxisManager,
     map_units: str = "pW",
     n_bessel: int = 10,
@@ -293,7 +369,7 @@ def fit_bessel_map(
     skip_multipoles: list[int] = [],
     calc_cov: bool = False,
     n_opt_pixels: int = 6000,
-) -> tuple[AxisManager, ndmap]:
+) -> tuple[AxisManager, Float[ndmap, "nx ny"]]:
     r"""
     Fit a Bessel/multipole core plus a smooth positive r^-3 wing.
 
@@ -561,11 +637,11 @@ def fit_bessel_map(
 
     Parameters
     ----------
-    imap : ndmap
+    imap : Float[ndmap, "nx ny"]
         Input map to fit.
-    ivar : ndmap
+    ivar : Float[ndmap, "nx ny"]
         Inverse-variance map corresponding to `imap`.
-    posmap : ndmap
+    posmap : Float[ndmap, "2 nx ny"]
         Position maps `(eta, xi)` in radians.
     guess : AxisManager
         Initial source position, FWHM, and offset estimates.
@@ -621,14 +697,14 @@ def fit_bessel_map(
         - `wing_errors`: `(2 * n_ang + 1,)` nonlinear parameter errors.
         - `core_cov`: `(n_linear, n_linear)` linear covariance matrix.
 
-    beam_model : ndmap
+    beam_model : Float[ndmap, "nx ny"]
         Final fitted model evaluated on the full input position map.
     """
     ell_max = np.pi * (d / lmd).decompose().value
 
     eta, xi = posmap
-    eta0 = guess.eta0.to(u.radian).value
-    xi0 = guess.xi0.to(u.radian).value
+    eta0 = float(cast(u.Quantity, guess.eta0).to(u.radian).value)
+    xi0 = float(cast(u.Quantity, guess.xi0).to(u.radian).value)
 
     xi = xi - xi0
     eta = eta - eta0
@@ -636,7 +712,10 @@ def fit_bessel_map(
     theta = np.arctan2(eta, xi)
     r = np.hypot(xi, eta)
 
-    fwhm = 0.5 * (guess.fwhm_xi.to(u.radian).value + guess.fwhm_eta.to(u.radian).value)
+    fwhm = 0.5 * (
+        float(cast(u.Quantity, guess.fwhm_xi).to(u.radian).value)
+        + float(cast(u.Quantity, guess.fwhm_eta).to(u.radian).value)
+    )
 
     ivar = ivar.copy()
     ivar[r == 0] = 0
@@ -692,9 +771,11 @@ def fit_bessel_map(
 
     # Construct the Bessel basis once for all fitting pixels.
     b_terms = np.column_stack(
-        [bessel_term_cached(r_fit, ell_max, n) for n in range(n_bessel)]
+        [
+            cast(NDArray[np.floating], bessel_term_cached(r_fit, ell_max, n))
+            for n in range(n_bessel)
+        ]
     )
-
     base_beams = b_terms[:, triu_indices[0]] * b_terms[:, triu_indices[1]]
 
     base_beams = np.nan_to_num(
@@ -1162,18 +1243,18 @@ def fit_bessel_map(
 
 
 def compute_full_covariance(
-    params,
-    linear,
-    B_core,
-    w,
-    F_mat_T,
-    r_fit,
-    scale,
-    n_core,
-    n_ang,
-    n_pixels,
-    sigma2,
-):
+    params: Float[NDArray, "n_nonlinear"],
+    linear: Float[NDArray, "n_linear"],
+    B_core: Float[NDArray, "n_pixels n_core"],
+    w: Float[NDArray, "n_pixels"],
+    F_mat_T: Float[NDArray, "n_pixels n_ang"],
+    r_fit: Float[NDArray, "n_pixels"],
+    scale: Float[NDArray, "n_linear"],
+    n_core: int,
+    n_ang: int,
+    n_pixels: int,
+    sigma2: float,
+) -> Float[NDArray, "n_params n_params"]:
     r"""
     Calculate the joint covariance of the linear and nonlinear fit
     parameters, including their cross-covariance.
@@ -1233,21 +1314,21 @@ def compute_full_covariance(
 
     Parameters
     ----------
-    params : NDArray[np.floating]
+    params : Float[NDArray, "n_nonlinear"]
         Final nonlinear parameters. Shape `(2 * n_ang + 1,)`.
-    linear : NDArray[np.floating]
+    linear : Float[NDArray, "n_linear"]
         Final full-pixel linear solution containing the Bessel coefficients
         followed by the global offset. Shape `(n_linear,)`.
-    B_core : NDArray[np.floating]
+    B_core : Float[NDArray, "n_pixels n_core"]
         Unweighted Bessel design matrix. Shape `(n_pixels, n_core)`.
-    w : NDArray[np.floating]
+    w : Float[NDArray, "n_pixels"]
         Pixel weights, equal to the square root of the inverse variance.
         Shape `(n_pixels,)`.
-    F_mat_T : NDArray[np.floating]
+    F_mat_T : Float[NDArray, "n_pixels n_ang"]
         Fourier design matrix transposed. Shape `(n_pixels, n_ang)`.
-    r_fit : NDArray[np.floating]
+    r_fit : Float[NDArray, "n_pixels"]
         Radius of each fitted pixel. Shape `(n_pixels,)`.
-    scale : NDArray[np.floating]
+    scale : Float[NDArray, "n_linear"]
         Column scaling used for the linear solve. Shape `(n_linear,)`.
     n_core : int
         Number of Bessel-core linear coefficients.
@@ -1260,8 +1341,8 @@ def compute_full_covariance(
 
     Returns
     -------
-    full_cov : NDArray[np.floating]
-        Joint covariance of ttrhe linear and nonlinear parameters. Shape
+    full_cov : Float[NDArray, "n_params n_params"]
+        Joint covariance of the linear and nonlinear parameters. Shape
         `(n_linear + 2 * n_ang + 1, n_linear + 2 * n_ang + 1)`.
     """
     # TODO: The regularization and penalization terms have constants that are hardcoded in a few spots, need to fix that
@@ -1395,16 +1476,16 @@ def compute_full_covariance(
         check_finite=False,
     )
 
-    return sigma2 * covariance
+    return sigma2 * cast(NDArray[np.floating], covariance)
 
 
 def bessel_profile_covariance(
-    fit,
-    posmap,
+    fit: AxisManager,
+    posmap: Float[ndmap, "2 nx ny"],
     lmax: int,
     n_modes: int,
     n_radial: int = 200,
-) -> tuple[AxisManager, ndmap]:
+) -> tuple[AxisManager, Float[ndmap, "nx ny"]]:
     r"""
     Propagate the full fit and covariance into a radial beam profile and b_l and their covariances.
     The covariance is propagated using a linearized model,
@@ -1434,7 +1515,7 @@ def bessel_profile_covariance(
     fit : AxisManager
         Output from `fit_bessel_map`. Must contain `full_cov`, `amps`,
         `wing_params`, and `off`.
-    posmap : tuple[NDArray, NDArray]
+    posmap : Float[ndmap, "2 nx ny"]
         Beam-coordinate maps `(eta, xi)` used to evaluate the model.
     lmax : int
         Maximum multipole for the window function.
@@ -1450,7 +1531,7 @@ def bessel_profile_covariance(
     prof_cov : AxisManager
         AxisManager containing the normalized radial profile, beam window
         function, covariance eigenmodes, and normalization information.
-    model_no_off : ndmap
+    model_no_off : Float[ndmap, "nx ny"]
         The model evaluated at posmap without the offset.
     """
     full_cov = np.asarray(fit.full_cov)
@@ -1473,9 +1554,9 @@ def bessel_profile_covariance(
         n_modes = min(n_modes, len(evals))
         evals, evecs = evals[:n_modes], evecs[:, :n_modes]
 
-    xi0 = float(fit.xi0.to(u.rad).value)
-    eta0 = float(fit.eta0.to(u.rad).value)
-    ell_max = float(fit.ell_max.value)
+    xi0 = float(cast(u.Quantity, fit.xi0).to(u.rad).value)
+    eta0 = float(cast(u.Quantity, fit.eta0).to(u.rad).value)
+    ell_max = float(cast(u.Quantity, fit.ell_max).value)
 
     model = bessel_beam(posmap, xi0, eta0, ell_max, amps, 0.0, wing_params, off)
     model_flat = np.asarray(model).ravel()
@@ -1491,7 +1572,7 @@ def bessel_profile_covariance(
     n_modes_actual = len(evals)
     J_mode = np.empty((n_pix, n_modes_actual), dtype=float)
     idx = np.asarray(fit.bessel_idx)
-    n_core = int(fit.n_core)
+    n_core = int(cast(int, fit.n_core))
 
     for i, (direction, eval_i) in enumerate(zip(evecs.T, evals)):
         sigma = np.sqrt(eval_i)

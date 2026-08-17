@@ -2,8 +2,6 @@ import logging
 
 import numpy as np
 from astropy import units as u
-from numpy.typing import NDArray
-from pixell.enmap import ndmap
 from scipy.interpolate import PchipInterpolator
 from scipy.optimize import minimize
 from scipy.special import factorial, jv, spherical_jn
