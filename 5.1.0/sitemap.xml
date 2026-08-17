@@ -1,63 +1,63 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/SUMMARY/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/SUMMARY/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/beam_utils/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/beam_utils/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/mapmaking/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/mapmaking/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/plotting/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/plotting/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/fitting/core/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/fitting/core/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/fitting/profile/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/fitting/profile/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/fitting/tod/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/fitting/tod/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/fitting/map/base/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/fitting/map/base/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/fitting/map/bessel/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/fitting/map/bessel/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/fitting/map/gauss/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/fitting/map/gauss/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/utils/config/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/utils/config/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/utils/io/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/utils/io/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/utils/jobs/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/utils/jobs/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
     <url>
-         <loc>https://skhrg.github.io/LAT_beams/5.1.0/reference/utils/log/</loc>
+         <loc>https://simonsobs.github.io/LAT_beams/5.1.0/reference/utils/log/</loc>
          <lastmod>2026-08-17</lastmod>
     </url>
 </urlset>
