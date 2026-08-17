@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from astropy import units as u
 from pixell.enmap import ndmap
-from scipy.optimize import minimize
+from scipy.optimize import minimize, least_squares
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
 
@@ -35,7 +35,7 @@ def fit_gauss_map(
         but they will have the same value.
     mask_size : float, default: -1
         If this is >0 then a mask will be applies to ivar
-        such that only data within `mask_size*(guess.fwhm_xi + guess.fwhm_eta)/2`
+        such that only data within `mask_size`
         of `(guess.xi0, guess.eta0)` is used in the fit.
 
     Returns
@@ -76,8 +76,6 @@ def fit_gauss_map(
             guess.fwhm_xi / 3,
             guess.fwhm_eta / 3,
             0,
-            # r0,
-            # 0,
         ],
         [
             np.max(x) + guess.fwhm_xi,
@@ -117,8 +115,17 @@ def fit_gauss_map(
     # Mask out things too far from the starting center
     if mask_size > 0:
         r = np.sqrt((x - x0[0]) ** 2 + (y - x0[1]) ** 2)
-        ivar = ivar.copy()
-        ivar[r > mask_size * 0.5 * (guess.fwhm_xi + guess.fwhm_eta)] = 0
+        msk = r < mask_size
+    
+        fit_imap = np.asarray(imap)[msk]
+        fit_ivar = np.asarray(ivar)[msk]
+        fit_posmap = np.asarray(posmap)[:, msk]
+    else:
+        fit_imap = np.asarray(imap)
+        fit_ivar = np.asarray(ivar)
+        fit_posmap = np.asarray(posmap)
+    
+    w = np.sqrt(fit_ivar)
 
     def _to_pars(coeffs):
         dx, dy, off, amp = coeffs[:4]
@@ -131,18 +138,22 @@ def fit_gauss_map(
 
         return dx, dy, off, amp, fwhm_xi, fwhm_eta, phi
 
-    def _objective(
-        coeffs,
-    ):
+    def _resid(coeffs):
         dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = _to_pars(coeffs)
-        beam = gaussian2d(posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
+        beam = gaussian2d(fit_posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
 
-        diff = imap - beam
-        chisq = np.nansum((diff**2) * ivar)
-        return chisq
+        return (w * (fit_imap - beam)).ravel() 
 
-    res = minimize(_objective, x0, bounds=bounds)
+    # def _objective(
+    #     coeffs,
+    # ):
+    #     resid = _resid(coeffs)
+    #     chisq = np.nansum(resid**2)
+    #     return chisq
+
+    res = least_squares(_resid, x0, bounds=np.array(bounds).T, method="trf", x_scale="jac",)
     if not res.success:
+        print(res)
         return None, None
 
     # Convert to aman
