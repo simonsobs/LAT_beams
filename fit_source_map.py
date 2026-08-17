@@ -313,7 +313,7 @@ for i, j in enumerate(joblist):
         guess,
         "pW",
         cfg.sym_gauss,
-        1000,
+        -1,
     )
     if gauss_params is None or model is None:
         msg = "Gauss fit failed"

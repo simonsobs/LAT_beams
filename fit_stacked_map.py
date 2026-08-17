@@ -6,13 +6,13 @@ from typing import cast
 import astropy.units as u
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+import soma.beams as sb
 import sqlalchemy as sqy
 from astropy import constants as const
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
 from pixell import enmap
-from pixell.mpi import FakeCommunicator as Comm
-from scipy.interpolate import PchipInterpolator
 from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
@@ -37,6 +37,9 @@ from lat_beams.utils import (
     setup_jobs,
     setup_paths,
 )
+
+palette = sns.color_palette("colorblind")
+sns.set_palette(palette)
 
 
 def get_jobdict(jdb):
@@ -102,6 +105,88 @@ def downsample(x, *ys, max_points=2000):
         return (x, *[np.asarray(y) for y in ys])
     idx = np.linspace(0, len(x) - 1, max_points).astype(int)
     return (x[idx], *[np.asarray(y)[idx] for y in ys])
+
+
+def plot_model_maps(
+    model,
+    imap,
+    off,
+    eta0,
+    xi0,
+    posmap,
+    pixsize,
+    extent,
+    plot_dir,
+    job,
+    log_thresh,
+    n_multipoles,
+):
+    plot_dir_spl = os.path.join(
+        plot_dir,
+        "stacks",
+        job.tags["split"],
+        job.tags["split_str"],
+        job.tags["det_split"],
+        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+    )
+    os.makedirs(plot_dir_spl, exist_ok=True)
+    ypix, xpix = enmap.sky2pix(imap.shape, imap.wcs, ([[eta0], [xi0]]))
+    y0, x0 = float(ypix[0]), float(xpix[0])
+
+    maps = [(model - off, "model"), (imap - model, "model_resid"), (imap - off, "")]
+    for omap, name in maps:
+        if "resid" not in name:
+            modes = sb.beam_modes(omap, mmax=n_multipoles + 2, center=(y0, x0))  # type: ignore
+            mode_data = {
+                "ell": np.tile(modes["ell"], n_multipoles),
+                "rho": np.concatenate(
+                    [modes["rho"][m] for m in range(1, n_multipoles + 1)]
+                ),
+                "mode": np.repeat(
+                    [f"m={m}" for m in np.arange(1, n_multipoles + 1)],
+                    len(modes["ell"]),
+                ),
+            }
+
+            plt.close()
+            sns.lineplot(
+                data=mode_data,
+                x="ell",
+                y="rho",
+                hue="mode",
+            )
+            plt.yscale("log")
+            plt.xlim(0, modes["lmax"])
+            plt.xlabel(r"$\ell$")
+            plt.ylabel(r"$b_m(\ell)/b_0(\ell)$")
+            label = "_T_stack" + "_" * (len(name) > 0) + name
+            title = f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}"
+            plt.title(f"{title}{label.replace('_', ' ')}")
+            plt.savefig(
+                os.path.join(
+                    plot_dir_spl, f"{title.replace(' ', '_')}_modes{label}.png"
+                ),
+                bbox_inches="tight",
+            )
+            plt.close()
+
+        if name == "":
+            continue
+
+        plot_map_complete(
+            omap,
+            posmap,
+            pixsize,
+            extent,
+            (0, 0),
+            plot_dir_spl,
+            f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}",
+            comps="T",
+            log_thresh=log_thresh,
+            append="stack_" + name,
+            units='"',
+            lognorm=1,
+        )
 
 
 # Get settings
@@ -296,6 +381,57 @@ for split in jobdict.keys():
                         to_plot_r[sc] += [si] * (np.sum(mmsk) + np.sum(dmsk))
                         to_plot_l[sc] += [si] * (2 * n)
 
+                    if jobstr not in stack_jobs:
+                        logger.warning(
+                            "Stack job missing for %s. Skipping maps.", jobstr
+                        )
+                        continue
+                    stack_job = stack_jobs[jobstr]
+                    map_path = stack_job.tags["map_stack"]
+                    fit_path = os.path.join(
+                        split,
+                        spl,
+                        f"{det_split}_{epoch[0]}_{epoch[1]}",
+                    )
+                    if not os.path.isfile(map_path):
+                        logger.warning(
+                            "Missing stacked map %s. Skipping maps.", map_path
+                        )
+                        continue
+                    imap = cast(enmap.ndmap, enmap.read_map(map_path)[0])
+                    imap = enmap.unapply_window(imap, order=0)
+                    fit = AxisManager.load(out_file, fit_path)
+                    model = cast(
+                        enmap.ndmap,
+                        enmap.read_map(
+                            os.path.join(
+                                data_dir,
+                                "stacks",
+                                job.tags["split"],
+                                job.tags["split_str"],
+                                job.tags["det_split"],
+                                f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+                                f"{job.tags['split_str']}_{job.tags['det_split']}_"
+                                f"{job.tags['epoch_start']}_{job.tags['epoch_end']}_model.fits",
+                            )
+                        )
+                        + fit.bessel.off.value,
+                    )
+                    posmap = np.rad2deg(imap.posmap()) * 3600
+                    plot_model_maps(
+                        model,
+                        imap,
+                        fit.bessel.off.value,
+                        fit.bessel.eta0.value,
+                        fit.bessel.xi0.value,
+                        posmap,
+                        pixsize,
+                        cfg.extent,
+                        plot_dir,
+                        job,
+                        cfg.log_thresh,
+                        cfg.n_multipoles,
+                    )
                     continue
 
                 job.mark_visited()
@@ -309,6 +445,7 @@ for split in jobdict.keys():
 
                 map_path = stack_job.tags["map_stack"]
                 ivar_path = stack_job.tags["map_ivar"]
+                # ivar_naive_path = stack_job.tags["ivar_stack"]
 
                 if not os.path.isfile(map_path) or not os.path.isfile(ivar_path):
                     msg = "Map missing"
@@ -316,9 +453,11 @@ for split in jobdict.keys():
                     continue
                 imap = enmap.read_map(map_path)[0]  # Just T for now
                 ivar = enmap.read_map(ivar_path)[0]  # Just T for now
+                # ivar_naive = enmap.read_map(ivar_naive_path)[0]  # Just T for now
                 imap = enmap.unapply_window(imap, order=0)
                 imap = cast(enmap.ndmap, imap)
                 ivar = cast(enmap.ndmap, ivar)
+                # ivar_naive = cast(enmap.ndmap, ivar_naive)
                 posmap = imap.posmap()
 
                 # Setup aman for output
@@ -342,7 +481,7 @@ for split in jobdict.keys():
                     guess,
                     "pW",
                     cfg.sym_gauss,
-                    1000,
+                    min(band_mask_size, 1.5 * guess.fwhm_xi),
                 )
                 if gauss_params is None or model is None:
                     msg = "Gauss fit failed!"
@@ -548,55 +687,41 @@ for split in jobdict.keys():
                     overwrite=True,
                 )
                 posmap = np.rad2deg(posmap) * 3600
-                resid = imap.copy()
-                resid -= model
+                resid = imap - model
+                data_dir_spl = os.path.join(
+                    data_dir,
+                    "stacks",
+                    job.tags["split"],
+                    job.tags["split_str"],
+                    job.tags["det_split"],
+                    f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+                )
+                os.makedirs(data_dir_spl, exist_ok=True)
                 for omap, name in [
                     (model - aman.bessel.off.value, "model"),
-                    (resid, "model_resi"),
+                    (resid, "model_resid"),
                 ]:
-                    data_dir_spl = os.path.join(
-                        data_dir,
-                        "stacks",
-                        job.tags["split"],
-                        job.tags["split_str"],
-                        job.tags["det_split"],
-                        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
-                    )
-                    plot_dir_spl = os.path.join(
-                        plot_dir,
-                        "stacks",
-                        job.tags["split"],
-                        job.tags["split_str"],
-                        job.tags["det_split"],
-                        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
-                    )
-                    os.makedirs(data_dir_spl, exist_ok=True)
-                    os.makedirs(plot_dir_spl, exist_ok=True)
-
                     path = os.path.join(
                         data_dir_spl,
-                        f"{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}_{name}.fits",
+                        f"{job.tags['split_str']}_{job.tags['det_split']}_"
+                        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}_{name}.fits",
                     )
-                    enmap.write_map(
-                        path,
-                        omap,
-                        "fits",
-                        allow_modify=True,
-                    )
-                    plot_map_complete(
-                        omap,
-                        posmap,
-                        pixsize,
-                        cfg.extent,
-                        (0, 0),
-                        plot_dir_spl,
-                        f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} {name}",
-                        comps="T",
-                        log_thresh=cfg.log_thresh,
-                        append="stack_" + name,
-                        units='"',
-                        lognorm=1,
-                    )
+                    enmap.write_map(path, omap, "fits", allow_modify=True)
+
+                plot_model_maps(
+                    model,
+                    imap,
+                    aman.bessel.off.value,
+                    aman.bessel.eta0.value,
+                    aman.bessel.xi0.value,
+                    posmap,
+                    pixsize,
+                    cfg.extent,
+                    plot_dir,
+                    job,
+                    cfg.log_thresh,
+                    cfg.n_multipoles,
+                )
                 logger.info("Saved")
                 set_tag(job, "message", "Success!")
                 job.jstate = cast(sqy.Column[str], jobdb.JState.done)
