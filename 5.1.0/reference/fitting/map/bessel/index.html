@@ -540,6 +540,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.bessel.bessel_beam_from_aman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bessel_beam_from_aman
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lat_beams.fitting.map.bessel.bessel_profile_covariance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -607,34 +618,6 @@
     
   
     gauss
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../map/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    map
   
 
     
@@ -997,6 +980,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.bessel.bessel_beam_from_aman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bessel_beam_from_aman
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lat_beams.fitting.map.bessel.bessel_profile_covariance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1066,6 +1060,81 @@
 <a id="lat_beams.fitting.map.bessel"></a>
     <div class="doc doc-contents first">
 
+        <p>Fit and evaluate a Bessel+multipole beam model with an <span class="arithmatex">\(r^{-3}\)</span> wing.</p>
+<p>The full beam model is:</p>
+<div class="arithmatex">\[
+M(r,\theta)
+=
+[1-w(r,\theta)]
+\left[
+b_{\rm core}
++
+\sum_{n_0\leq n_1}
+\frac{J_{n_0}(\ell_{\max}r)}{\ell_{\max}r}
+\frac{J_{n_1}(\ell_{\max}r)}{\ell_{\max}r}
+\left(
+a_{n_0,n_1,0}
++
+\sum_{m&gt;0}
+\left[
+a_{n_0,n_1,m,c}\cos(m\theta)
++
+a_{n_0,n_1,m,s}\sin(m\theta)
+\right]
+\right)
+\right]
++
+w(r,\theta)
+\frac{\exp[F(\theta)c_a]}{r^3}
++
+b,
+\]</div>
+<p>where</p>
+<div class="arithmatex">\[
+F(\theta)
+=
+\left[
+1,\,
+\cos\theta,\,
+\sin\theta,\,
+\ldots,\,
+\cos(N\theta),\,
+\sin(N\theta)
+\right],
+\]</div>
+<p>and</p>
+<div class="arithmatex">\[
+r_0(\theta)=\exp[F(\theta)c_{r_0}]
+\]</div>
+<p>The wing transition is</p>
+<div class="arithmatex">\[
+w(r,\theta)
+=
+\begin{cases}
+0, &amp; r \leq r_0-\delta/2,\\
+10u^3-15u^4+6u^5,
+    &amp; r_0-\delta/2 &lt; r &lt; r_0+\delta/2,\\
+1, &amp; r \geq r_0+\delta/2,
+\end{cases}
+\]</div>
+<p>with</p>
+<div class="arithmatex">\[
+\delta=\frac{0.3r_0}{p},
+\qquad
+u=\frac{r-(r_0-\delta/2)}{\delta}.
+\]</div>
+<p><code>fit_bessel_map</code> fits the model using variable projection. For
+fixed wing parameters, the Bessel-core coefficients and offsets are
+solved with a weighted linear least-squares problem, while the wing
+parameters are optimized nonlinearly. The nonlinear fit uses an
+analytic Jacobian, Fourier regularization, and a penalty against
+negative model values.</p>
+<p>If requested, the fit covariance is computed from the joint
+Gauss-Newton Hessian, including the linear-nonlinear cross-covariance.
+<code>bessel_profile_covariance</code> propagates this covariance to radial
+profiles and beam window functions.</p>
+<p>See the individual function docstrings for details.</p>
+
 
 
 
@@ -1097,19 +1166,17 @@
 
     <div class="doc doc-contents ">
 
-        <p>Evaluate a fitted Bessel-core plus smooth <span class="arithmatex">\(r^{-3}\)</span>-wing model.</p>
-<p>The model is</p>
+        <p>Evaluate a fitted Bessel-core plus smooth <span class="arithmatex">\(r^{-3}\)</span>-wing beam model.</p>
+<p>The full model and its parameterization are described in the module
+docstring. In particular, the Bessel core is evaluated using the
+normalized terms</p>
 <div class="arithmatex">\[
-M(r,\theta) =
-[1-w(r,\theta)]\,C(r,\theta)
-+ w(r,\theta)\,W(r,\theta)
-+ b,
+\frac{J_n(\ell_{\max}r)}{\ell_{\max}r}
 \]</div>
-<p>where <span class="arithmatex">\(C\)</span> is the Bessel/multipole core, <span class="arithmatex">\(W\)</span> is the positive
-asymptotic wing, <span class="arithmatex">\(w\)</span> is the smooth transition weight, and <span class="arithmatex">\(b\)</span> is
-the global offset.</p>
-<p>The wing transition and its parameterization are defined by
-<code>fast_wing_transition</code>. See that function for details.</p>
+<p>which are then summed up as the multipole expansion of the pairwise products
+of the Bessel terms.</p>
+<p>The wing and transition is evaluated by <code>fast_wing_transition</code>
+using the same implementation as the fitting code.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1128,7 +1195,7 @@ the global offset.</p>
                 <code>posmap</code>
             </td>
             <td>
-                  <code>(<span title="pixell.enmap.ndmap">ndmap</span>, <span title="pixell.enmap.ndmap">ndmap</span>)</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1192,13 +1259,12 @@ the global offset.</p>
                 <code>amps</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n_bessel n_bessel n_multipoles 2&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Bessel/multipole coefficients with shape
-<code>(n_bessel, n_bessel, n_multipoles, 2)</code>. The final axis
-contains cosine and sine coefficients.</p>
+                <p>Bessel/multipole coefficients. The final axis contains cosine and
+sine coefficients.</p>
               </div>
             </td>
             <td>
@@ -1226,13 +1292,11 @@ contains cosine and sine coefficients.</p>
                 <code>wing_params</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_params">n_params</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Nonlinear wing parameters containing the Fourier coefficients
-of <span class="arithmatex">\(\log a\)</span>, the Fourier coefficients of <span class="arithmatex">\(\log r_0\)</span>, and
-<span class="arithmatex">\(\log p\)</span>, in that order.</p>
+                <p>Nonlinear wing parameters passed to <code>fast_wing_transition</code>.</p>
               </div>
             </td>
             <td>
@@ -1263,13 +1327,13 @@ of <span class="arithmatex">\(\log a\)</span>, the Fourier coefficients of <span
     <table>
       <thead>
         <tr>
-<th>Name</th>          <th>Type</th>
+          <th>Type</th>
           <th>Description</th>
         </tr>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-<td><code>bessel_beam</code></td>            <td>
+            <td>
                   <code><span title="pixell.enmap.ndmap">ndmap</span></code>
             </td>
             <td>
@@ -1284,61 +1348,7 @@ of <span class="arithmatex">\(\log a\)</span>, the Fourier coefficients of <span
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/bessel.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">123</span>
-<span class="normal">124</span>
-<span class="normal">125</span>
-<span class="normal">126</span>
-<span class="normal">127</span>
-<span class="normal">128</span>
-<span class="normal">129</span>
-<span class="normal">130</span>
-<span class="normal">131</span>
-<span class="normal">132</span>
-<span class="normal">133</span>
-<span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span>
-<span class="normal">137</span>
-<span class="normal">138</span>
-<span class="normal">139</span>
-<span class="normal">140</span>
-<span class="normal">141</span>
-<span class="normal">142</span>
-<span class="normal">143</span>
-<span class="normal">144</span>
-<span class="normal">145</span>
-<span class="normal">146</span>
-<span class="normal">147</span>
-<span class="normal">148</span>
-<span class="normal">149</span>
-<span class="normal">150</span>
-<span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
-<span class="normal">157</span>
-<span class="normal">158</span>
-<span class="normal">159</span>
-<span class="normal">160</span>
-<span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span>
-<span class="normal">173</span>
-<span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">177</span>
 <span class="normal">178</span>
 <span class="normal">179</span>
 <span class="normal">180</span>
@@ -1426,62 +1436,106 @@ of <span class="arithmatex">\(\log a\)</span>, the Fourier coefficients of <span
 <span class="normal">262</span>
 <span class="normal">263</span>
 <span class="normal">264</span>
-<span class="normal">265</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bessel_beam</span><span class="p">(</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bessel_beam</span><span class="p">(</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">],</span>
     <span class="n">xi0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="n">eta0</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="n">ell_max</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-    <span class="n">amps</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
+    <span class="n">amps</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_bessel n_bessel n_multipoles 2"</span><span class="p">],</span>
     <span class="n">bessel_off</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-    <span class="n">wing_params</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
+    <span class="n">wing_params</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_wing_params"</span><span class="p">],</span>
     <span class="n">off</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ndmap</span><span class="p">:</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
-<span class="sd">    Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing model.</span>
+<span class="sd">    Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing beam model.</span>
 
-<span class="sd">    The model is</span>
+<span class="sd">    The full model and its parameterization are described in the module</span>
+<span class="sd">    docstring. In particular, the Bessel core is evaluated using the</span>
+<span class="sd">    normalized terms</span>
 
 <span class="sd">    $$</span>
-<span class="sd">    M(r,\theta) =</span>
-<span class="sd">    [1-w(r,\theta)]\,C(r,\theta)</span>
-<span class="sd">    + w(r,\theta)\,W(r,\theta)</span>
-<span class="sd">    + b,</span>
+<span class="sd">    \frac{J_n(\ell_{\max}r)}{\ell_{\max}r}</span>
 <span class="sd">    $$</span>
 
-<span class="sd">    where $C$ is the Bessel/multipole core, $W$ is the positive</span>
-<span class="sd">    asymptotic wing, $w$ is the smooth transition weight, and $b$ is</span>
-<span class="sd">    the global offset.</span>
+<span class="sd">    which are then summed up as the multipole expansion of the pairwise products</span>
+<span class="sd">    of the Bessel terms.</span>
 
-<span class="sd">    The wing transition and its parameterization are defined by</span>
-<span class="sd">    `fast_wing_transition`. See that function for details.</span>
+<span class="sd">    The wing and transition is evaluated by `fast_wing_transition`</span>
+<span class="sd">    using the same implementation as the fitting code.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    posmap : ndmap, ndmap</span>
-<span class="sd">        Two-dimensional coordinate maps `(eta, xi)` in radians.</span>
+<span class="sd">    posmap : Float[ndmap, "2 nx ny"]</span>
+<span class="sd">        Two-dimensional coordinate maps ``(eta, xi)`` in radians.</span>
 <span class="sd">    xi0 : float</span>
-<span class="sd">        Beam center in the `xi` coordinate, in radians.</span>
+<span class="sd">        Beam center in the ``xi`` coordinate, in radians.</span>
 <span class="sd">    eta0 : float</span>
-<span class="sd">        Beam center in the `eta` coordinate, in radians.</span>
+<span class="sd">        Beam center in the ``eta`` coordinate, in radians.</span>
 <span class="sd">    ell_max : float</span>
 <span class="sd">        Maximum multipole used to construct the Bessel basis.</span>
-<span class="sd">    amps : NDArray[np.floating]</span>
-<span class="sd">        Bessel/multipole coefficients with shape</span>
-<span class="sd">        `(n_bessel, n_bessel, n_multipoles, 2)`. The final axis</span>
-<span class="sd">        contains cosine and sine coefficients.</span>
+<span class="sd">    amps : Float[NDArray, "n_bessel n_bessel n_multipoles 2"]</span>
+<span class="sd">        Bessel/multipole coefficients. The final axis contains cosine and</span>
+<span class="sd">        sine coefficients.</span>
 <span class="sd">    bessel_off : float</span>
 <span class="sd">        Additive offset applied to the Bessel core.</span>
-<span class="sd">    wing_params : NDArray[np.floating]</span>
-<span class="sd">        Nonlinear wing parameters containing the Fourier coefficients</span>
-<span class="sd">        of $\log a$, the Fourier coefficients of $\log r_0$, and</span>
-<span class="sd">        $\log p$, in that order.</span>
+<span class="sd">    wing_params : Float[NDArray, "n_params"]</span>
+<span class="sd">        Nonlinear wing parameters passed to `fast_wing_transition`.</span>
 <span class="sd">    off : float</span>
 <span class="sd">        Global additive model offset.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    bessel_beam : ndmap</span>
-<span class="sd">        Model evaluated on the same two-dimensional grid as `posmap`.</span>
+<span class="sd">    ndmap</span>
+<span class="sd">        Model evaluated on the same two-dimensional grid as ``posmap``.</span>
 <span class="sd">    """</span>
 
     <span class="n">n_bessel</span> <span class="o">=</span> <span class="n">amps</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -1578,6 +1632,173 @@ of <span class="arithmatex">\(\log a\)</span>, the Fourier coefficients of <span
 <div class="doc doc-object doc-function">
 
 
+<h2 id="lat_beams.fitting.map.bessel.bessel_beam_from_aman" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">bessel_beam_from_aman</span><span class="p">(</span><span class="n">posmap</span><span class="p">,</span> <span class="n">aman</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Evaluate a fitted Bessel beam from an <code>AxisManager</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>posmap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 nx ny&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Two-dimensional beam-coordinate maps <code>(eta, xi)</code> in radians.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>aman</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fitted parameter container produced by <code>fit_bessel_map</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>beam_model</code></td>            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;nx ny&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Beam model evaluated on <code>posmap</code> using the fitted parameters.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/bessel.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bessel_beam_from_aman</span><span class="p">(</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">],</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Evaluate a fitted Bessel beam from an `AxisManager`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    posmap : Float[ndmap, "2 nx ny"]</span>
+<span class="sd">        Two-dimensional beam-coordinate maps `(eta, xi)` in radians.</span>
+<span class="sd">    aman : AxisManager</span>
+<span class="sd">        Fitted parameter container produced by `fit_bessel_map`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    beam_model : Float[ndmap, "nx ny"]</span>
+<span class="sd">        Beam model evaluated on `posmap` using the fitted parameters.</span>
+<span class="sd">    """</span>
+    <span class="n">xi0</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gauss</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span>
+    <span class="n">eta0</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gauss</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span>
+
+    <span class="n">ell_max</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">bessel</span><span class="o">.</span><span class="n">ell_max</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">amps</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="n">aman</span><span class="o">.</span><span class="n">bessel</span><span class="o">.</span><span class="n">amps</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">bessel_off</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">bessel</span><span class="o">.</span><span class="n">bessel_off</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">wing_params</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="n">aman</span><span class="o">.</span><span class="n">bessel</span><span class="o">.</span><span class="n">wing_params</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">off</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">bessel</span><span class="o">.</span><span class="n">off</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">bessel_beam</span><span class="p">(</span>
+        <span class="n">posmap</span><span class="p">,</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">xi0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">),</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">eta0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">),</span>
+        <span class="n">ell_max</span><span class="p">,</span>
+        <span class="n">amps</span><span class="p">,</span>
+        <span class="n">bessel_off</span><span class="p">,</span>
+        <span class="n">wing_params</span><span class="p">,</span>
+        <span class="n">off</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h2 id="lat_beams.fitting.map.bessel.bessel_profile_covariance" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">bessel_profile_covariance</span><span class="p">(</span><span class="n">fit</span><span class="p">,</span> <span class="n">posmap</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">n_modes</span><span class="p">,</span> <span class="n">n_radial</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span></code>
 
@@ -1637,7 +1858,7 @@ C_y \simeq (J_y V_N)\Lambda_N(J_y V_N)^T
                 <code>posmap</code>
             </td>
             <td>
-                  <code><span title="tuple">tuple</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="numpy.typing.NDArray">NDArray</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1724,7 +1945,7 @@ function, covariance eigenmodes, and normalization information.</p>
           </tr>
           <tr class="doc-section-item">
 <td><code>model_no_off</code></td>            <td>
-                  <code><span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1738,88 +1959,7 @@ function, covariance eigenmodes, and normalization information.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/bessel.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1401</span>
-<span class="normal">1402</span>
-<span class="normal">1403</span>
-<span class="normal">1404</span>
-<span class="normal">1405</span>
-<span class="normal">1406</span>
-<span class="normal">1407</span>
-<span class="normal">1408</span>
-<span class="normal">1409</span>
-<span class="normal">1410</span>
-<span class="normal">1411</span>
-<span class="normal">1412</span>
-<span class="normal">1413</span>
-<span class="normal">1414</span>
-<span class="normal">1415</span>
-<span class="normal">1416</span>
-<span class="normal">1417</span>
-<span class="normal">1418</span>
-<span class="normal">1419</span>
-<span class="normal">1420</span>
-<span class="normal">1421</span>
-<span class="normal">1422</span>
-<span class="normal">1423</span>
-<span class="normal">1424</span>
-<span class="normal">1425</span>
-<span class="normal">1426</span>
-<span class="normal">1427</span>
-<span class="normal">1428</span>
-<span class="normal">1429</span>
-<span class="normal">1430</span>
-<span class="normal">1431</span>
-<span class="normal">1432</span>
-<span class="normal">1433</span>
-<span class="normal">1434</span>
-<span class="normal">1435</span>
-<span class="normal">1436</span>
-<span class="normal">1437</span>
-<span class="normal">1438</span>
-<span class="normal">1439</span>
-<span class="normal">1440</span>
-<span class="normal">1441</span>
-<span class="normal">1442</span>
-<span class="normal">1443</span>
-<span class="normal">1444</span>
-<span class="normal">1445</span>
-<span class="normal">1446</span>
-<span class="normal">1447</span>
-<span class="normal">1448</span>
-<span class="normal">1449</span>
-<span class="normal">1450</span>
-<span class="normal">1451</span>
-<span class="normal">1452</span>
-<span class="normal">1453</span>
-<span class="normal">1454</span>
-<span class="normal">1455</span>
-<span class="normal">1456</span>
-<span class="normal">1457</span>
-<span class="normal">1458</span>
-<span class="normal">1459</span>
-<span class="normal">1460</span>
-<span class="normal">1461</span>
-<span class="normal">1462</span>
-<span class="normal">1463</span>
-<span class="normal">1464</span>
-<span class="normal">1465</span>
-<span class="normal">1466</span>
-<span class="normal">1467</span>
-<span class="normal">1468</span>
-<span class="normal">1469</span>
-<span class="normal">1470</span>
-<span class="normal">1471</span>
-<span class="normal">1472</span>
-<span class="normal">1473</span>
-<span class="normal">1474</span>
-<span class="normal">1475</span>
-<span class="normal">1476</span>
-<span class="normal">1477</span>
-<span class="normal">1478</span>
-<span class="normal">1479</span>
-<span class="normal">1480</span>
-<span class="normal">1481</span>
-<span class="normal">1482</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1482</span>
 <span class="normal">1483</span>
 <span class="normal">1484</span>
 <span class="normal">1485</span>
@@ -1922,13 +2062,94 @@ function, covariance eigenmodes, and normalization information.</p>
 <span class="normal">1582</span>
 <span class="normal">1583</span>
 <span class="normal">1584</span>
-<span class="normal">1585</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bessel_profile_covariance</span><span class="p">(</span>
-    <span class="n">fit</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">,</span>
+<span class="normal">1585</span>
+<span class="normal">1586</span>
+<span class="normal">1587</span>
+<span class="normal">1588</span>
+<span class="normal">1589</span>
+<span class="normal">1590</span>
+<span class="normal">1591</span>
+<span class="normal">1592</span>
+<span class="normal">1593</span>
+<span class="normal">1594</span>
+<span class="normal">1595</span>
+<span class="normal">1596</span>
+<span class="normal">1597</span>
+<span class="normal">1598</span>
+<span class="normal">1599</span>
+<span class="normal">1600</span>
+<span class="normal">1601</span>
+<span class="normal">1602</span>
+<span class="normal">1603</span>
+<span class="normal">1604</span>
+<span class="normal">1605</span>
+<span class="normal">1606</span>
+<span class="normal">1607</span>
+<span class="normal">1608</span>
+<span class="normal">1609</span>
+<span class="normal">1610</span>
+<span class="normal">1611</span>
+<span class="normal">1612</span>
+<span class="normal">1613</span>
+<span class="normal">1614</span>
+<span class="normal">1615</span>
+<span class="normal">1616</span>
+<span class="normal">1617</span>
+<span class="normal">1618</span>
+<span class="normal">1619</span>
+<span class="normal">1620</span>
+<span class="normal">1621</span>
+<span class="normal">1622</span>
+<span class="normal">1623</span>
+<span class="normal">1624</span>
+<span class="normal">1625</span>
+<span class="normal">1626</span>
+<span class="normal">1627</span>
+<span class="normal">1628</span>
+<span class="normal">1629</span>
+<span class="normal">1630</span>
+<span class="normal">1631</span>
+<span class="normal">1632</span>
+<span class="normal">1633</span>
+<span class="normal">1634</span>
+<span class="normal">1635</span>
+<span class="normal">1636</span>
+<span class="normal">1637</span>
+<span class="normal">1638</span>
+<span class="normal">1639</span>
+<span class="normal">1640</span>
+<span class="normal">1641</span>
+<span class="normal">1642</span>
+<span class="normal">1643</span>
+<span class="normal">1644</span>
+<span class="normal">1645</span>
+<span class="normal">1646</span>
+<span class="normal">1647</span>
+<span class="normal">1648</span>
+<span class="normal">1649</span>
+<span class="normal">1650</span>
+<span class="normal">1651</span>
+<span class="normal">1652</span>
+<span class="normal">1653</span>
+<span class="normal">1654</span>
+<span class="normal">1655</span>
+<span class="normal">1656</span>
+<span class="normal">1657</span>
+<span class="normal">1658</span>
+<span class="normal">1659</span>
+<span class="normal">1660</span>
+<span class="normal">1661</span>
+<span class="normal">1662</span>
+<span class="normal">1663</span>
+<span class="normal">1664</span>
+<span class="normal">1665</span>
+<span class="normal">1666</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bessel_profile_covariance</span><span class="p">(</span>
+    <span class="n">fit</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">],</span>
     <span class="n">lmax</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">n_modes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">n_radial</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">ndmap</span><span class="p">]:</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
 <span class="sd">    Propagate the full fit and covariance into a radial beam profile and b_l and their covariances.</span>
 <span class="sd">    The covariance is propagated using a linearized model,</span>
@@ -1958,7 +2179,7 @@ function, covariance eigenmodes, and normalization information.</p>
 <span class="sd">    fit : AxisManager</span>
 <span class="sd">        Output from `fit_bessel_map`. Must contain `full_cov`, `amps`,</span>
 <span class="sd">        `wing_params`, and `off`.</span>
-<span class="sd">    posmap : tuple[NDArray, NDArray]</span>
+<span class="sd">    posmap : Float[ndmap, "2 nx ny"]</span>
 <span class="sd">        Beam-coordinate maps `(eta, xi)` used to evaluate the model.</span>
 <span class="sd">    lmax : int</span>
 <span class="sd">        Maximum multipole for the window function.</span>
@@ -1974,7 +2195,7 @@ function, covariance eigenmodes, and normalization information.</p>
 <span class="sd">    prof_cov : AxisManager</span>
 <span class="sd">        AxisManager containing the normalized radial profile, beam window</span>
 <span class="sd">        function, covariance eigenmodes, and normalization information.</span>
-<span class="sd">    model_no_off : ndmap</span>
+<span class="sd">    model_no_off : Float[ndmap, "nx ny"]</span>
 <span class="sd">        The model evaluated at posmap without the offset.</span>
 <span class="sd">    """</span>
     <span class="n">full_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">fit</span><span class="o">.</span><span class="n">full_cov</span><span class="p">)</span>
@@ -1997,9 +2218,9 @@ function, covariance eigenmodes, and normalization information.</p>
         <span class="n">n_modes</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_modes</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">evals</span><span class="p">))</span>
         <span class="n">evals</span><span class="p">,</span> <span class="n">evecs</span> <span class="o">=</span> <span class="n">evals</span><span class="p">[:</span><span class="n">n_modes</span><span class="p">],</span> <span class="n">evecs</span><span class="p">[:,</span> <span class="p">:</span><span class="n">n_modes</span><span class="p">]</span>
 
-    <span class="n">xi0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">fit</span><span class="o">.</span><span class="n">xi0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">rad</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
-    <span class="n">eta0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">fit</span><span class="o">.</span><span class="n">eta0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">rad</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
-    <span class="n">ell_max</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">fit</span><span class="o">.</span><span class="n">ell_max</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">xi0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">fit</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">rad</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">eta0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">fit</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">rad</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">ell_max</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">fit</span><span class="o">.</span><span class="n">ell_max</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
 
     <span class="n">model</span> <span class="o">=</span> <span class="n">bessel_beam</span><span class="p">(</span><span class="n">posmap</span><span class="p">,</span> <span class="n">xi0</span><span class="p">,</span> <span class="n">eta0</span><span class="p">,</span> <span class="n">ell_max</span><span class="p">,</span> <span class="n">amps</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">wing_params</span><span class="p">,</span> <span class="n">off</span><span class="p">)</span>
     <span class="n">model_flat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
@@ -2015,7 +2236,7 @@ function, covariance eigenmodes, and normalization information.</p>
     <span class="n">n_modes_actual</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">evals</span><span class="p">)</span>
     <span class="n">J_mode</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">n_pix</span><span class="p">,</span> <span class="n">n_modes_actual</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">fit</span><span class="o">.</span><span class="n">bessel_idx</span><span class="p">)</span>
-    <span class="n">n_core</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fit</span><span class="o">.</span><span class="n">n_core</span><span class="p">)</span>
+    <span class="n">n_core</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">fit</span><span class="o">.</span><span class="n">n_core</span><span class="p">))</span>
 
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">direction</span><span class="p">,</span> <span class="n">eval_i</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">evecs</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">evals</span><span class="p">)):</span>
         <span class="n">sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">eval_i</span><span class="p">)</span>
@@ -2183,7 +2404,7 @@ which implicitly assumes <code>C_cq = 0</code>.</p>
                 <code>params</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_nonlinear">n_nonlinear</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2199,7 +2420,7 @@ which implicitly assumes <code>C_cq = 0</code>.</p>
                 <code>linear</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_linear">n_linear</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2216,7 +2437,7 @@ followed by the global offset. Shape <code>(n_linear,)</code>.</p>
                 <code>B_core</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n_pixels n_core&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2232,7 +2453,7 @@ followed by the global offset. Shape <code>(n_linear,)</code>.</p>
                 <code>w</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_pixels">n_pixels</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2249,7 +2470,7 @@ Shape <code>(n_pixels,)</code>.</p>
                 <code>F_mat_T</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n_pixels n_ang&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2265,7 +2486,7 @@ Shape <code>(n_pixels,)</code>.</p>
                 <code>r_fit</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_pixels">n_pixels</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2281,7 +2502,7 @@ Shape <code>(n_pixels,)</code>.</p>
                 <code>scale</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_linear">n_linear</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2371,11 +2592,11 @@ Shape <code>(n_pixels,)</code>.</p>
       <tbody>
           <tr class="doc-section-item">
 <td><code>full_cov</code></td>            <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span>[<span title="numpy.floating">floating</span>]</code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n_params n_params&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Joint covariance of ttrhe linear and nonlinear parameters. Shape
+                <p>Joint covariance of the linear and nonlinear parameters. Shape
 <code>(n_linear + 2 * n_ang + 1, n_linear + 2 * n_ang + 1)</code>.</p>
               </div>
             </td>
@@ -2386,88 +2607,7 @@ Shape <code>(n_pixels,)</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/bessel.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1164</span>
-<span class="normal">1165</span>
-<span class="normal">1166</span>
-<span class="normal">1167</span>
-<span class="normal">1168</span>
-<span class="normal">1169</span>
-<span class="normal">1170</span>
-<span class="normal">1171</span>
-<span class="normal">1172</span>
-<span class="normal">1173</span>
-<span class="normal">1174</span>
-<span class="normal">1175</span>
-<span class="normal">1176</span>
-<span class="normal">1177</span>
-<span class="normal">1178</span>
-<span class="normal">1179</span>
-<span class="normal">1180</span>
-<span class="normal">1181</span>
-<span class="normal">1182</span>
-<span class="normal">1183</span>
-<span class="normal">1184</span>
-<span class="normal">1185</span>
-<span class="normal">1186</span>
-<span class="normal">1187</span>
-<span class="normal">1188</span>
-<span class="normal">1189</span>
-<span class="normal">1190</span>
-<span class="normal">1191</span>
-<span class="normal">1192</span>
-<span class="normal">1193</span>
-<span class="normal">1194</span>
-<span class="normal">1195</span>
-<span class="normal">1196</span>
-<span class="normal">1197</span>
-<span class="normal">1198</span>
-<span class="normal">1199</span>
-<span class="normal">1200</span>
-<span class="normal">1201</span>
-<span class="normal">1202</span>
-<span class="normal">1203</span>
-<span class="normal">1204</span>
-<span class="normal">1205</span>
-<span class="normal">1206</span>
-<span class="normal">1207</span>
-<span class="normal">1208</span>
-<span class="normal">1209</span>
-<span class="normal">1210</span>
-<span class="normal">1211</span>
-<span class="normal">1212</span>
-<span class="normal">1213</span>
-<span class="normal">1214</span>
-<span class="normal">1215</span>
-<span class="normal">1216</span>
-<span class="normal">1217</span>
-<span class="normal">1218</span>
-<span class="normal">1219</span>
-<span class="normal">1220</span>
-<span class="normal">1221</span>
-<span class="normal">1222</span>
-<span class="normal">1223</span>
-<span class="normal">1224</span>
-<span class="normal">1225</span>
-<span class="normal">1226</span>
-<span class="normal">1227</span>
-<span class="normal">1228</span>
-<span class="normal">1229</span>
-<span class="normal">1230</span>
-<span class="normal">1231</span>
-<span class="normal">1232</span>
-<span class="normal">1233</span>
-<span class="normal">1234</span>
-<span class="normal">1235</span>
-<span class="normal">1236</span>
-<span class="normal">1237</span>
-<span class="normal">1238</span>
-<span class="normal">1239</span>
-<span class="normal">1240</span>
-<span class="normal">1241</span>
-<span class="normal">1242</span>
-<span class="normal">1243</span>
-<span class="normal">1244</span>
-<span class="normal">1245</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1245</span>
 <span class="normal">1246</span>
 <span class="normal">1247</span>
 <span class="normal">1248</span>
@@ -2620,19 +2760,100 @@ Shape <code>(n_pixels,)</code>.</p>
 <span class="normal">1395</span>
 <span class="normal">1396</span>
 <span class="normal">1397</span>
-<span class="normal">1398</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_full_covariance</span><span class="p">(</span>
-    <span class="n">params</span><span class="p">,</span>
-    <span class="n">linear</span><span class="p">,</span>
-    <span class="n">B_core</span><span class="p">,</span>
-    <span class="n">w</span><span class="p">,</span>
-    <span class="n">F_mat_T</span><span class="p">,</span>
-    <span class="n">r_fit</span><span class="p">,</span>
-    <span class="n">scale</span><span class="p">,</span>
-    <span class="n">n_core</span><span class="p">,</span>
-    <span class="n">n_ang</span><span class="p">,</span>
-    <span class="n">n_pixels</span><span class="p">,</span>
-    <span class="n">sigma2</span><span class="p">,</span>
-<span class="p">):</span>
+<span class="normal">1398</span>
+<span class="normal">1399</span>
+<span class="normal">1400</span>
+<span class="normal">1401</span>
+<span class="normal">1402</span>
+<span class="normal">1403</span>
+<span class="normal">1404</span>
+<span class="normal">1405</span>
+<span class="normal">1406</span>
+<span class="normal">1407</span>
+<span class="normal">1408</span>
+<span class="normal">1409</span>
+<span class="normal">1410</span>
+<span class="normal">1411</span>
+<span class="normal">1412</span>
+<span class="normal">1413</span>
+<span class="normal">1414</span>
+<span class="normal">1415</span>
+<span class="normal">1416</span>
+<span class="normal">1417</span>
+<span class="normal">1418</span>
+<span class="normal">1419</span>
+<span class="normal">1420</span>
+<span class="normal">1421</span>
+<span class="normal">1422</span>
+<span class="normal">1423</span>
+<span class="normal">1424</span>
+<span class="normal">1425</span>
+<span class="normal">1426</span>
+<span class="normal">1427</span>
+<span class="normal">1428</span>
+<span class="normal">1429</span>
+<span class="normal">1430</span>
+<span class="normal">1431</span>
+<span class="normal">1432</span>
+<span class="normal">1433</span>
+<span class="normal">1434</span>
+<span class="normal">1435</span>
+<span class="normal">1436</span>
+<span class="normal">1437</span>
+<span class="normal">1438</span>
+<span class="normal">1439</span>
+<span class="normal">1440</span>
+<span class="normal">1441</span>
+<span class="normal">1442</span>
+<span class="normal">1443</span>
+<span class="normal">1444</span>
+<span class="normal">1445</span>
+<span class="normal">1446</span>
+<span class="normal">1447</span>
+<span class="normal">1448</span>
+<span class="normal">1449</span>
+<span class="normal">1450</span>
+<span class="normal">1451</span>
+<span class="normal">1452</span>
+<span class="normal">1453</span>
+<span class="normal">1454</span>
+<span class="normal">1455</span>
+<span class="normal">1456</span>
+<span class="normal">1457</span>
+<span class="normal">1458</span>
+<span class="normal">1459</span>
+<span class="normal">1460</span>
+<span class="normal">1461</span>
+<span class="normal">1462</span>
+<span class="normal">1463</span>
+<span class="normal">1464</span>
+<span class="normal">1465</span>
+<span class="normal">1466</span>
+<span class="normal">1467</span>
+<span class="normal">1468</span>
+<span class="normal">1469</span>
+<span class="normal">1470</span>
+<span class="normal">1471</span>
+<span class="normal">1472</span>
+<span class="normal">1473</span>
+<span class="normal">1474</span>
+<span class="normal">1475</span>
+<span class="normal">1476</span>
+<span class="normal">1477</span>
+<span class="normal">1478</span>
+<span class="normal">1479</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_full_covariance</span><span class="p">(</span>
+    <span class="n">params</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_nonlinear"</span><span class="p">],</span>
+    <span class="n">linear</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_linear"</span><span class="p">],</span>
+    <span class="n">B_core</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels n_core"</span><span class="p">],</span>
+    <span class="n">w</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels"</span><span class="p">],</span>
+    <span class="n">F_mat_T</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels n_ang"</span><span class="p">],</span>
+    <span class="n">r_fit</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels"</span><span class="p">],</span>
+    <span class="n">scale</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_linear"</span><span class="p">],</span>
+    <span class="n">n_core</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n_ang</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n_pixels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">sigma2</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_params n_params"</span><span class="p">]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
 <span class="sd">    Calculate the joint covariance of the linear and nonlinear fit</span>
 <span class="sd">    parameters, including their cross-covariance.</span>
@@ -2692,21 +2913,21 @@ Shape <code>(n_pixels,)</code>.</p>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    params : NDArray[np.floating]</span>
+<span class="sd">    params : Float[NDArray, "n_nonlinear"]</span>
 <span class="sd">        Final nonlinear parameters. Shape `(2 * n_ang + 1,)`.</span>
-<span class="sd">    linear : NDArray[np.floating]</span>
+<span class="sd">    linear : Float[NDArray, "n_linear"]</span>
 <span class="sd">        Final full-pixel linear solution containing the Bessel coefficients</span>
 <span class="sd">        followed by the global offset. Shape `(n_linear,)`.</span>
-<span class="sd">    B_core : NDArray[np.floating]</span>
+<span class="sd">    B_core : Float[NDArray, "n_pixels n_core"]</span>
 <span class="sd">        Unweighted Bessel design matrix. Shape `(n_pixels, n_core)`.</span>
-<span class="sd">    w : NDArray[np.floating]</span>
+<span class="sd">    w : Float[NDArray, "n_pixels"]</span>
 <span class="sd">        Pixel weights, equal to the square root of the inverse variance.</span>
 <span class="sd">        Shape `(n_pixels,)`.</span>
-<span class="sd">    F_mat_T : NDArray[np.floating]</span>
+<span class="sd">    F_mat_T : Float[NDArray, "n_pixels n_ang"]</span>
 <span class="sd">        Fourier design matrix transposed. Shape `(n_pixels, n_ang)`.</span>
-<span class="sd">    r_fit : NDArray[np.floating]</span>
+<span class="sd">    r_fit : Float[NDArray, "n_pixels"]</span>
 <span class="sd">        Radius of each fitted pixel. Shape `(n_pixels,)`.</span>
-<span class="sd">    scale : NDArray[np.floating]</span>
+<span class="sd">    scale : Float[NDArray, "n_linear"]</span>
 <span class="sd">        Column scaling used for the linear solve. Shape `(n_linear,)`.</span>
 <span class="sd">    n_core : int</span>
 <span class="sd">        Number of Bessel-core linear coefficients.</span>
@@ -2719,8 +2940,8 @@ Shape <code>(n_pixels,)</code>.</p>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    full_cov : NDArray[np.floating]</span>
-<span class="sd">        Joint covariance of ttrhe linear and nonlinear parameters. Shape</span>
+<span class="sd">    full_cov : Float[NDArray, "n_params n_params"]</span>
+<span class="sd">        Joint covariance of the linear and nonlinear parameters. Shape</span>
 <span class="sd">        `(n_linear + 2 * n_ang + 1, n_linear + 2 * n_ang + 1)`.</span>
 <span class="sd">    """</span>
     <span class="c1"># TODO: The regularization and penalization terms have constants that are hardcoded in a few spots, need to fix that</span>
@@ -2854,7 +3075,7 @@ Shape <code>(n_pixels,)</code>.</p>
         <span class="n">check_finite</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">sigma2</span> <span class="o">*</span> <span class="n">covariance</span>
+    <span class="k">return</span> <span class="n">sigma2</span> <span class="o">*</span> <span class="n">cast</span><span class="p">(</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="n">covariance</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2872,36 +3093,11 @@ Shape <code>(n_pixels,)</code>.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Evaluate the positive <span class="arithmatex">\(r^{-3}\)</span> wing and smooth core-to-wing transition.</p>
-<p>The wing amplitude and transition radius are Fourier expansions in
-angle:</p>
-<div class="arithmatex">\[
-a(\theta) = \exp[F(\theta)\,c_a], \qquad
-r_0(\theta) = \exp[F(\theta)\,c_{r_0}]
-\]</div>
-<p>giving the asymptotic wing
-;</p>
-<div class="arithmatex">\[
-W(r,\theta) = \frac{a(\theta)}{r^3}
-\]</div>
-<p>The mixing weight is 0 below</p>
-<div class="arithmatex">\[
-r_{\rm lo} = r_0 - \frac{\delta}{2}
-\]</div>
-<p>and 1 above</p>
-<div class="arithmatex">\[
-r_{\rm hi} = r_0 + \frac{\delta}{2}
-\]</div>
-<p>and a quintic smoothstep within the transition region.
-Where</p>
-<div class="arithmatex">\[
-\delta = \frac{0.3\,r_0}{p}
-\]</div>
-<p>and</p>
-<div class="arithmatex">\[
-w(u) = 10u^3 - 15u^4 + 6u^5
-\]</div>
-<p>The sharpness parameter is constrained to <span class="arithmatex">\(0.5 \leq p \leq 20\)</span>.</p>
+        <p>The wing parameterization and transition equations are given in the
+module docstring. This function evaluates them at the supplied radial
+coordinates and Fourier design matrix.</p>
+<p>The transition sharpness is clipped to <span class="arithmatex">\(0.5 \leq p \leq 20\)</span>, and the
+radius and amplitude are floored/capped as needed for numerical stability.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2920,7 +3116,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
                 <code>r_fit</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_pixels">n_pixels</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2936,7 +3132,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
                 <code>loga_coeff</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_ang">n_ang</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2952,7 +3148,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
                 <code>logr_coeff</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_ang">n_ang</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2984,7 +3180,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
                 <code>F_mat_T</code>
             </td>
             <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n_pixels n_ang&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3011,7 +3207,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
       <tbody>
           <tr class="doc-section-item">
 <td><code>pure_wing</code></td>            <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_pixels">n_pixels</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3021,7 +3217,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
           </tr>
           <tr class="doc-section-item">
 <td><code>wing_weight</code></td>            <td>
-                  <code><span title="numpy.typing.NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_pixels">n_pixels</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3035,98 +3231,7 @@ w(u) = 10u^3 - 15u^4 + 6u^5
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/bessel.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 17</span>
-<span class="normal"> 18</span>
-<span class="normal"> 19</span>
-<span class="normal"> 20</span>
-<span class="normal"> 21</span>
-<span class="normal"> 22</span>
-<span class="normal"> 23</span>
-<span class="normal"> 24</span>
-<span class="normal"> 25</span>
-<span class="normal"> 26</span>
-<span class="normal"> 27</span>
-<span class="normal"> 28</span>
-<span class="normal"> 29</span>
-<span class="normal"> 30</span>
-<span class="normal"> 31</span>
-<span class="normal"> 32</span>
-<span class="normal"> 33</span>
-<span class="normal"> 34</span>
-<span class="normal"> 35</span>
-<span class="normal"> 36</span>
-<span class="normal"> 37</span>
-<span class="normal"> 38</span>
-<span class="normal"> 39</span>
-<span class="normal"> 40</span>
-<span class="normal"> 41</span>
-<span class="normal"> 42</span>
-<span class="normal"> 43</span>
-<span class="normal"> 44</span>
-<span class="normal"> 45</span>
-<span class="normal"> 46</span>
-<span class="normal"> 47</span>
-<span class="normal"> 48</span>
-<span class="normal"> 49</span>
-<span class="normal"> 50</span>
-<span class="normal"> 51</span>
-<span class="normal"> 52</span>
-<span class="normal"> 53</span>
-<span class="normal"> 54</span>
-<span class="normal"> 55</span>
-<span class="normal"> 56</span>
-<span class="normal"> 57</span>
-<span class="normal"> 58</span>
-<span class="normal"> 59</span>
-<span class="normal"> 60</span>
-<span class="normal"> 61</span>
-<span class="normal"> 62</span>
-<span class="normal"> 63</span>
-<span class="normal"> 64</span>
-<span class="normal"> 65</span>
-<span class="normal"> 66</span>
-<span class="normal"> 67</span>
-<span class="normal"> 68</span>
-<span class="normal"> 69</span>
-<span class="normal"> 70</span>
-<span class="normal"> 71</span>
-<span class="normal"> 72</span>
-<span class="normal"> 73</span>
-<span class="normal"> 74</span>
-<span class="normal"> 75</span>
-<span class="normal"> 76</span>
-<span class="normal"> 77</span>
-<span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
-<span class="normal"> 97</span>
-<span class="normal"> 98</span>
-<span class="normal"> 99</span>
-<span class="normal">100</span>
-<span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span>
-<span class="normal">106</span>
-<span class="normal">107</span>
-<span class="normal">108</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">108</span>
 <span class="normal">109</span>
 <span class="normal">110</span>
 <span class="normal">111</span>
@@ -3138,78 +3243,95 @@ w(u) = 10u^3 - 15u^4 + 6u^5
 <span class="normal">117</span>
 <span class="normal">118</span>
 <span class="normal">119</span>
-<span class="normal">120</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@numba</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fastmath</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@numba</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fastmath</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">fast_wing_transition</span><span class="p">(</span>
-    <span class="n">r_fit</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
-    <span class="n">loga_coeff</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
-    <span class="n">logr_coeff</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
+    <span class="n">r_fit</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels"</span><span class="p">],</span>
+    <span class="n">loga_coeff</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_ang"</span><span class="p">],</span>
+    <span class="n">logr_coeff</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_ang"</span><span class="p">],</span>
     <span class="n">p_val</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-    <span class="n">F_mat_T</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">NDArray</span><span class="p">]:</span>
+    <span class="n">F_mat_T</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels n_ang"</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels"</span><span class="p">],</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_pixels"</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
-<span class="sd">    Evaluate the positive $r^{-3}$ wing and smooth core-to-wing transition.</span>
+<span class="sd">    The wing parameterization and transition equations are given in the</span>
+<span class="sd">    module docstring. This function evaluates them at the supplied radial</span>
+<span class="sd">    coordinates and Fourier design matrix.</span>
 
-<span class="sd">    The wing amplitude and transition radius are Fourier expansions in</span>
-<span class="sd">    angle:</span>
-
-<span class="sd">    $$</span>
-<span class="sd">    a(\theta) = \exp[F(\theta)\,c_a], \qquad</span>
-<span class="sd">    r_0(\theta) = \exp[F(\theta)\,c_{r_0}]</span>
-<span class="sd">    $$</span>
-
-<span class="sd">    giving the asymptotic wing</span>
-<span class="sd">    ;</span>
-
-<span class="sd">    $$</span>
-<span class="sd">    W(r,\theta) = \frac{a(\theta)}{r^3}</span>
-<span class="sd">    $$</span>
-
-<span class="sd">    The mixing weight is 0 below</span>
-
-<span class="sd">    $$</span>
-<span class="sd">    r_{\rm lo} = r_0 - \frac{\delta}{2}</span>
-<span class="sd">    $$</span>
-
-<span class="sd">    and 1 above</span>
-
-<span class="sd">    $$</span>
-<span class="sd">    r_{\rm hi} = r_0 + \frac{\delta}{2}</span>
-<span class="sd">    $$</span>
-
-<span class="sd">    and a quintic smoothstep within the transition region.</span>
-<span class="sd">    Where</span>
-
-<span class="sd">    $$</span>
-<span class="sd">    \delta = \frac{0.3\,r_0}{p}</span>
-<span class="sd">    $$</span>
-
-<span class="sd">    and</span>
-
-<span class="sd">    $$</span>
-<span class="sd">    w(u) = 10u^3 - 15u^4 + 6u^5</span>
-<span class="sd">    $$</span>
-
-<span class="sd">    The sharpness parameter is constrained to $0.5 \leq p \leq 20$.</span>
+<span class="sd">    The transition sharpness is clipped to $0.5 \leq p \leq 20$, and the</span>
+<span class="sd">    radius and amplitude are floored/capped as needed for numerical stability.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    r_fit : NDArray</span>
+<span class="sd">    r_fit : Float[NDArray, "n_pixels"]</span>
 <span class="sd">        Radial coordinates of the fitted pixels, in radians.</span>
-<span class="sd">    loga_coeff : NDArray</span>
+<span class="sd">    loga_coeff : Float[NDArray, "n_ang"]</span>
 <span class="sd">        Fourier coefficients of $\log a(\theta)$.</span>
-<span class="sd">    logr_coeff : NDArray</span>
+<span class="sd">    logr_coeff : Float[NDArray, "n_ang"]</span>
 <span class="sd">        Fourier coefficients of $\log r_0(\theta)$.</span>
 <span class="sd">    p_val : float</span>
 <span class="sd">        Logarithm of the transition sharpness, $\log p$.</span>
-<span class="sd">    F_mat_T : NDArray</span>
+<span class="sd">    F_mat_T : Float[NDArray, "n_pixels n_ang"]</span>
 <span class="sd">        Transposed Fourier design matrix with shape</span>
 <span class="sd">        `(n_pixels, n_fourier)`.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    pure_wing : NDArray</span>
+<span class="sd">    pure_wing : Float[NDArray, "n_pixels"]</span>
 <span class="sd">        Unblended wing model $a(\theta)/r^3$ at each fitted pixel.</span>
-<span class="sd">    wing_weight : NDArray</span>
+<span class="sd">    wing_weight : Float[NDArray, "n_pixels"]</span>
 <span class="sd">        Core-to-wing mixing weight, ranging from 0 to 1.</span>
 <span class="sd">    """</span>
     <span class="n">loga</span> <span class="o">=</span> <span class="n">F_mat_T</span> <span class="o">@</span> <span class="n">loga_coeff</span>
@@ -3484,7 +3606,7 @@ D^{-1}
                 <code>imap</code>
             </td>
             <td>
-                  <code><span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3500,7 +3622,7 @@ D^{-1}
                 <code>ivar</code>
             </td>
             <td>
-                  <code><span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3516,7 +3638,7 @@ D^{-1}
                 <code>posmap</code>
             </td>
             <td>
-                  <code><span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3755,7 +3877,7 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
           </tr>
           <tr class="doc-section-item">
 <td><code>beam_model</code></td>            <td>
-                  <code><span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3769,83 +3891,7 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/bessel.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 281</span>
-<span class="normal"> 282</span>
-<span class="normal"> 283</span>
-<span class="normal"> 284</span>
-<span class="normal"> 285</span>
-<span class="normal"> 286</span>
-<span class="normal"> 287</span>
-<span class="normal"> 288</span>
-<span class="normal"> 289</span>
-<span class="normal"> 290</span>
-<span class="normal"> 291</span>
-<span class="normal"> 292</span>
-<span class="normal"> 293</span>
-<span class="normal"> 294</span>
-<span class="normal"> 295</span>
-<span class="normal"> 296</span>
-<span class="normal"> 297</span>
-<span class="normal"> 298</span>
-<span class="normal"> 299</span>
-<span class="normal"> 300</span>
-<span class="normal"> 301</span>
-<span class="normal"> 302</span>
-<span class="normal"> 303</span>
-<span class="normal"> 304</span>
-<span class="normal"> 305</span>
-<span class="normal"> 306</span>
-<span class="normal"> 307</span>
-<span class="normal"> 308</span>
-<span class="normal"> 309</span>
-<span class="normal"> 310</span>
-<span class="normal"> 311</span>
-<span class="normal"> 312</span>
-<span class="normal"> 313</span>
-<span class="normal"> 314</span>
-<span class="normal"> 315</span>
-<span class="normal"> 316</span>
-<span class="normal"> 317</span>
-<span class="normal"> 318</span>
-<span class="normal"> 319</span>
-<span class="normal"> 320</span>
-<span class="normal"> 321</span>
-<span class="normal"> 322</span>
-<span class="normal"> 323</span>
-<span class="normal"> 324</span>
-<span class="normal"> 325</span>
-<span class="normal"> 326</span>
-<span class="normal"> 327</span>
-<span class="normal"> 328</span>
-<span class="normal"> 329</span>
-<span class="normal"> 330</span>
-<span class="normal"> 331</span>
-<span class="normal"> 332</span>
-<span class="normal"> 333</span>
-<span class="normal"> 334</span>
-<span class="normal"> 335</span>
-<span class="normal"> 336</span>
-<span class="normal"> 337</span>
-<span class="normal"> 338</span>
-<span class="normal"> 339</span>
-<span class="normal"> 340</span>
-<span class="normal"> 341</span>
-<span class="normal"> 342</span>
-<span class="normal"> 343</span>
-<span class="normal"> 344</span>
-<span class="normal"> 345</span>
-<span class="normal"> 346</span>
-<span class="normal"> 347</span>
-<span class="normal"> 348</span>
-<span class="normal"> 349</span>
-<span class="normal"> 350</span>
-<span class="normal"> 351</span>
-<span class="normal"> 352</span>
-<span class="normal"> 353</span>
-<span class="normal"> 354</span>
-<span class="normal"> 355</span>
-<span class="normal"> 356</span>
-<span class="normal"> 357</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 357</span>
 <span class="normal"> 358</span>
 <span class="normal"> 359</span>
 <span class="normal"> 360</span>
@@ -4649,10 +4695,91 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
 <span class="normal">1158</span>
 <span class="normal">1159</span>
 <span class="normal">1160</span>
-<span class="normal">1161</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_bessel_map</span><span class="p">(</span>
-    <span class="n">imap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">ivar</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
+<span class="normal">1161</span>
+<span class="normal">1162</span>
+<span class="normal">1163</span>
+<span class="normal">1164</span>
+<span class="normal">1165</span>
+<span class="normal">1166</span>
+<span class="normal">1167</span>
+<span class="normal">1168</span>
+<span class="normal">1169</span>
+<span class="normal">1170</span>
+<span class="normal">1171</span>
+<span class="normal">1172</span>
+<span class="normal">1173</span>
+<span class="normal">1174</span>
+<span class="normal">1175</span>
+<span class="normal">1176</span>
+<span class="normal">1177</span>
+<span class="normal">1178</span>
+<span class="normal">1179</span>
+<span class="normal">1180</span>
+<span class="normal">1181</span>
+<span class="normal">1182</span>
+<span class="normal">1183</span>
+<span class="normal">1184</span>
+<span class="normal">1185</span>
+<span class="normal">1186</span>
+<span class="normal">1187</span>
+<span class="normal">1188</span>
+<span class="normal">1189</span>
+<span class="normal">1190</span>
+<span class="normal">1191</span>
+<span class="normal">1192</span>
+<span class="normal">1193</span>
+<span class="normal">1194</span>
+<span class="normal">1195</span>
+<span class="normal">1196</span>
+<span class="normal">1197</span>
+<span class="normal">1198</span>
+<span class="normal">1199</span>
+<span class="normal">1200</span>
+<span class="normal">1201</span>
+<span class="normal">1202</span>
+<span class="normal">1203</span>
+<span class="normal">1204</span>
+<span class="normal">1205</span>
+<span class="normal">1206</span>
+<span class="normal">1207</span>
+<span class="normal">1208</span>
+<span class="normal">1209</span>
+<span class="normal">1210</span>
+<span class="normal">1211</span>
+<span class="normal">1212</span>
+<span class="normal">1213</span>
+<span class="normal">1214</span>
+<span class="normal">1215</span>
+<span class="normal">1216</span>
+<span class="normal">1217</span>
+<span class="normal">1218</span>
+<span class="normal">1219</span>
+<span class="normal">1220</span>
+<span class="normal">1221</span>
+<span class="normal">1222</span>
+<span class="normal">1223</span>
+<span class="normal">1224</span>
+<span class="normal">1225</span>
+<span class="normal">1226</span>
+<span class="normal">1227</span>
+<span class="normal">1228</span>
+<span class="normal">1229</span>
+<span class="normal">1230</span>
+<span class="normal">1231</span>
+<span class="normal">1232</span>
+<span class="normal">1233</span>
+<span class="normal">1234</span>
+<span class="normal">1235</span>
+<span class="normal">1236</span>
+<span class="normal">1237</span>
+<span class="normal">1238</span>
+<span class="normal">1239</span>
+<span class="normal">1240</span>
+<span class="normal">1241</span>
+<span class="normal">1242</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_bessel_map</span><span class="p">(</span>
+    <span class="n">imap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">],</span>
+    <span class="n">ivar</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">],</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">],</span>
     <span class="n">guess</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">map_units</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pW"</span><span class="p">,</span>
     <span class="n">n_bessel</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
@@ -4664,7 +4791,7 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
     <span class="n">skip_multipoles</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
     <span class="n">calc_cov</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">n_opt_pixels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6000</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">ndmap</span><span class="p">]:</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
 <span class="sd">    Fit a Bessel/multipole core plus a smooth positive r^-3 wing.</span>
 
@@ -4932,11 +5059,11 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    imap : ndmap</span>
+<span class="sd">    imap : Float[ndmap, "nx ny"]</span>
 <span class="sd">        Input map to fit.</span>
-<span class="sd">    ivar : ndmap</span>
+<span class="sd">    ivar : Float[ndmap, "nx ny"]</span>
 <span class="sd">        Inverse-variance map corresponding to `imap`.</span>
-<span class="sd">    posmap : ndmap</span>
+<span class="sd">    posmap : Float[ndmap, "2 nx ny"]</span>
 <span class="sd">        Position maps `(eta, xi)` in radians.</span>
 <span class="sd">    guess : AxisManager</span>
 <span class="sd">        Initial source position, FWHM, and offset estimates.</span>
@@ -4992,14 +5119,14 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
 <span class="sd">        - `wing_errors`: `(2 * n_ang + 1,)` nonlinear parameter errors.</span>
 <span class="sd">        - `core_cov`: `(n_linear, n_linear)` linear covariance matrix.</span>
 
-<span class="sd">    beam_model : ndmap</span>
+<span class="sd">    beam_model : Float[ndmap, "nx ny"]</span>
 <span class="sd">        Final fitted model evaluated on the full input position map.</span>
 <span class="sd">    """</span>
     <span class="n">ell_max</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="p">(</span><span class="n">d</span> <span class="o">/</span> <span class="n">lmd</span><span class="p">)</span><span class="o">.</span><span class="n">decompose</span><span class="p">()</span><span class="o">.</span><span class="n">value</span>
 
     <span class="n">eta</span><span class="p">,</span> <span class="n">xi</span> <span class="o">=</span> <span class="n">posmap</span>
-    <span class="n">eta0</span> <span class="o">=</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
-    <span class="n">xi0</span> <span class="o">=</span> <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
+    <span class="n">eta0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">xi0</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
 
     <span class="n">xi</span> <span class="o">=</span> <span class="n">xi</span> <span class="o">-</span> <span class="n">xi0</span>
     <span class="n">eta</span> <span class="o">=</span> <span class="n">eta</span> <span class="o">-</span> <span class="n">eta0</span>
@@ -5007,7 +5134,10 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
     <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">eta</span><span class="p">,</span> <span class="n">xi</span><span class="p">)</span>
     <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hypot</span><span class="p">(</span><span class="n">xi</span><span class="p">,</span> <span class="n">eta</span><span class="p">)</span>
 
-    <span class="n">fwhm</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span> <span class="o">+</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="n">fwhm</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span>
+        <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+    <span class="p">)</span>
 
     <span class="n">ivar</span> <span class="o">=</span> <span class="n">ivar</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
     <span class="n">ivar</span><span class="p">[</span><span class="n">r</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
@@ -5063,9 +5193,11 @@ optimization. Set to <code>None</code> to use all valid pixels.</p>
 
     <span class="c1"># Construct the Bessel basis once for all fitting pixels.</span>
     <span class="n">b_terms</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">bessel_term_cached</span><span class="p">(</span><span class="n">r_fit</span><span class="p">,</span> <span class="n">ell_max</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_bessel</span><span class="p">)]</span>
+        <span class="p">[</span>
+            <span class="n">cast</span><span class="p">(</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="n">bessel_term_cached</span><span class="p">(</span><span class="n">r_fit</span><span class="p">,</span> <span class="n">ell_max</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_bessel</span><span class="p">)</span>
+        <span class="p">]</span>
     <span class="p">)</span>
-
     <span class="n">base_beams</span> <span class="o">=</span> <span class="n">b_terms</span><span class="p">[:,</span> <span class="n">triu_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">*</span> <span class="n">b_terms</span><span class="p">[:,</span> <span class="n">triu_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
 
     <span class="n">base_beams</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">(</span>

@@ -604,34 +604,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../map/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    map
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1034,11 +1006,10 @@
 <a id="lat_beams.fitting.map.base"></a>
     <div class="doc doc-contents first">
 
-        <p>Functions for fitting beam models to a map.</p>
-<p>All functions will have the following standardized interface
-which is defined by the <code>FitMap</code> protocol in this module.
-Fitting functions should follow the naming convention <code>fit_{MODEL}_map</code>
-where <code>{MODEL}</code> is a one word description of the model being fit.</p>
+        <p>Interfaces and helpers for fitting beam models to maps.</p>
+<p>Beam-fitting functions follow the <code>fit_{MODEL}_map</code> naming convention and
+the <code>FitMap</code> interface defined below. See individual fitting functions
+for details of each beam model.</p>
 
 
 
@@ -1122,54 +1093,44 @@ where <code>{MODEL}</code> is a one word description of the model being fit.</p>
 <span class="normal">54</span>
 <span class="normal">55</span>
 <span class="normal">56</span>
-<span class="normal">57</span>
-<span class="normal">58</span>
-<span class="normal">59</span>
-<span class="normal">60</span>
-<span class="normal">61</span>
-<span class="normal">62</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FitMap</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="normal">57</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FitMap</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">imap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-        <span class="n">ivar</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-        <span class="n">posmap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
+        <span class="n">imap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+        <span class="n">ivar</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+        <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 ny nx"</span><span class="p">],</span>
         <span class="n">guess</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
         <span class="n">map_units</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pW"</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndmap</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Function to fit a beam model to a map.</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]]]:</span>
+<span class="w">        </span><span class="sd">"""Fit a beam model to a map.</span>
 
-<span class="sd">        Arguments</span>
-<span class="sd">        ---------</span>
-<span class="sd">        imap : ndmap</span>
-<span class="sd">            Input map to fit with shape `(nx, ny)`.</span>
-<span class="sd">        ivar : ndmap</span>
-<span class="sd">            Inverse-variance map for `imap` with shape `(nx, ny)`.</span>
-<span class="sd">        posmap : ndmap</span>
-<span class="sd">            Position map in radians for `imap`.</span>
-<span class="sd">            First element is eta and the second is xi.</span>
-<span class="sd">            Should have shape `(2, nx, ny)`.</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        imap : Float[ndmap, "ny nx"]</span>
+<span class="sd">            Input beam map.</span>
+<span class="sd">        ivar : Float[ndmap, "ny nx"]</span>
+<span class="sd">            Inverse-variance map for `imap`.</span>
+<span class="sd">        posmap : Float[ndmap, "2 ny nx"]</span>
+<span class="sd">            Position map in radians. The first component is `eta` and the</span>
+<span class="sd">            second is `xi`.</span>
 <span class="sd">        guess : AxisManager</span>
-<span class="sd">            `AxisManager` containing parameters that are useful as a starting point.</span>
-<span class="sd">            See `make_guess` for the expected parameters.</span>
-<span class="sd">        map_units : str, default: 'pW'</span>
-<span class="sd">            The units of the map.</span>
-<span class="sd">            Should be a string that astromy units understands.</span>
-<span class="sd">        **kwargs</span>
+<span class="sd">            Initial parameter values useful for starting the fit. See</span>
+<span class="sd">            :func:`make_guess` for the standard parameters.</span>
+<span class="sd">        map_units : str, default: "pW"</span>
+<span class="sd">            Units of the input map.</span>
+<span class="sd">        **kwargs : object</span>
 <span class="sd">            Additional arguments for the specific fitting function.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        fit_params : Optional[AxisManager]</span>
-<span class="sd">            The fit parameters.</span>
-<span class="sd">            See individual function docstrings for detail.</span>
-<span class="sd">            Returns `None` if the fit failed.</span>
-<span class="sd">        model : Optional[NDArray]</span>
-<span class="sd">            The model evaluated with the fit parameters.</span>
-<span class="sd">            Returns `None` if the fit failed.</span>
+<span class="sd">            Fitted model parameters. Returns `None` if the fit fails.</span>
+<span class="sd">        model : Optional[Float[ndmap, "ny nx"]]</span>
+<span class="sd">            Model evaluated with the fitted parameters. Returns `None` if</span>
+<span class="sd">            the fit fails.</span>
 <span class="sd">        """</span>
-        <span class="k">pass</span>
+        <span class="o">...</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -1197,28 +1158,121 @@ where <code>{MODEL}</code> is a one word description of the model being fit.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Function to fit a beam model to a map.</p>
+        <p>Fit a beam model to a map.</p>
 
 
-<details class="arguments" open>
-  <summary>Arguments</summary>
-  <p>imap : ndmap
-    Input map to fit with shape <code>(nx, ny)</code>.
-ivar : ndmap
-    Inverse-variance map for <code>imap</code> with shape <code>(nx, ny)</code>.
-posmap : ndmap
-    Position map in radians for <code>imap</code>.
-    First element is eta and the second is xi.
-    Should have shape <code>(2, nx, ny)</code>.
-guess : AxisManager
-    <code>AxisManager</code> containing parameters that are useful as a starting point.
-    See <code>make_guess</code> for the expected parameters.
-map_units : str, default: 'pW'
-    The units of the map.
-    Should be a string that astromy units understands.
-**kwargs
-    Additional arguments for the specific fitting function.</p>
-</details>
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>imap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input beam map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ivar</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Inverse-variance map for <code>imap</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>posmap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Position map in radians. The first component is <code>eta</code> and the
+second is <code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>guess</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial parameter values useful for starting the fit. See
+:func:<code>make_guess</code> for the standard parameters.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>map_units</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Units of the input map.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#34;pW&#34;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>**kwargs</code>
+            </td>
+            <td>
+                  <code><span title="object">object</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Additional arguments for the specific fitting function.</p>
+              </div>
+            </td>
+            <td>
+                  <code>{}</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
 
     <p><span class="doc-section-title">Returns:</span></p>
     <table>
@@ -1235,20 +1289,18 @@ map_units : str, default: 'pW'
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The fit parameters.
-See individual function docstrings for detail.
-Returns <code>None</code> if the fit failed.</p>
+                <p>Fitted model parameters. Returns <code>None</code> if the fit fails.</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
 <td><code>model</code></td>            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="NDArray">NDArray</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The model evaluated with the fit parameters.
-Returns <code>None</code> if the fit failed.</p>
+                <p>Model evaluated with the fitted parameters. Returns <code>None</code> if
+the fit fails.</p>
               </div>
             </td>
           </tr>
@@ -1294,53 +1346,43 @@ Returns <code>None</code> if the fit failed.</p>
 <span class="normal">54</span>
 <span class="normal">55</span>
 <span class="normal">56</span>
-<span class="normal">57</span>
-<span class="normal">58</span>
-<span class="normal">59</span>
-<span class="normal">60</span>
-<span class="normal">61</span>
-<span class="normal">62</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
+<span class="normal">57</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
-    <span class="n">imap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">ivar</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
+    <span class="n">imap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">ivar</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 ny nx"</span><span class="p">],</span>
     <span class="n">guess</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">map_units</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pW"</span><span class="p">,</span>
-    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndmap</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Function to fit a beam model to a map.</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]]]:</span>
+<span class="w">    </span><span class="sd">"""Fit a beam model to a map.</span>
 
-<span class="sd">    Arguments</span>
-<span class="sd">    ---------</span>
-<span class="sd">    imap : ndmap</span>
-<span class="sd">        Input map to fit with shape `(nx, ny)`.</span>
-<span class="sd">    ivar : ndmap</span>
-<span class="sd">        Inverse-variance map for `imap` with shape `(nx, ny)`.</span>
-<span class="sd">    posmap : ndmap</span>
-<span class="sd">        Position map in radians for `imap`.</span>
-<span class="sd">        First element is eta and the second is xi.</span>
-<span class="sd">        Should have shape `(2, nx, ny)`.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    imap : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Input beam map.</span>
+<span class="sd">    ivar : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Inverse-variance map for `imap`.</span>
+<span class="sd">    posmap : Float[ndmap, "2 ny nx"]</span>
+<span class="sd">        Position map in radians. The first component is `eta` and the</span>
+<span class="sd">        second is `xi`.</span>
 <span class="sd">    guess : AxisManager</span>
-<span class="sd">        `AxisManager` containing parameters that are useful as a starting point.</span>
-<span class="sd">        See `make_guess` for the expected parameters.</span>
-<span class="sd">    map_units : str, default: 'pW'</span>
-<span class="sd">        The units of the map.</span>
-<span class="sd">        Should be a string that astromy units understands.</span>
-<span class="sd">    **kwargs</span>
+<span class="sd">        Initial parameter values useful for starting the fit. See</span>
+<span class="sd">        :func:`make_guess` for the standard parameters.</span>
+<span class="sd">    map_units : str, default: "pW"</span>
+<span class="sd">        Units of the input map.</span>
+<span class="sd">    **kwargs : object</span>
 <span class="sd">        Additional arguments for the specific fitting function.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    fit_params : Optional[AxisManager]</span>
-<span class="sd">        The fit parameters.</span>
-<span class="sd">        See individual function docstrings for detail.</span>
-<span class="sd">        Returns `None` if the fit failed.</span>
-<span class="sd">    model : Optional[NDArray]</span>
-<span class="sd">        The model evaluated with the fit parameters.</span>
-<span class="sd">        Returns `None` if the fit failed.</span>
+<span class="sd">        Fitted model parameters. Returns `None` if the fit fails.</span>
+<span class="sd">    model : Optional[Float[ndmap, "ny nx"]]</span>
+<span class="sd">        Model evaluated with the fitted parameters. Returns `None` if</span>
+<span class="sd">        the fit fails.</span>
 <span class="sd">    """</span>
-    <span class="k">pass</span>
+    <span class="o">...</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1367,28 +1409,135 @@ Returns <code>None</code> if the fit failed.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Helper function to make the initial guess <code>AxisManager</code>.
-Note that all arguments will be scalars in the output
-and all positional parameters are in radians.</p>
+        <p>Make an initial beam-fitting parameter guess.</p>
 
 
-<details class="arguments" open>
-  <summary>Arguments</summary>
-  <p>amp : float, default: 1
-    Amplitude of the beam.
-fwhm_xi : float, default: 2/60
-    FWHM in xi.
-fwhm_eta : float, default: 2/60
-    FWHM in eta.
-xi0 : float, default: 0
-    Center of beam in xi.
-eta0 : float, default: 0
-    Center of beam in eta.
-phi : float, default: 0
-    Rotation of the beam.
-off : float, default: 0
-    DC offset of the beam.</p>
-</details>
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>amp</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial beam amplitude.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fwhm_xi</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial FWHM in <code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>2 / 60</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fwhm_eta</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial FWHM in <code>eta</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>2 / 60</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>xi0</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial beam center in <code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>eta0</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial beam center in <code>eta</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>phi</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial beam rotation angle.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>off</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial DC offset.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
 
     <p><span class="doc-section-title">Returns:</span></p>
     <table>
@@ -1405,7 +1554,8 @@ off : float, default: 0
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>AxisManager</code> with the guess parameters.</p>
+                <p><code>AxisManager</code> containing the initial parameters. All values are scalar
+and positional parameters are in radians.</p>
               </div>
             </td>
           </tr>
@@ -1415,47 +1565,45 @@ off : float, default: 0
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 65</span>
-<span class="normal"> 66</span>
-<span class="normal"> 67</span>
-<span class="normal"> 68</span>
-<span class="normal"> 69</span>
-<span class="normal"> 70</span>
-<span class="normal"> 71</span>
-<span class="normal"> 72</span>
-<span class="normal"> 73</span>
-<span class="normal"> 74</span>
-<span class="normal"> 75</span>
-<span class="normal"> 76</span>
-<span class="normal"> 77</span>
-<span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
-<span class="normal"> 97</span>
-<span class="normal"> 98</span>
-<span class="normal"> 99</span>
-<span class="normal">100</span>
-<span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_guess</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span>
+<span class="normal">91</span>
+<span class="normal">92</span>
+<span class="normal">93</span>
+<span class="normal">94</span>
+<span class="normal">95</span>
+<span class="normal">96</span>
+<span class="normal">97</span>
+<span class="normal">98</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_guess</span><span class="p">(</span>
     <span class="n">amp</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">fwhm_xi</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">/</span> <span class="mi">60</span><span class="p">,</span>
     <span class="n">fwhm_eta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">/</span> <span class="mi">60</span><span class="p">,</span>
@@ -1464,32 +1612,30 @@ off : float, default: 0
     <span class="n">phi</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">off</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AxisManager</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Helper function to make the initial guess `AxisManager`.</span>
-<span class="sd">    Note that all arguments will be scalars in the output</span>
-<span class="sd">    and all positional parameters are in radians.</span>
+<span class="w">    </span><span class="sd">"""Make an initial beam-fitting parameter guess.</span>
 
-<span class="sd">    Arguments</span>
-<span class="sd">    ---------</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
 <span class="sd">    amp : float, default: 1</span>
-<span class="sd">        Amplitude of the beam.</span>
-<span class="sd">    fwhm_xi : float, default: 2/60</span>
-<span class="sd">        FWHM in xi.</span>
-<span class="sd">    fwhm_eta : float, default: 2/60</span>
-<span class="sd">        FWHM in eta.</span>
+<span class="sd">        Initial beam amplitude.</span>
+<span class="sd">    fwhm_xi : float, default: 2 / 60</span>
+<span class="sd">        Initial FWHM in `xi`.</span>
+<span class="sd">    fwhm_eta : float, default: 2 / 60</span>
+<span class="sd">        Initial FWHM in `eta`.</span>
 <span class="sd">    xi0 : float, default: 0</span>
-<span class="sd">        Center of beam in xi.</span>
+<span class="sd">        Initial beam center in `xi`.</span>
 <span class="sd">    eta0 : float, default: 0</span>
-<span class="sd">        Center of beam in eta.</span>
+<span class="sd">        Initial beam center in `eta`.</span>
 <span class="sd">    phi : float, default: 0</span>
-<span class="sd">        Rotation of the beam.</span>
+<span class="sd">        Initial beam rotation angle.</span>
 <span class="sd">    off : float, default: 0</span>
-<span class="sd">        DC offset of the beam.</span>
+<span class="sd">        Initial DC offset.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    guess : AxisManager</span>
-<span class="sd">        `AxisManager` with the guess parameters.</span>
+<span class="sd">        `AxisManager` containing the initial parameters. All values are scalar</span>
+<span class="sd">        and positional parameters are in radians.</span>
 <span class="sd">    """</span>
     <span class="n">guess_dict</span> <span class="o">=</span> <span class="nb">locals</span><span class="p">()</span>
     <span class="n">guess</span> <span class="o">=</span> <span class="n">AxisManager</span><span class="p">()</span>

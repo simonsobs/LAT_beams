@@ -14,7 +14,7 @@
         <link rel="prev" href="../bessel/">
       
       
-        <link rel="next" href="../map/">
+        <link rel="next" href="../../profile/">
       
       
         
@@ -578,38 +578,32 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.gauss.gaussian2d_from_aman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gaussian2d_from_aman
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.gauss.gaussian2d_multipoles_from_aman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gaussian2d_multipoles_from_aman
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../map/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    map
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -974,6 +968,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.gauss.gaussian2d_from_aman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gaussian2d_from_aman
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.gauss.gaussian2d_multipoles_from_aman" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gaussian2d_multipoles_from_aman
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -999,6 +1015,12 @@
 
 <a id="lat_beams.fitting.map.gauss"></a>
     <div class="doc doc-contents first">
+
+        <p>Gaussian and multipole expansion beam fitting utilities.</p>
+<p>The Gaussian beam model is fit directly to a map using weighted least squares.
+A fitted Gaussian can then be used as the base beam for a multipole expansion,
+whose amplitudes are obtained by a weighted linear decomposition.  See the
+individual fitting and model-conversion functions for details.</p>
 
 
 
@@ -1031,22 +1053,143 @@
 
     <div class="doc doc-contents ">
 
-        <p>Fit 2d Gaussian to input map.
-Note that only keywod arguments are shown below.
-See <code>FitMap</code> for the rest.</p>
+        <p>Fit a 2D Gaussian beam to a map.</p>
+<p>The fit minimizes the inverse-variance-weighted residual between <code>imap</code>
+and a Gaussian beam. The Gaussian can optionally be constrained to be
+symmetric, and the fit can optionally be restricted to a circular region
+around the initial beam center.</p>
 
 
-<details class="arguments" open>
-  <summary>Arguments</summary>
-  <p>force_sym: bool, default: False
-    It true fit a symmetric beam.
-    Both FWHMs will still be in the output,
-    but they will have the same value.
-mask_size : float, default: -1
-    If this is &gt;0 then a mask will be applies to ivar
-    such that only data within <code>mask_size</code>
-    of <code>(guess.xi0, guess.eta0)</code> is used in the fit.</p>
-</details>
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>imap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input beam map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ivar</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Inverse-variance map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>posmap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Beam coordinates. The first component is <code>eta</code> and the second is
+<code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>guess</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial Gaussian parameters. Must contain <code>xi0</code>, <code>eta0</code>, <code>off</code>,
+<code>amp</code>, <code>fwhm_xi</code>, <code>fwhm_eta</code>, and <code>phi</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>map_units</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Unit of the map amplitude and offset parameters.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#34;pW&#34;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>force_sym</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>True</code>, constrain the fitted Gaussian to have equal FWHM in
+<code>xi</code> and <code>eta</code> and zero rotation angle.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mask_size</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If positive, only pixels within this radius of the initial beam center
+are included in the fit.</p>
+              </div>
+            </td>
+            <td>
+                  <code>-1</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
 
     <p><span class="doc-section-title">Returns:</span></p>
     <table>
@@ -1063,29 +1206,19 @@ mask_size : float, default: -1
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Parameters are:</p>
-<ul>
-<li><code>amp</code>: Amplitude of the beam</li>
-<li><code>fwhm_xi</code>: FWHM in xi</li>
-<li><code>fwhm_eta</code>: FWHM in eta</li>
-<li><code>xi0</code>: Center of beam in xi</li>
-<li><code>eta0</code>: Center of beam in eta</li>
-<li><code>phi</code>: Rotation of the beam</li>
-<li><code>off</code>: DC offset of the beam</li>
-</ul>
-<p>Note that all positional parameters are in radians.
-Returns <code>None</code> if the fit failed.</p>
+                <p>Fitted Gaussian parameters. Positional parameters are stored in
+radians. <code>None</code> if the fit fails.</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
 <td><code>model</code></td>            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="NDArray">NDArray</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The model evaluated with the fit parameters.
-Returns <code>None</code> if the fit failed.</p>
+                <p>The fitted Gaussian evaluated on <code>posmap</code>. <code>None</code> if the fit
+fails.</p>
               </div>
             </td>
           </tr>
@@ -1095,17 +1228,7 @@ Returns <code>None</code> if the fit failed.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/gauss.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 16</span>
-<span class="normal"> 17</span>
-<span class="normal"> 18</span>
-<span class="normal"> 19</span>
-<span class="normal"> 20</span>
-<span class="normal"> 21</span>
-<span class="normal"> 22</span>
-<span class="normal"> 23</span>
-<span class="normal"> 24</span>
-<span class="normal"> 25</span>
-<span class="normal"> 26</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 26</span>
 <span class="normal"> 27</span>
 <span class="normal"> 28</span>
 <span class="normal"> 29</span>
@@ -1251,77 +1374,93 @@ Returns <code>None</code> if the fit failed.</p>
 <span class="normal">169</span>
 <span class="normal">170</span>
 <span class="normal">171</span>
-<span class="normal">172</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_gauss_map</span><span class="p">(</span>
-    <span class="n">imap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">ivar</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_gauss_map</span><span class="p">(</span>
+    <span class="n">imap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">ivar</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 ny nx"</span><span class="p">],</span>
     <span class="n">guess</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">map_units</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pW"</span><span class="p">,</span>
     <span class="n">force_sym</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">mask_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Fit 2d Gaussian to input map.</span>
-<span class="sd">    Note that only keywod arguments are shown below.</span>
-<span class="sd">    See `FitMap` for the rest.</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]]]:</span>
+<span class="w">    </span><span class="sd">"""Fit a 2D Gaussian beam to a map.</span>
 
-<span class="sd">    Arguments</span>
-<span class="sd">    ---------</span>
-<span class="sd">    force_sym: bool, default: False</span>
-<span class="sd">        It true fit a symmetric beam.</span>
-<span class="sd">        Both FWHMs will still be in the output,</span>
-<span class="sd">        but they will have the same value.</span>
+<span class="sd">    The fit minimizes the inverse-variance-weighted residual between `imap`</span>
+<span class="sd">    and a Gaussian beam. The Gaussian can optionally be constrained to be</span>
+<span class="sd">    symmetric, and the fit can optionally be restricted to a circular region</span>
+<span class="sd">    around the initial beam center.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    imap : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Input beam map.</span>
+<span class="sd">    ivar : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Inverse-variance map.</span>
+<span class="sd">    posmap : Float[ndmap, "2 ny nx"]</span>
+<span class="sd">        Beam coordinates. The first component is `eta` and the second is</span>
+<span class="sd">        `xi`.</span>
+<span class="sd">    guess : AxisManager</span>
+<span class="sd">        Initial Gaussian parameters. Must contain `xi0`, `eta0`, `off`,</span>
+<span class="sd">        `amp`, `fwhm_xi`, `fwhm_eta`, and `phi`.</span>
+<span class="sd">    map_units : str, default: "pW"</span>
+<span class="sd">        Unit of the map amplitude and offset parameters.</span>
+<span class="sd">    force_sym : bool, default: False</span>
+<span class="sd">        If `True`, constrain the fitted Gaussian to have equal FWHM in</span>
+<span class="sd">        `xi` and `eta` and zero rotation angle.</span>
 <span class="sd">    mask_size : float, default: -1</span>
-<span class="sd">        If this is &gt;0 then a mask will be applies to ivar</span>
-<span class="sd">        such that only data within `mask_size`</span>
-<span class="sd">        of `(guess.xi0, guess.eta0)` is used in the fit.</span>
+<span class="sd">        If positive, only pixels within this radius of the initial beam center</span>
+<span class="sd">        are included in the fit.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    fit_params : Optional[AxisManager]</span>
-<span class="sd">        Parameters are:</span>
-
-<span class="sd">        - `amp`: Amplitude of the beam</span>
-<span class="sd">        - `fwhm_xi`: FWHM in xi</span>
-<span class="sd">        - `fwhm_eta`: FWHM in eta</span>
-<span class="sd">        - `xi0`: Center of beam in xi</span>
-<span class="sd">        - `eta0`: Center of beam in eta</span>
-<span class="sd">        - `phi`: Rotation of the beam</span>
-<span class="sd">        - `off`: DC offset of the beam</span>
-
-<span class="sd">        Note that all positional parameters are in radians.</span>
-<span class="sd">        Returns `None` if the fit failed.</span>
-<span class="sd">    model : Optional[NDArray]</span>
-<span class="sd">        The model evaluated with the fit parameters.</span>
-<span class="sd">        Returns `None` if the fit failed.</span>
+<span class="sd">        Fitted Gaussian parameters. Positional parameters are stored in</span>
+<span class="sd">        radians. `None` if the fit fails.</span>
+<span class="sd">    model : Optional[Float[ndmap, "ny nx"]]</span>
+<span class="sd">        The fitted Gaussian evaluated on `posmap`. `None` if the fit</span>
+<span class="sd">        fails.</span>
 <span class="sd">    """</span>
+
     <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">=</span> <span class="n">posmap</span>
     <span class="n">x0</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="p">,</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="p">,</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">off</span><span class="p">,</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">amp</span><span class="p">,</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">,</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">,</span>
-        <span class="n">guess</span><span class="o">.</span><span class="n">phi</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="p">),</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="p">),</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">off</span><span class="p">),</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">amp</span><span class="p">),</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">),</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">),</span>
+        <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">phi</span><span class="p">),</span>
     <span class="p">]</span>
     <span class="n">bounds</span> <span class="o">=</span> <span class="p">[</span>
         <span class="p">[</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">,</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">-</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">),</span>
             <span class="o">-</span><span class="mi">5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">imap</span><span class="p">)),</span>
             <span class="mi">0</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span>
             <span class="mi">0</span><span class="p">,</span>
         <span class="p">],</span>
         <span class="p">[</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">,</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">),</span>
             <span class="mi">5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">imap</span><span class="p">),</span>
             <span class="mi">5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">imap</span><span class="p">),</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">)</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">)</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span>
             <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
         <span class="p">],</span>
     <span class="p">]</span>
@@ -1425,19 +1564,143 @@ Returns <code>None</code> if the fit failed.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Fit the multipole expansion of a input model to a map.</p>
+        <p>Fit a multipole expansion of a beam model to a map.</p>
+<p>The input map is modeled as a multipole expansion of <code>base_beam</code>.
+If no base beam is provided, a unit-amplitude Gaussian is constructed
+from <code>guess</code>. The multipole amplitudes are fit using inverse-variance
+weighting.</p>
 
 
-<details class="arguments" open>
-  <summary>Arguments</summary>
-  <p>base_beam : Optional[ndmap], default: None
-    The base beam model to take the multipole expansion of.
-    If <code>None</code> then this will be computend by passing the <code>guess</code> parameters to
-    <code>guassian2d</code> (but with the amplitude set to 1).
-n_multipoles : int, default: 5
-    The number of multipoles to fit.
-    0 will just be the monopole, 1 the dipole, and so on.</p>
-</details>
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>imap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input beam map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ivar</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Inverse-variance map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>posmap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Beam coordinates. The first component is <code>eta</code> and the second is
+<code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>guess</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Initial Gaussian beam parameters used to construct <code>base_beam</code> when
+it is not provided.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>map_units</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Unit of the fitted multipole amplitudes.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#34;pW&#34;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>base_beam</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Base beam whose angular dependence is expanded. If <code>None</code>, a
+unit-amplitude Gaussian is constructed from <code>guess</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_multipoles</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of multipoles to fit. <code>0</code> fits only the monopole, <code>1</code> adds
+the dipole, and so on.</p>
+              </div>
+            </td>
+            <td>
+                  <code>5</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
 
     <p><span class="doc-section-title">Returns:</span></p>
     <table>
@@ -1454,22 +1717,20 @@ n_multipoles : int, default: 5
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The only element is an array called <code>amps</code> with shape
-<code>(n_multipoles, 2)</code> where each row containes the amplitudes
-for a given multipole, the first collumn is the <code>cos</code> terms,
-and the second <code>collumn</code> is the <code>sin</code> terms.
-The <code>AxisManager</code> will contain axes called <code>multipoles</code> and <code>term</code>
-for this array.</p>
+                <p>Fitted multipole amplitudes stored in <code>amps</code> with shape
+<code>(n_multipoles, 2)</code>. The second dimension contains the cosine and
+sine amplitudes. The <code>AxisManager</code> also contains <code>multipoles</code> and
+<code>term</code> axes.</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
 <td><code>model</code></td>            <td>
-                  <code><span title="NDArray">NDArray</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The model evaluated with the fit parameters.</p>
+                <p>Beam model evaluated with the fitted multipole amplitudes.</p>
               </div>
             </td>
           </tr>
@@ -1479,20 +1740,7 @@ for this array.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/fitting/map/gauss.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span>
-<span class="normal">180</span>
-<span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span>
-<span class="normal">184</span>
-<span class="normal">185</span>
-<span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">188</span>
 <span class="normal">189</span>
 <span class="normal">190</span>
 <span class="normal">191</span>
@@ -1542,61 +1790,118 @@ for this array.</p>
 <span class="normal">235</span>
 <span class="normal">236</span>
 <span class="normal">237</span>
-<span class="normal">238</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_multipole_map</span><span class="p">(</span>
-    <span class="n">imap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">ivar</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">ndmap</span><span class="p">,</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_multipole_map</span><span class="p">(</span>
+    <span class="n">imap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">ivar</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 ny nx"</span><span class="p">],</span>
     <span class="n">guess</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">map_units</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pW"</span><span class="p">,</span>
-    <span class="n">base_beam</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ndmap</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">base_beam</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">n_multipoles</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
-<span class="p">):</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Fit the multipole expansion of a input model to a map.</span>
+<span class="sd">    Fit a multipole expansion of a beam model to a map.</span>
 
-<span class="sd">    Arguments</span>
-<span class="sd">    ---------</span>
-<span class="sd">    base_beam : Optional[ndmap], default: None</span>
-<span class="sd">        The base beam model to take the multipole expansion of.</span>
-<span class="sd">        If `None` then this will be computend by passing the `guess` parameters to</span>
-<span class="sd">        `guassian2d` (but with the amplitude set to 1).</span>
+<span class="sd">    The input map is modeled as a multipole expansion of `base_beam`.</span>
+<span class="sd">    If no base beam is provided, a unit-amplitude Gaussian is constructed</span>
+<span class="sd">    from `guess`. The multipole amplitudes are fit using inverse-variance</span>
+<span class="sd">    weighting.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    imap : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Input beam map.</span>
+<span class="sd">    ivar : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Inverse-variance map.</span>
+<span class="sd">    posmap : Float[ndmap, "2 ny nx"]</span>
+<span class="sd">        Beam coordinates. The first component is `eta` and the second is</span>
+<span class="sd">        `xi`.</span>
+<span class="sd">    guess : AxisManager</span>
+<span class="sd">        Initial Gaussian beam parameters used to construct `base_beam` when</span>
+<span class="sd">        it is not provided.</span>
+<span class="sd">    map_units : str, default: "pW"</span>
+<span class="sd">        Unit of the fitted multipole amplitudes.</span>
+<span class="sd">    base_beam : Optional[Float[ndmap, "ny nx"]], default: None</span>
+<span class="sd">        Base beam whose angular dependence is expanded. If `None`, a</span>
+<span class="sd">        unit-amplitude Gaussian is constructed from `guess`.</span>
 <span class="sd">    n_multipoles : int, default: 5</span>
-<span class="sd">        The number of multipoles to fit.</span>
-<span class="sd">        0 will just be the monopole, 1 the dipole, and so on.</span>
+<span class="sd">        Number of multipoles to fit. `0` fits only the monopole, `1` adds</span>
+<span class="sd">        the dipole, and so on.</span>
+
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    fit_params : AxisManager</span>
-<span class="sd">        The only element is an array called `amps` with shape</span>
-<span class="sd">        `(n_multipoles, 2)` where each row containes the amplitudes</span>
-<span class="sd">        for a given multipole, the first collumn is the `cos` terms,</span>
-<span class="sd">        and the second `collumn` is the `sin` terms.</span>
-<span class="sd">        The `AxisManager` will contain axes called `multipoles` and `term`</span>
-<span class="sd">        for this array.</span>
-<span class="sd">    model : NDArray</span>
-<span class="sd">        The model evaluated with the fit parameters.</span>
+<span class="sd">        Fitted multipole amplitudes stored in `amps` with shape</span>
+<span class="sd">        `(n_multipoles, 2)`. The second dimension contains the cosine and</span>
+<span class="sd">        sine amplitudes. The `AxisManager` also contains `multipoles` and</span>
+<span class="sd">        `term` axes.</span>
+<span class="sd">    model : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Beam model evaluated with the fitted multipole amplitudes.</span>
 <span class="sd">    """</span>
+
     <span class="k">if</span> <span class="n">base_beam</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">base_beam</span> <span class="o">=</span> <span class="n">gaussian2d</span><span class="p">(</span>
             <span class="n">posmap</span><span class="p">,</span>
             <span class="mi">1</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">phi</span><span class="p">,</span>
-            <span class="n">guess</span><span class="o">.</span><span class="n">off</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">phi</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="mi">0</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">=</span> <span class="n">posmap</span>
     <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span>
-        <span class="n">y</span> <span class="o">-</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">x</span> <span class="o">-</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
+        <span class="n">y</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">x</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="c1"># Compute model</span>
     <span class="k">if</span> <span class="n">n_multipoles</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">amps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">guess</span><span class="o">.</span><span class="n">amp</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span>
+        <span class="n">amps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">amp</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">amps</span> <span class="o">=</span> <span class="n">multipole_decomp</span><span class="p">(</span><span class="n">base_beam</span><span class="p">,</span> <span class="n">imap</span><span class="p">,</span> <span class="n">ivar</span><span class="p">,</span> <span class="n">n_multipoles</span><span class="p">,</span> <span class="n">theta</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-    <span class="n">model</span> <span class="o">=</span> <span class="n">multipole_expansion</span><span class="p">(</span><span class="n">base_beam</span><span class="p">,</span> <span class="n">amps</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">imap</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">model</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">multipole_expansion</span><span class="p">(</span><span class="n">base_beam</span><span class="p">,</span> <span class="n">amps</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span>
+        <span class="n">ndmap</span><span class="p">,</span>
+        <span class="n">multipole_expansion</span><span class="p">(</span><span class="n">base_beam</span><span class="p">,</span> <span class="n">amps</span><span class="p">,</span> <span class="n">theta</span><span class="p">),</span>
+    <span class="p">)</span>
 
     <span class="c1"># Convert to aman</span>
     <span class="n">m_units</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">Unit</span><span class="p">(</span><span class="n">map_units</span><span class="p">)</span>
@@ -1606,6 +1911,336 @@ for this array.</p>
     <span class="n">aman</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"amps"</span><span class="p">,</span> <span class="n">amps</span> <span class="o">*</span> <span class="n">m_units</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="n">mp_ax</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">sc_ax</span><span class="p">)])</span>
 
     <span class="k">return</span> <span class="n">aman</span><span class="p">,</span> <span class="n">model</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.gauss.gaussian2d_from_aman" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">gaussian2d_from_aman</span><span class="p">(</span><span class="n">posmap</span><span class="p">,</span> <span class="n">aman</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Evaluate a Gaussian beam from an AxisManager.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>posmap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Beam coordinates. The first component is <code>eta</code> and the second is
+<code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>aman</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>AxisManager containing the Gaussian parameters. If it contains a
+<code>gaussian</code> field, that field is used. Otherwise the parameters are
+read directly from <code>aman</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>beam</code></td>            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gaussian beam evaluated at <code>posmap</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/gauss.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gaussian2d_from_aman</span><span class="p">(</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 ny nx"</span><span class="p">],</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Evaluate a Gaussian beam from an AxisManager.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    posmap : Float[ndmap, "2 ny nx"]</span>
+<span class="sd">        Beam coordinates. The first component is `eta` and the second is</span>
+<span class="sd">        `xi`.</span>
+<span class="sd">    aman : AxisManager</span>
+<span class="sd">        AxisManager containing the Gaussian parameters. If it contains a</span>
+<span class="sd">        `gaussian` field, that field is used. Otherwise the parameters are</span>
+<span class="sd">        read directly from `aman`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    beam : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Gaussian beam evaluated at `posmap`.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="s2">"gaussian"</span> <span class="ow">in</span> <span class="n">aman</span><span class="o">.</span><span class="n">_fields</span><span class="p">:</span>
+        <span class="n">aman</span> <span class="o">=</span> <span class="n">aman</span><span class="o">.</span><span class="n">gaussian</span>
+
+    <span class="k">return</span> <span class="n">gaussian2d</span><span class="p">(</span>
+        <span class="n">posmap</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">amp</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">phi</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">off</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.gauss.gaussian2d_multipoles_from_aman" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">gaussian2d_multipoles_from_aman</span><span class="p">(</span><span class="n">posmap</span><span class="p">,</span> <span class="n">aman</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Evaluate a Gaussian multipole beam from an AxisManager.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>posmap</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Beam coordinates. The first component is <code>eta</code> and the second is
+<code>xi</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>aman</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>AxisManager containing <code>gaussian</code> and <code>gauss_multipole</code> fields.
+<code>gaussian</code> contains the base Gaussian parameters and
+<code>gauss_multipole.amps</code> contains the multipole amplitudes.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>beam</code></td>            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gaussian multipole beam evaluated at <code>posmap</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/gauss.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gaussian2d_multipoles_from_aman</span><span class="p">(</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 ny nx"</span><span class="p">],</span>
+    <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Evaluate a Gaussian multipole beam from an AxisManager.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    posmap : Float[ndmap, "2 ny nx"]</span>
+<span class="sd">        Beam coordinates. The first component is `eta` and the second is</span>
+<span class="sd">        `xi`.</span>
+<span class="sd">    aman : AxisManager</span>
+<span class="sd">        AxisManager containing `gaussian` and `gauss_multipole` fields.</span>
+<span class="sd">        `gaussian` contains the base Gaussian parameters and</span>
+<span class="sd">        `gauss_multipole.amps` contains the multipole amplitudes.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    beam : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Gaussian multipole beam evaluated at `posmap`.</span>
+<span class="sd">    """</span>
+    <span class="n">base_beam</span> <span class="o">=</span> <span class="n">gaussian2d_from_aman</span><span class="p">(</span><span class="n">posmap</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gaussian</span><span class="p">)</span>
+    <span class="n">base_beam</span> <span class="o">-=</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gaussian</span><span class="o">.</span><span class="n">off</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
+    <span class="n">base_beam</span> <span class="o">/=</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gaussian</span><span class="o">.</span><span class="n">amp</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
+
+    <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">=</span> <span class="n">posmap</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span>
+        <span class="n">y</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gaussian</span><span class="o">.</span><span class="n">eta0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">x</span> <span class="o">-</span> <span class="n">cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">Quantity</span><span class="p">,</span> <span class="n">aman</span><span class="o">.</span><span class="n">gaussian</span><span class="o">.</span><span class="n">xi0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">radian</span><span class="p">)</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">amps</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">aman</span><span class="o">.</span><span class="n">gauss_multipole</span><span class="o">.</span><span class="n">amps</span><span class="o">.</span><span class="n">value</span><span class="p">),)</span>
+
+    <span class="n">model</span> <span class="o">=</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">model</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">multipole_expansion</span><span class="p">(</span><span class="n">base_beam</span><span class="p">,</span> <span class="n">amps</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">ndmap</span><span class="p">,</span> <span class="n">multipole_expansion</span><span class="p">(</span><span class="n">base_beam</span><span class="p">,</span> <span class="n">amps</span><span class="p">,</span> <span class="n">theta</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">model</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
