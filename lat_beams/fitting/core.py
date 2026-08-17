@@ -60,7 +60,7 @@ def gaussian2d(posmap, a, xi0, eta0, fwhm_xi, fwhm_eta, phi, off):
     sin2phi = np.sin(2 * phi)
 
     a_coef = cos2 / (2 * sigma_eta**2) + sin2 / (2 * sigma_xi**2)
-    b_coef = -sin2phi / (4 * sigma_eta**2) + sin2phi / (4 * sigma_xi * 2)
+    b_coef = -sin2phi / (4 * sigma_eta**2) + sin2phi / (4 * sigma_xi**2)
     c_coef = sin2 / (2 * sigma_eta**2) + cos2 / (2 * sigma_xi**2)
 
     deta = eta - eta0
@@ -208,10 +208,22 @@ def multipole_expansion(base_beam, amps, theta):
     return beam
 
 
-def bessel_term(r, ell_max, i):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        bessel = jv(i, r * ell_max) / (r * ell_max)
-    return bessel
+def bessel_term( r: NDArray[np.float64], ell_max: float, i: int,) -> NDArray[np.float64]:
+    """
+    Evaluate the normalized Bessel basis function.
+    Computes
+        J_i(r * ell_max) / (r * ell_max)
+    with the limiting value at `r = 0` handled explicitly.
+    """
+    x = r * ell_max
+    out = np.empty_like(x, dtype=float)
+    zero = x == 0
+    nonzero = ~zero
+    out[nonzero] = jv(i, x[nonzero]) / x[nonzero]
+    out[zero] = 0.0
+    if i == 0:
+        out[zero] = 1.0
+    return out
 
 
 bessel_term_cached = memory.cache(bessel_term)
