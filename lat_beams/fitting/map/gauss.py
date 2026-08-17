@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from astropy import units as u
 from pixell.enmap import ndmap
-from scipy.optimize import minimize, least_squares
+from scipy.optimize import least_squares, minimize
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 from sotodlib.tod_ops.filters import logger as flog
 
@@ -116,7 +116,7 @@ def fit_gauss_map(
     if mask_size > 0:
         r = np.sqrt((x - x0[0]) ** 2 + (y - x0[1]) ** 2)
         msk = r < mask_size
-    
+
         fit_imap = np.asarray(imap)[msk]
         fit_ivar = np.asarray(ivar)[msk]
         fit_posmap = np.asarray(posmap)[:, msk]
@@ -124,7 +124,7 @@ def fit_gauss_map(
         fit_imap = np.asarray(imap)
         fit_ivar = np.asarray(ivar)
         fit_posmap = np.asarray(posmap)
-    
+
     w = np.sqrt(fit_ivar)
 
     def _to_pars(coeffs):
@@ -142,7 +142,7 @@ def fit_gauss_map(
         dx, dy, off, amp, fwhm_xi, fwhm_eta, phi = _to_pars(coeffs)
         beam = gaussian2d(fit_posmap, amp, dx, dy, fwhm_xi, fwhm_eta, phi, off)
 
-        return (w * (fit_imap - beam)).ravel() 
+        return (w * (fit_imap - beam)).ravel()
 
     # def _objective(
     #     coeffs,
@@ -151,7 +151,13 @@ def fit_gauss_map(
     #     chisq = np.nansum(resid**2)
     #     return chisq
 
-    res = least_squares(_resid, x0, bounds=np.array(bounds).T, method="trf", x_scale="jac",)
+    res = least_squares(
+        _resid,
+        x0,
+        bounds=np.array(bounds).T,
+        method="trf",
+        x_scale="jac",
+    )
     if not res.success:
         print(res)
         return None, None

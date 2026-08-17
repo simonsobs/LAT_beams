@@ -1,21 +1,21 @@
 import os
 import sys
+import time as time
 from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+import soma.harmonic as sh
 from pixell import enmap
 from sotodlib.core import Context
 from sotodlib.io import hkdb
 from tqdm import tqdm
-import seaborn as sns
-import time as time
 
+import lat_beams.fitting.map.bessel as fb
 from lat_beams import beam_utils as bu
-from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
-import lat_beams.fitting.map.bessel as fb 
 from lat_beams.plotting import auto_relplot
-import soma.harmonic as sh
+from lat_beams.utils import get_args_cfg, make_jobdb, setup_cfg, setup_paths
 
 palette = sns.color_palette("colorblind", 13)
 sns.set_palette(palette)
@@ -71,7 +71,7 @@ if len(fjobs) == 0:
 
 # Get multipole stats
 t0 = time.time()
-pix_extent = int(2 * (np.deg2rad(cfg.mask_size)//cfg.res)) 
+pix_extent = int(2 * (np.deg2rad(cfg.mask_size) // cfg.res))
 twcs = enmap.wcsutils.build(
     [0, 0],
     res=np.rad2deg(cfg.res),
@@ -95,12 +95,16 @@ for i, fit in enumerate(tqdm(all_fits)):
         if fjobstr not in mjobdict:
             raise ValueError("Map job not found for %s", fjobstr)
         mjob = mjobdict[fjobstr]
-        map_path = os.path.join( data_dir, mjob.tags["solved"].format(split=fjob.tags["split"]))
+        map_path = os.path.join(
+            data_dir, mjob.tags["solved"].format(split=fjob.tags["split"])
+        )
         imap = cast(enmap.ndmap, enmap.read_map(map_path)[0])
     else:
         raise ValueError("Invalid mode %s", mode)
 
-    ypix, xpix = enmap.sky2pix(imap.shape, imap.wcs, ([[aman.eta0.value], [aman.xi0.value]]))
+    ypix, xpix = enmap.sky2pix(
+        imap.shape, imap.wcs, ([[aman.eta0.value], [aman.xi0.value]])
+    )
     y0, x0 = float(ypix[0]), float(xpix[0])
     modes = sh.azimuthal_modes(imap, mmax=4, center=(y0, x0))
     a_m = modes["a_m"]
@@ -110,7 +114,7 @@ for i, fit in enumerate(tqdm(all_fits)):
     mamps_list.append(frac_integrated)
     fit_angles = sh.integrated_multipole_angles(a_m, ell, True)
     mangs_list.append(fit_angles)
-mamps = 100*np.array(mamps_list)
+mamps = 100 * np.array(mamps_list)
 mangs = np.array(mangs_list)
 
 # Kill obvious outliers
@@ -150,7 +154,9 @@ if False:
         )
         result = hkdb.load_hk(lspec)
         if "env-vantage.weather_data.temp_outside" in result.data:
-            temps[i] = np.nanmean(result.data["env-vantage.weather_data.temp_outside"][1])
+            temps[i] = np.nanmean(
+                result.data["env-vantage.weather_data.temp_outside"][1]
+            )
         else:
             temps[i] = np.nan
 
@@ -162,7 +168,7 @@ dset["ctime (s)"] = all_fits["time"]
 enc = bu.get_split_vec(all_fits, "az_center+el_center+roll_center", ctx)
 az, el, roll = np.array(np.char.split(enc, "+").tolist()).astype(float).T
 dset["Azimuth (deg)"] = az
-dset["Elevation (deg)"] = el 
+dset["Elevation (deg)"] = el
 dset["Roll (deg)"] = roll
 dset["Corot (deg)"] = el - 60 - roll
 dset["Amp (pW)"] = bu.get_fit_vec(all_fits, "gauss.amp").value
@@ -174,10 +180,20 @@ for epoch_start, epoch_end in cfg.epochs:
     tmsk = (all_fits["time"] >= epoch_start) * (all_fits["time"] < epoch_end)
     epoch_starts[tmsk] = epoch_start
     epoch_ends[tmsk] = epoch_end
-dset["Epoch"] = np.array([f"{s}-{e}" for s,e in zip(epoch_starts, epoch_ends)])
-to_scatter = [("ctime (s)", "time"), ("Hour of Day (hr)", "hour"), ("Amp (pW)", "amp"), ('FWHM (")', "fwhm"), ("PWV (mm)", "pwv"), ("Azimuth (deg)", "az"), ("Elevation (deg)", "el"), ("Roll (deg)", "roll"), ("Corot (deg)", "corot")]
+dset["Epoch"] = np.array([f"{s}-{e}" for s, e in zip(epoch_starts, epoch_ends)])
+to_scatter = [
+    ("ctime (s)", "time"),
+    ("Hour of Day (hr)", "hour"),
+    ("Amp (pW)", "amp"),
+    ('FWHM (")', "fwhm"),
+    ("PWV (mm)", "pwv"),
+    ("Azimuth (deg)", "az"),
+    ("Elevation (deg)", "el"),
+    ("Roll (deg)", "roll"),
+    ("Corot (deg)", "corot"),
+]
 emsk = dset["Epoch"] != "0-0"
-dset = {k : v[emsk] for k, v in dset.items()}
+dset = {k: v[emsk] for k, v in dset.items()}
 all_fits = all_fits[emsk]
 fjobs = fjobs[emsk]
 
@@ -216,7 +232,7 @@ for split in cfg.split_by:
         continue
     spls = np.array(np.char.split(split_vec[msk], "+").tolist()).T
     srt = np.lexsort(spls.tolist() + [dset["Epoch"][msk]])
-    dset_filt = {k : v[msk][srt] for k, v in dset.items()}
+    dset_filt = {k: v[msk][srt] for k, v in dset.items()}
     for i, s in enumerate(split.split("+")):
         dset_filt[s] = spls[i][srt]
 
@@ -242,15 +258,24 @@ for split in cfg.split_by:
                 ignore=to_ignore,
                 merge=to_merge,
                 auto=False,
-                facet_kws={"sharey": False, "sharex": name != "time", "margin_titles": True},
-                alpha=.8,
+                facet_kws={
+                    "sharey": False,
+                    "sharex": name != "time",
+                    "margin_titles": True,
+                },
+                alpha=0.8,
                 s=10,
             )
             for axis in plot.axes.flat:
                 axis.tick_params(labelleft=True)
-            plot.figure.suptitle(f"Fractional m={m} Amplitude by {name.upper() if field.split(' ')[0].isupper() else name.title()} ({mode})")
+            plot.figure.suptitle(
+                f"Fractional m={m} Amplitude by {name.upper() if field.split(' ')[0].isupper() else name.title()} ({mode})"
+            )
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
-            plt.savefig(os.path.join(plot_dir_spl, f"{mode}_{name}_amp_{m}.png"), bbox_inches="tight")
+            plt.savefig(
+                os.path.join(plot_dir_spl, f"{mode}_{name}_amp_{m}.png"),
+                bbox_inches="tight",
+            )
             plt.close()
 
             plot = auto_relplot(
@@ -265,12 +290,21 @@ for split in cfg.split_by:
                 ignore=to_ignore,
                 merge=to_merge,
                 auto=False,
-                facet_kws={"sharey": False, "sharex": name != "time", "margin_titles": True},
-                alpha=.5,
+                facet_kws={
+                    "sharey": False,
+                    "sharex": name != "time",
+                    "margin_titles": True,
+                },
+                alpha=0.5,
             )
             for axis in plot.axes.flat:
                 axis.tick_params(labelleft=True)
-            plot.figure.suptitle(f"Fractional m={m} Angle by {name.upper() if field.split(' ')[0].isupper() else name.title()} ({mode})")
+            plot.figure.suptitle(
+                f"Fractional m={m} Angle by {name.upper() if field.split(' ')[0].isupper() else name.title()} ({mode})"
+            )
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
-            plt.savefig(os.path.join(plot_dir_spl, f"{mode}_{name}_ang_{m}.png"), bbox_inches="tight")
+            plt.savefig(
+                os.path.join(plot_dir_spl, f"{mode}_{name}_ang_{m}.png"),
+                bbox_inches="tight",
+            )
             plt.close()

@@ -208,7 +208,11 @@ def multipole_expansion(base_beam, amps, theta):
     return beam
 
 
-def bessel_term( r: NDArray[np.float64], ell_max: float, i: int,) -> NDArray[np.float64]:
+def bessel_term(
+    r: NDArray[np.float64],
+    ell_max: float,
+    i: int,
+) -> NDArray[np.float64]:
     """
     Evaluate the normalized Bessel basis function.
     Computes
