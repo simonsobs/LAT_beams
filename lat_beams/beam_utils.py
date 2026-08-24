@@ -20,6 +20,11 @@ from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
+try:
+    from numpy import trapz
+except ImportError:
+    from numpy import trapezoid as trapz
+
 from .utils import LoggerLike
 from .utils.jobs import ErrCode, fail, set_tag
 
@@ -69,11 +74,11 @@ def solid_angle(
     # perform the solid angle integral
     _integrand = integrand.copy()
     _integrand[r > r1] = 0
-    integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    integral_inner = trapz(trapz(_integrand, el, axis=0), az, axis=0)
 
     _integrand = integrand.copy()
     _integrand[(r < r1) + (r > r2)] = 0
-    integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    integral_outer = trapz(trapz(_integrand, el, axis=0), az, axis=0)
     return integral_inner - integral_outer
 
 
