@@ -950,7 +950,7 @@ def fit_bessel_map(
         threshold = 10.0 ** (-n_sigma) * peak_val
         below_threshold = r_prof_clean[y_prof_clean <= threshold]
         if len(below_threshold):
-            r0_init = np.min(below_threshold)
+            r0_init = np.percentile(below_threshold, 10)
         r0_init = np.clip(
             r0_init,
             1.2 * fwhm,
@@ -984,7 +984,7 @@ def fit_bessel_map(
     upper = np.full_like(params0, np.inf)
     lower[n_ang] = np.log(max(1.2 * fwhm, 1e-8))
     if np.isfinite(mask_size):
-        upper[n_ang] = np.log(max(0.9 * mask_size, 1.2 * fwhm))
+        upper[n_ang] = np.log(min(max(0.9 * mask_size, 2 * fwhm), 0.9 * mask_size))
 
     lower[-1] = np.log(0.5)
     upper[-1] = np.log(20.0)
@@ -1137,6 +1137,7 @@ def fit_bessel_map(
         xtol=1e-5,
         gtol=1e-5,
         jac=jacobian,  # type: ignore
+        loss="soft_l1",
     )
 
     def solve_linear_full(params):
@@ -1176,6 +1177,7 @@ def fit_bessel_map(
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
     for idx, value in zip(idx_list, coeff[:-1]):
         amps[idx] = value
+    dof = np.sum(fit_msk) - n_linear - len(result.x)
 
     aman.wrap(
         "amps",
@@ -1190,7 +1192,7 @@ def fit_bessel_map(
     aman.wrap("wing_p", np.exp(result.x[-1]) * u.dimensionless_unscaled)
 
     aman.wrap("chi2", np.sum(result.fun**2))
-    aman.wrap("dof", max(1, len(result.fun) - len(result.x)))
+    aman.wrap("dof", dof)
     aman.wrap("wing_success", result.success)
     aman.wrap("n_opt_pixels", len(opt_idx))
     aman.wrap("n_fit_pixels", n_pixels)
@@ -1198,9 +1200,20 @@ def fit_bessel_map(
     aman.wrap("xi0", xi0 * u.radian)
     aman.wrap("eta0", eta0 * u.radian)
 
+    beam_model = bessel_beam(
+        posmap,
+        xi0,
+        eta0,
+        ell_max,
+        amps,
+        0,
+        result.x,
+        off,
+    )
+
     if calc_cov:
-        dof = max(1, len(result.fun) - len(result.x))
-        sigma2 = np.sum(result.fun**2) / dof
+        resid = beam_model[fit_msk] - map_fit
+        sigma2 = np.sum((resid * w) ** 2) / dof
 
         full_cov = compute_full_covariance(
             params=result.x,
@@ -1228,17 +1241,6 @@ def fit_bessel_map(
         aman.wrap("core_wing_cov", core_wing_cov, [(0, linear_ax), (1, wing_ax)])
         aman.wrap("wing_errors", wing_errors, [(0, wing_ax)])
         aman.wrap("sigma2", sigma2)
-
-    beam_model = bessel_beam(
-        posmap,
-        xi0,
-        eta0,
-        ell_max,
-        amps,
-        0,
-        result.x,
-        off,
-    )
 
     return aman, beam_model
 
@@ -1428,7 +1430,7 @@ def compute_full_covariance(
     J[:, n_linear:] = J_nonlinear
     H = J.T @ J
 
-    ridge = 1e-6 / scale[:n_core] ** 2
+    ridge = 1e-6 * scale[:n_core] ** 2
     H[
         :n_core,
         :n_core,
@@ -1476,8 +1478,9 @@ def compute_full_covariance(
         H,
         check_finite=False,
     )
+    sigma2 = 1
 
-    return sigma2 * cast(NDArray[np.floating], covariance)
+    return cast(NDArray[np.floating], covariance / sigma2)
 
 
 def bessel_profile_covariance(
@@ -1535,6 +1538,11 @@ def bessel_profile_covariance(
     model_no_off : Float[ndmap, "nx ny"]
         The model evaluated at posmap without the offset.
     """
+
+    def normalize_profile(profile, off):
+        norm = np.max(profile) - off
+        return (profile - off) / norm
+
     full_cov = np.asarray(fit.full_cov)
     wing_params = np.asarray(fit.wing_params.value)
     linear = np.asarray(fit.linear_coeffs.value)
@@ -1562,12 +1570,14 @@ def bessel_profile_covariance(
     model = bessel_beam(posmap, xi0, eta0, ell_max, amps, 0.0, wing_params, off)
     model_flat = np.asarray(model).ravel()
     radial_centers, profile, R = radial_profile_lin(
-        model - off,
+        model,
         posmap,
         xi0=xi0,
         eta0=eta0,
         n_bins=n_radial,
     )
+    profile_norm = np.max(profile) - off
+    profile = normalize_profile(profile, off)
 
     n_pix = len(model_flat)
     n_modes_actual = len(evals)
@@ -1607,17 +1617,12 @@ def bessel_profile_covariance(
             p_minus[n_core],
         )
         J_mode[:, i] = (
-            np.asarray(model_plus).ravel() - np.asarray(model_minus).ravel()
+            normalize_profile(np.asarray(model_plus).ravel(), p_plus[n_core])
+            - normalize_profile(np.asarray(model_minus).ravel(), p_minus[n_core])
         ) / (2.0 * sigma)
 
     J_profile_mode = R @ J_mode
 
-    profile_norm = np.max(model) - off
-    if not np.isfinite(profile_norm) or profile_norm == 0:
-        raise ValueError(f"Invalid profile normalization: {profile_norm}")
-
-    profile /= profile_norm
-    J_profile_mode /= profile_norm
     profile_cov = (J_profile_mode * evals[None, :]) @ J_profile_mode.T
     profile_sigma = np.sqrt(np.maximum(np.diag(profile_cov), 0.0))
 
