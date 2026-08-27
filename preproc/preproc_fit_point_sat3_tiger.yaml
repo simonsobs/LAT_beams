@@ -20,7 +20,13 @@ archive:
 process_pipe:
     - name: "correct_iir_params"
       process: True
-
+      
+    - name: "hwp_angle_model"
+      process: True
+      calc:
+        on_sign_ambiguous: 'fail'
+      save: True
+      
     - name: "smurfgaps_flags"
       calc:
         buffer: 200
@@ -47,7 +53,16 @@ process_pipe:
     - name: "detrend"
       process:
         method: "median"
+        
+    - name: "estimate_hwpss"
+      calc:
+        hwpss_stats_name: "hwpss_stats"
+      save: True
 
+    - name: "subtract_hwpss"
+      process:
+        subtract_name: "signal"
+        
     - name: "trends"
       calc:
         max_trend: 2.5 #was 1 and that was bad for SAT and Moon
