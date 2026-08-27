@@ -1,0 +1,274 @@
+# when running in cli please specify the following
+# --tags 'mars' 'neptune' 'uranus' 'taua' 'saturn' 'mercury'
+# --planet-obs
+tags:
+  basedir:  /scratch/gpfs/SIMONSOBS/so/tracked/metadata/satp3
+  contextdir: /scratch/gpfs/SIMONSOBS/users/eshaw/mymetadata/satp3/
+context_file: '/scratch/gpfs/SIMONSOBS/users/eshaw/mymetadata/satp3/context_for_fitpointing.yaml/'
+#'{basedir}/contexts/smurf_detsets_local.yaml'
+
+plot_dir: '/so/site-pipeline/lat/preprocess/fit_pointing' #does not actually do anything
+
+flag_name_rms_calc: 'around_source'
+
+subobs:
+  use: ['wafer_slot']
+  label: wafer_slot
+
+archive:
+  index: '/scratch/gpfs/SIMONSOBS/users/eshaw/fp_process_archive.sqlite'
+  policy:
+    type: 'simple'
+    filename: '/scratch/gpfs/SIMONSOBS/users/eshaw/fp_preprocess_archive.h5'
+
+process_pipe:
+    #- name: "pointing_model"
+    #  process: True
+      
+    - name: "hwp_angle_model"
+      process: True
+      calc:
+        on_sign_ambiguous: 'fail'
+      save: True
+      
+    - name: "correct_iir_params"
+      process: True
+      
+    - name: "smurfgaps_flags"
+      calc:
+        buffer: 200
+        name: "smurfgaps"
+        merge: True
+      save: True
+      
+    ##- name: "dark_dets"
+    ##  signal: "signal"
+    ##  calc: True
+    ##  save: True
+    ##  select: True
+      
+    ##- name : "fp_flags"
+    ##  calc:
+    ##    merge: False
+    ##  save: True
+    ##  select: True
+
+    ##- name: "detcal_nan_cuts"
+    ##  select:
+    ##    fields: ["tau_eff", "phase_to_pW"]
+
+    - name: "flag_turnarounds"
+      process: 
+        method: "scanspeed"
+        t_buffer: 5 #4.
+      calc:
+        method: "scanspeed"
+        t_buffer: 5 #4.
+      save: True
+      
+    - name: "det_bias_flags"
+      calc: 
+        rfrac_range: [0.2, 0.8]
+        #psat_range: [0.1, 10]  
+        rn_range: [6.5e-3, 9.5e-3]
+      save: True
+      select: True
+      
+    - name: "detrend"
+      process:
+        method: "median"
+
+    - name: "trends"
+      calc:
+        max_trend: 2.5 #was 1 and that was bad for SAT and Moon
+        t_piece: 10
+      save: True
+      select:
+        kind: "any"
+
+    #Slow jumps didn't seem necessary. They just pick up on Moon crossings.
+    #- name: "jumps"
+    #  skip_on_sim: False
+    #  calc:
+    #    function: "slow_jumps"
+    #    jump_configs:
+    #      win_size: 1000
+    #      thresh: 20
+    #  save:
+    #    jumps_name: "jumps_slow"
+    #  select:
+    #    max_n_jumps: 50
+
+    - name: "jumps"
+      skip_on_sim: False
+      calc:
+        function: "twopi_jumps"
+        jump_configs:
+          win_size: 5 #30 #stop picking up moon Xings
+          nsigma: 10.0
+      save:
+        jumps_name: "jumps_2pi"
+      select:
+        max_n_jumps: 20
+  
+    - name: "fix_jumps"
+      skip_on_sim: True
+      process:
+        jumps_aman: "jumps_2pi"
+        nbuf: 10
+        use_pca: False
+        modes: 1
+        
+    - name: "combine_flags"
+      process:
+        flag_labels: ['jumps_2pi.jump_flag']
+        method: '*'
+        total_flags_label: 'glitchfill_jumps_2pi'
+        
+    #cleans up glitches from jump stitching    
+    - name: "glitchfill"
+      skip_on_sim: False  # Not skipped but will have no effect on sims
+      process:
+        nbuf: 10
+        use_pca: False
+        modes: 1
+        wrap: "signal"
+        glitch_flags: "glitchfill_jumps_2pi"   
+
+    - name: "detrend"
+      process:
+        method: "median"
+
+    #- name: "glitches"
+    #  glitch_name: "source_snr_glitches" #this is working better for jupiter
+    #  calc:
+    #    t_glitch: 0.5
+    #    n_sig: 8              
+    #    buffer: 300             
+    #    hp_fc: 0.1
+    #    subscan: True
+    #    edge_guard: 10
+    #  save: True
+      
+    - name: "glitches" #these worked pretty good on moon crossings
+      glitch_name: "source_snr_glitches"
+      calc:
+        t_glitch: 0.1
+        detrend: linear
+        n_sig: 5              # High SNR threshold to isolate bright crossings
+        buffer: 1             # Dilates the mask by N samples around each detection
+        hp_fc: 0.1 #0.007
+        subscan: False
+        edge_guard: 10
+      save: True  
+
+    - name: 'combine_flags'
+      process:
+        flag_labels: ['source_snr_glitches.glitch_flags', 'turnaround_flags.turnarounds']
+        method: 'except'
+        total_flags_label: 'source_only'
+      
+    ###
+    - name: "glitches"
+      skip_on_sim: False
+      glitch_name: "glitches_pre_hwpss"
+      calc:
+        t_glitch: 0.007 #0.007
+        buffer: 30 #100
+        hp_fc: 6.0
+        n_sig: 150 #30 #(was catching on moon crossings)
+        subscan: True
+      save: True
+      select:
+        max_n_glitch: 1000
+        sig_glitch: 30
+
+    #- name: "glitchfill"
+    #  skip_on_sim: False  # Not skipped but will have no effect on sims
+    #  flags: "glitches_pre_hwpss.glitch_flags"
+    #  process:
+    #    nbuf: 10
+    #    use_pca: False
+    #    modes: 1
+    #    wrap: "signal"     
+        
+    - name: "combine_flags"
+      process:
+        flag_labels: ['turnaround_flags.turnarounds', 'smurfgaps.smurfgaps',
+        "source_snr_glitches.glitch_flags",
+        'jumps_2pi.jump_flag', 'glitches_pre_hwpss.glitch_flags']
+        method: '+'
+        total_flags_label: 'pre_hwpss_flags'
+
+    #- name: "calibrate"
+    #  skip_on_sim: True  # This would multiply the sim TODs with the wrong factor.
+    #  process:
+    #    kind: "array"
+    #    cal_array: "det_cal.phase_to_pW"
+
+    #- name: "estimate_hwpss"
+    #  skip_on_sim: True
+    #  calc:
+    #    hwpss_stats_name: "pre_hwpss_stats"
+    #    flags: "flags.pre_hwpss_flags"
+    #  save: True        
+
+    #- name: "subtract_hwpss"
+    #  skip_on_sim: False  # Deprojecting HWPSS template for sims
+    #  hwpss_stats: "pre_hwpss_stats"
+    #  process:
+    #    subtract_name: "signal"    
+
+    #- name: "glitchfill"  #Again because subtract hwpss added 
+    #  skip_on_sim: False  
+    #  flags: "glitches_pre_hwpss.glitch_flags"
+    #  process:
+    #    nbuf: 10
+    #    use_pca: False
+    #    modes: 1
+    #    wrap: "signal"     
+
+    #- name: "detrend"
+    #  process:
+    #    method: "median"
+        
+    #- name: "apodize"
+    #  process:
+    #    apodize_samps: 2000        
+        
+    #- name: "fourier_filter"
+    #  process:
+    #    filters:
+    #      - name: "iir_filter"
+    #        filter_params:
+    #          invert: True
+    #      - name: "timeconst_filter"
+    #        filter_params:
+    #          timeconst: "det_cal.tau_eff"
+    #          invert: True
+
+    #- name: "detrend"
+    #  process:
+    #    method: "median"
+
+    #- name: "apodize"
+    #  process:
+    #    apodize_samps: 2000
+
+    #- name: "combine_flags"
+    #  process:
+    #    flag_labels: ['turnaround_flags.turnarounds', 'source_snr_glitches.glitch_flags', 'jumps_2pi.jump_flag']
+    #    method: '+'
+    #    total_flags_label: 'pca_exclude'
+
+    #- name: "filter_for_sources"
+    #  signal: "signal"
+    #  skip_on_sim: True  # updated
+    #  process:
+    #    n_modes: 40
+    #    source_flags: "pca_exclude"
+    #    edge_guard: 100
+
+    #- name: "apodize"
+    #  process:
+    #    apodize_samps: 2000
