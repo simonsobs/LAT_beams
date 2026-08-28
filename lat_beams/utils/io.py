@@ -7,9 +7,9 @@ from typing import Optional
 
 import numpy as np
 from sotodlib.core import AxisManager, Context
+from sotodlib.preprocess import Pipeline
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
-from sotodlib.preprocess import Pipeline
 
 from .jobs import ErrCode, fail, set_tag
 from .log import LoggerLike, log_lvl
@@ -24,7 +24,7 @@ def load_aman(
     logger: LoggerLike,
     fp_flag: bool = False,
     save: bool = False,
-    debug_dets = None,
+    debug_dets=None,
 ) -> Optional[AxisManager]:
     """
     Load and preprocess an observation.
@@ -55,7 +55,7 @@ def load_aman(
         If `True` then try to save the preprocess result.
     debug_dets : int or str, default: None
         If `int` then will load first N dets from meta.dets.vals
-        If string of comma-separated readout_ids, will load only those. 
+        If string of comma-separated readout_ids, will load only those.
 
     Returns
     -------
@@ -69,24 +69,24 @@ def load_aman(
             meta = ctx.get_meta(obs_id, dets)
             try:
                 debug_dets = int(debug_dets)
-                meta.restrict('dets', meta.dets.vals[:debug_dets])
+                meta.restrict("dets", meta.dets.vals[:debug_dets])
                 if min_dets > int(debug_dets):
                     _msg = "min_dets is more than number of dets selected for debugging"
-                    logger.error("%s",_msg)
-                    min_dets = int(debug_dets)//10
+                    logger.error("%s", _msg)
+                    min_dets = int(debug_dets) // 10
 
             except ValueError:
-                restrict_list = [det for det in debug_dets.split(',')]
-                meta.restrict('dets', restrict_list)
+                restrict_list = [det for det in debug_dets.split(",")]
+                meta.restrict("dets", restrict_list)
                 if min_dets > len(restrict_list):
                     _msg = "min_dets is more than number of dets selected for debugging"
-                    logger.error("%s",_msg)
-                    min_dets = len(restrict_list)//10
+                    logger.error("%s", _msg)
+                    min_dets = len(restrict_list) // 10
 
-            aman = ctx.get_obs(meta)    
+            aman = ctx.get_obs(meta)
             pipe = Pipeline(preprocess_cfg["process_pipe"], logger=logger)
             proc_aman, success = pipe.run(aman)
-            aman.wrap('preprocess', proc_aman)
+            aman.wrap("preprocess", proc_aman)
         except Exception as e:
             msg = "failed to preprocess aman"
             fail(job, ErrCode.PREPROC, msg, logger)
@@ -95,7 +95,7 @@ def load_aman(
             msg = f"Preprocess failed with error {err}"
             fail(job, ErrCode.PREPROC, msg, logger)
             return None
-            
+
         if fp_flag:
             aman.restrict(
                 "dets",
@@ -108,7 +108,7 @@ def load_aman(
             fail(job, ErrCode.MIN_DETS, msg, logger)
             return None
         return aman
-        
+
     else:
         try:
             with log_lvl(logger, logging.ERROR):

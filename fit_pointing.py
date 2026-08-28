@@ -471,7 +471,7 @@ def main():
                     logger,
                     fp_flag=False,
                     save=(nproc == 1),
-                    debug_dets=cfg.debug_dets
+                    debug_dets=cfg.debug_dets,
                 )
                 if aman is None:
                     continue
