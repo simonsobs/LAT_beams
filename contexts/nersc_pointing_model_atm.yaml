@@ -36,10 +36,10 @@ metadata:
     load_fields:
       - 'dets:readout_id'
       - 'wafer_slot': 'dets:wafer.wafer_slot'
-  - db: '{manifestdir}/pointing_model/lat_pointing_model_260423r1/db_local.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/pointing_model/lat_pointing_model_260423r2/db.sqlite'
     label: pointing_model
     unpack: pointing_model
-  - db: '/global/homes/s/skh/data/pointing/lat/finalize_focal_plane/results/combined/db.sqlite'
+  - db: '/global/cfs/cdirs/sobs/users/skh/data/pointing/metadata/lat/manifests/focal_plane/lat_focal_plane_250810r6/db.sqlite'
     label: focal_plane
     unpack: focal_plane
     on_missing: trim 

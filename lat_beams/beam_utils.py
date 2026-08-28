@@ -6,7 +6,7 @@ TODO: Make everything radians
 
 import datetime as dt
 import os
-from typing import Optional, cast
+from typing import Literal, Optional, cast, overload
 
 import astropy.units as u
 import h5py
@@ -19,6 +19,11 @@ from scipy import sparse
 from scipy.interpolate import interp1d
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
+
+try:
+    from numpy import trapz
+except ImportError:
+    from numpy import trapezoid as trapz
 
 from .utils import LoggerLike
 from .utils.jobs import ErrCode, fail, set_tag
@@ -69,11 +74,11 @@ def solid_angle(
     # perform the solid angle integral
     _integrand = integrand.copy()
     _integrand[r > r1] = 0
-    integral_inner = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    integral_inner = trapz(trapz(_integrand, el, axis=0), az, axis=0)
 
     _integrand = integrand.copy()
     _integrand[(r < r1) + (r > r2)] = 0
-    integral_outer = np.trapz(np.trapz(_integrand, el, axis=0), az, axis=0)
+    integral_outer = trapz(trapz(_integrand, el, axis=0), az, axis=0)
     return integral_inner - integral_outer
 
 
@@ -338,9 +343,39 @@ def crop_maps(
     return maps
 
 
+@overload
 def estimate_cent(
-    imap: Float[np.ndarray, "nx ny"], sigma: float = 5, buf: int = 30
-) -> tuple[int, int]:
+    imap: Float[np.ndarray, "nx ny"],
+    sigma: float = ...,
+    buf: int = ...,
+    ret_smooth: Literal[True] = True,
+) -> tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
+
+
+@overload
+def estimate_cent(
+    imap: Float[np.ndarray, "nx ny"],
+    sigma: float = ...,
+    buf: int = ...,
+    ret_smooth: Literal[False] = False,
+) -> tuple[int, int]: ...
+
+
+@overload
+def estimate_cent(
+    imap: Float[np.ndarray, "nx ny"],
+    sigma: float = 5,
+    buf: int = 30,
+    ret_smooth: bool = False,
+) -> tuple[int, int] | tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
+
+
+def estimate_cent(
+    imap: Float[np.ndarray, "nx ny"],
+    sigma: float = 5,
+    buf: int = 30,
+    ret_smooth: bool = False,
+) -> tuple[int, int] | tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]:
     """
     Estimate the location of the central pixel of a beam map.
     To do this we first smooth the map with a gaussian of size `sigma`,
@@ -357,6 +392,8 @@ def estimate_cent(
         Pixels within `buf` of the edge of the map
         will not be searched. Meant to avoid low hits
         pixels near the edge of the map.
+    ret_smooth : bool
+        If True also return the smoothed map.
 
     Returns
     -------
@@ -364,7 +401,7 @@ def estimate_cent(
         The index of the estimated center pixel.
     """
     smoothed = imap.copy()
-    smoothed[smoothed == 0] = np.nan
+    smoothed[smoothed <= 0] = np.nan
     kern = Gaussian2DKernel(sigma, sigma)
     smoothed = convolve_fft(smoothed, kern)
     smoothed[:buf] = 0
@@ -372,8 +409,12 @@ def estimate_cent(
     smoothed[:, :buf] = 0
     smoothed[:, -1 * buf :] = 0
     cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
+    cent = (int(cent[0]), int(cent[1]))
 
-    return (int(cent[0]), int(cent[1]))
+    if ret_smooth:
+        return cent, smoothed
+
+    return cent
 
 
 def process_model(

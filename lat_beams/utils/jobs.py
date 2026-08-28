@@ -281,11 +281,11 @@ def setup_jobs(
 
     # Make the missing jobs
     # Doing this serially so that we don't lock up the db
-    tot_missing = 0
+    tot_missing = len(jobs_to_make)
     if comm is not None:
         tot_missing = comm.reduce(len(jobs_to_make), root=0)
     logger.info("Adding %s new jobs", tot_missing)
-    tot_opening = 0
+    tot_opening = len(jobs_to_open)
     if comm is not None:
         tot_opening = comm.reduce(len(jobs_to_open), root=0)
     logger.info("Opening %s old jobs", tot_opening)

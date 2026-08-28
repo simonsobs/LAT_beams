@@ -39,9 +39,9 @@ cgiters_single: 0
 cgiters_full: 200
 mlpass: 3
 sym_gauss: False
-n_bessel: 25
+n_bessel: 20
 n_multipoles: 6
-bessel_wing_n_sigma: 7
+bessel_wing_n_sigma: 8
 extent: 1200
 det_split_dir: "det_lists"
 gauss_multipole: False
@@ -57,12 +57,12 @@ split_by:
   # - "tube_slot+band"
   # - "source+band"
   - "mainsrc+band"
-  - "nojup+band"
+  # - "nojup+band"
   # - "source+tube_slot+band"
   - "mainsrc+tube_slot+band"
-  - "nojup+tube_slot+band"
-# det_splits:
-#   - inout0
-#   - inout1
+  # - "nojup+tube_slot+band"
+det_splits:
+  - inout0
+  - inout1
   # - left
   # - right

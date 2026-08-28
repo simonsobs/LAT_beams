@@ -384,6 +384,7 @@ def auto_relplot(
     y: str,
     ignore: Optional[list[str]] = None,
     merge: Optional[list[list[str]]] = None,
+    combine: Optional[list[tuple[str, str]]] = None,
     auto: bool = True,
     errorbar: Optional[str] = None,
     max_errorbars: Optional[int] = 20,
@@ -417,6 +418,8 @@ def auto_relplot(
         of fields. The merged field will have a name with the format
         `{field1}+{field2}+...`. The fields specified here cannot overlap
         with each other, `ignore`, or fields specified by `**kwargs`.
+    combine : list[tuple[str, str]], optional
+        Groups matching values of a field into non-overlapping combinations.
     auto : bool, default=True
         If False then all automatic features to pick categories for the
         relplot are turned off and this is simply a wrapper to `relplot`
@@ -435,8 +438,10 @@ def auto_relplot(
     plot : sns.FacetGrid
         The plot output by `relplot`.
     """
+    data = data.copy()
     ignore = [] if ignore is None else ignore.copy()
     merge = [] if merge is None else merge
+    combine = [] if combine is None else combine
 
     if errorbar is not None:
         if errorbar not in data:
@@ -469,6 +474,29 @@ def auto_relplot(
             ]
         )
 
+    for independent, to_combine in combine:
+        columns = [independent, to_combine]
+        missing = [col for col in columns if col not in data]
+        if missing:
+            raise ValueError(f"Columns not found in data: {missing}")
+
+        group = np.asarray(data[independent])
+        values = np.asarray(data[to_combine])
+        result = np.asarray(group, dtype=object).copy()
+        signatures = {}
+        for g in np.unique(group):
+            mask = group == g
+            signatures[g] = tuple(sorted(map(str, values[mask])))
+        signatures = {str(k): np.unique(v) for k, v in signatures.items()}
+        unique_values = [list(x) for x in {tuple(x) for x in list(signatures.values())}]
+        max_n = np.max([len(l) for l in unique_values])
+        for i in range(max_n):
+            uvs = [u[i] for u in unique_values if len(unique_values) > i]
+            label = "+".join(uvs)
+            msk = np.isin(values, uvs)
+            result[msk] = label
+        data[to_combine] = result
+
     if auto:
         fields = [
             k
@@ -476,20 +504,28 @@ def auto_relplot(
             if k not in (x, y) and k not in in_kwargs and k not in ignore
         ]
         fields.sort(key=lambda c: len(set(data[c])))
+        fields = fields[::-1]
 
         for field, cat in zip(fields, can_add):
             kwargs[cat] = field
 
         if len(fields) > len(can_add):
-            to_combine = [kwargs["hue"]] + fields[len(can_add) :]
-            name = "+".join(to_combine)
-            data[name] = np.array(
-                [
-                    "+".join(str(data[c][i]) for c in to_combine)
-                    for i in range(len(data[x]))
-                ]
-            )
-            kwargs["hue"] = name
+            for i, cat in enumerate(cats):
+                j = len(can_add) + i
+                if j >= len(fields):
+                    continue
+                to_combine = []
+                if cat in kwargs and kwargs[cat] is not None:
+                    to_combine = [kwargs[cat]]
+                to_combine += fields[j:][:: len(cats)]
+                name = "+".join(to_combine)
+                data[name] = np.array(
+                    [
+                        "+".join(str(data[c][i]) for c in to_combine)
+                        for i in range(len(data[x]))
+                    ]
+                )
+                kwargs[cat] = name
 
     if np.issubdtype(data[x].dtype, np.str_):
         nx = len(np.unique(data[x]))
