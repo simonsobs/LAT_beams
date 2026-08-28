@@ -808,7 +808,25 @@ for split in jobdict.keys():
         facet_kws={"sharey": False, "sharex": True},
     )
     plot.set_axis_labels(r"$\ell$", r"Beam Window Function ($B_{\ell}^{T}$)")
-    plot.set(ylim=(0, None))
+    ls = ""
+    for ax in plot.axes.flat:
+        for line in ax.lines:
+            if "model" in line.get_label():
+                ls = line.get_linestyle()
+                break
+    for ax in plot.axes.flat:
+        if ls == "":
+            continue
+        ys = []
+        for line in ax.lines:
+            if line.get_linestyle() != ls:
+                continue
+            d = line.get_data()[1]
+            if len(d) == 0:
+                continue
+            ys += [np.max(d)]
+        if len(ys) > 0:
+            ax.set_ylim(0, 1.1 * np.max(ys))
     plot.figure.suptitle(f"Beam Window by {split}", wrap=True)
     plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
     plt.savefig(os.path.join(prof_plot_dir, f"window_{split}.png"), bbox_inches="tight")
