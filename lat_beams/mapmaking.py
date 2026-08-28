@@ -11,6 +11,7 @@ from typing import Optional, cast
 
 import numpy as np
 import sqlalchemy as sqy
+import yaml
 from astropy.wcs import WCS
 from mpi4py import MPI
 from pixell import bunch, enmap
@@ -112,7 +113,7 @@ def make_map(
     logger: LoggerLike,
     cfg: Namespace,
     det_splits: dict[str, RangesMatrix] = {},
-) -> tuple[Optional[dict], Optional[tuple[int, int]]]:
+) -> tuple[Optional[dict], Optional[tuple[int, int]], str]:
     """
     Make a filter-bin map of a source and estimate the center.
     The map will be in source-scan coordinates and uses `domdir` threading.
@@ -172,6 +173,9 @@ def make_map(
     cent : Optional[tuple[int, int]]]
         The estimated center of the map.
         `None` is returned if we are below `min_det_secs` or `cfg.min_snr`.
+    X_str : str
+        YAML string containing the information from X to reconstruct the
+        coordinate rotations used when mapmaking.
     """
     # Get time on source
     sf_uncut = source_flags * ~cuts
@@ -184,7 +188,7 @@ def make_map(
     if det_secs < min_det_secs:
         msg = f"Not enough time on source in {map_str} mask."
         fail(job, ErrCode.DET_SECS, msg, logger)
-        return None, None
+        return None, None, ""
 
     with log_lvl(logger, logging.WARNING):
         try:
@@ -200,24 +204,41 @@ def make_map(
                 n_modes=n_modes,
                 info=info,
                 data_splits=det_splits if len(det_splits) else None,
+                unroll=True,
             )
         except Exception as e:
             msg = f"Failed to make map with error {e}"
             logger.error("%s", msg)
-            return None, None
+            return None, None, ""
 
     # Smooth and find the center
     if len(det_splits) == 0:
         omap = out["solved"][0]
     else:
         omap = out["splits"]["full"]["solved"][0]
-    cent = estimate_cent(omap, fwhm_nom / pixsize, cfg.buf)
+    cent, smoothed = estimate_cent(omap, fwhm_nom / pixsize, cfg.buf, True)
+
+    # Serialize coord info
+    X = out["X"]
+    if X is None:
+        X = {}
+    if "rot" in X:
+        del X["rot"]
+    if "planet" in X:
+        del X["planet"]
+    X = {k: float(v) for k, v in X.items() if isinstance(v, np.floating)}
+    X_str = yaml.dump(X)
 
     # Estimate SNR
-    peak = omap[cent]
+    peak = smoothed[cent]
     snr = peak / tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0]
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
-    logger.debug("%s map SNR approximately %s", map_str.title(), snr)
+    logger.debug(
+        "%s map SNR approximately %s (centered at idx %s)",
+        map_str.title(),
+        snr,
+        str(cent),
+    )
     if snr < cfg.min_snr * np.sqrt(ndets) / 2:
         msg = f"{map_str.title()} map SNR too low."
         fail(job, ErrCode.SNR_LOW, msg, logger)
@@ -230,8 +251,8 @@ def make_map(
                     os.remove(fname)
             for name in ["binned", "detweights", "solved", "weights"]:
                 set_tag(job, name, "")
-        return None, None
-    return out, cent
+        return None, None, X_str
+    return out, cent, X_str
 
 
 def get_passes(cfg: Namespace) -> list[bunch.Bunch]:

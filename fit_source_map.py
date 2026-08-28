@@ -296,9 +296,11 @@ for i, j in enumerate(joblist):
     aman.wrap("noise", noise * u.pW)
 
     # Fit gaussian model
-    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
+    cent, smoothed = estimate_cent(
+        solved, cfg.smooth_kern / pixsize, cfg.buf_cropped, True
+    )
     guess = make_guess(
-        amp=solved[cent].item(),
+        amp=smoothed[cent].item(),
         fwhm_xi=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
         fwhm_eta=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
         xi0=posmap[1][cent[0], cent[1]].item(),

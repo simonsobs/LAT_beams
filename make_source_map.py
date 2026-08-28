@@ -167,6 +167,7 @@ def get_tags(info):
         "context": "",
         "preprocess": "",
         "splits": "",
+        "X": "",
     }
     return tags
 
@@ -491,6 +492,7 @@ for i, j in enumerate(joblist):
             res=cfg.res,
             max_pix=4e8,
             wrap=None,
+            unroll=False,
         )
 
     # Do an aggressive filter and flag dets without the source
@@ -502,7 +504,7 @@ for i, j in enumerate(joblist):
 
     # Initial map
     info = {"obs_id": obs["obs_id"], "ufm": ufm, "band": band}
-    out, cent = lbm.make_map(
+    out, cent, _ = lbm.make_map(
         aman,
         src_to_map,
         cfg.res,
@@ -544,6 +546,7 @@ for i, j in enumerate(joblist):
             res=cfg.res,
             max_pix=4e8,
             wrap=None,
+            unroll=False,
         )
 
     # Make splits
@@ -551,7 +554,7 @@ for i, j in enumerate(joblist):
     set_tag(job, "splits", ",".join(det_splits.keys()))
 
     # Make final map
-    out, cent = lbm.make_map(
+    out, cent, X = lbm.make_map(
         aman,
         src_to_map,
         cfg.res,
@@ -570,6 +573,7 @@ for i, j in enumerate(joblist):
         cfg,
         det_splits,
     )
+    set_tag(job, "X", X)
     if out is None or cent is None:
         continue
 
