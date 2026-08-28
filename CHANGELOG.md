@@ -1,3 +1,19 @@
+## 5.2.0 (2026-08-28)
+
+### Feat
+
+- add error plots
+- run with new unroll option and better snr est
+- add option to return smoothed map
+- add option to combin non overlapping values of a field
+
+### Fix
+
+- better plotting, proper normalization, sigma2
+- np2 trapz compat
+- LF fwhm swap
+- dont just log 0 without mpi
+
 ## 5.1.0 (2026-08-17)
 
 ### Feat
