@@ -50,27 +50,39 @@ def get_jobdict(jdb):
     return jobdict
 
 
-def get_jobit(jdb, det_splits):
+def get_jobit(jdb, det_splits, obs_ids, start_time, stop_time):
     maplist = jdb.get_jobs(jclass="beam_map", jstate="done", locked=False)
     maplist = np.array_split(maplist, nproc)[myrank]
+    timestamps = np.array(
+        [float(info.tags["obs_id"].split("_")[1]) for info in maplist]
+    )
+    tmsk = (timestamps >= start_time) * (timestamps < stop_time)
+    maplist = maplist[tmsk]
+    if obs_ids is not None:
+        sub_ids = [obs_id.split(":") for obs_id in obs_ids]
+        obs_list = [obs_id[0] for obs_id in sub_ids]
+        ws_list = [sub_id[1] if len(sub_id) > 1 else None for sub_id in sub_ids]
+        ba_list = [sub_id[2] if len(sub_id) > 2 else None for sub_id in sub_ids]
+        maplist = [info for info in maplist if info.tags["obs_id"] in obs_list]
+    else:
+        ws_list = [None] * len(maplist)
+        ba_list = [None] * len(maplist)
+
     to_ret = []
-    for info in maplist:
+    for info, wsl, bal in zip(maplist, ws_list, ba_list):
+        if wsl is not None and info.tags["wafer_slot"] not in wsl:
+            continue
+        if bal is not None and info.tags["band"] not in bal:
+            continue
         to_ret += [
             (info, ds) for ds in info.tags["splits"].split(",") if ds in det_splits
         ]
     return to_ret
 
 
-def get_jobstr(mjob, ctx, start_time, stop_time):
+def get_jobstr(mjob):
     mjob, split = mjob
     job_str = f"{mjob.tags['obs_id']}-{mjob.tags['wafer_slot']}-{mjob.tags['stream_id']}-{mjob.tags['array']}-{mjob.tags['band']}-{mjob.tags['comps']}-{split}"
-    obs = ctx.obsdb.get(mjob.tags["obs_id"])
-    if args.obs_ids is None and (
-        obs["timestamp"] < start_time or obs["timestamp"] >= stop_time
-    ):
-        return None
-    if args.obs_ids is not None and obs["obs_id"] not in args.obs_ids:
-        return None
     return job_str
 
 
@@ -136,8 +148,14 @@ jdb, all_jobs = setup_jobs(
     data_dir,
     "fit_map",
     get_jobdict,
-    partial(get_jobit, det_splits=det_split_names),
-    partial(get_jobstr, ctx=ctx, start_time=cfg.start_time, stop_time=cfg.stop_time),
+    partial(
+        get_jobit,
+        det_splits=det_split_names,
+        obs_ids=args.obs_ids,
+        start_time=cfg.start_time,
+        stop_time=cfg.stop_time,
+    ),
+    get_jobstr,
     get_tags,
     cfg.source_list,
     args.overwrite,

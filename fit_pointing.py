@@ -71,7 +71,9 @@ def get_jobdict(jdb):
 def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, logger):
     with log_lvl(logger, 25):
         if obs_ids is not None:
-            obslist = [ctx.obsdb.get(obs_id) for obs_id in obs_ids]
+            sub_ids = [obs_id.split(":") for obs_id in obs_ids]
+            obslist = [ctx.obsdb.get(obs_id[0]) for obs_id in sub_ids]
+            ws_list = [sub_id[1] if len(sub_id) > 1 else None for sub_id in sub_ids]
         else:
             # src_str = "==1 or ".join(source_list) + "==1"
             obslists = [
@@ -82,10 +84,11 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, lo
                 for i, source in enumerate(source_list)
             ]
             obslist = reduce(lambda q, p: p + q, obslists)
+            ws_list = [None] * len(obslist)
 
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
-        for obs in obslist:
+        for obs, wsl in zip(obslist, ws_list):
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
@@ -103,6 +106,8 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, lo
                 ws,
                 ufm,
             ) in wsufms:
+                if wsl is not None and ws not in wsl:
+                    continue
                 obsit += [(obs, ws, ufm)]
     return obsit
 
