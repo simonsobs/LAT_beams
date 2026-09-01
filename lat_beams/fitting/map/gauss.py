@@ -93,8 +93,8 @@ def fit_gauss_map(
         [
             np.max(x) + cast(float, guess.fwhm_xi),
             np.max(y) + cast(float, guess.fwhm_eta),
-            5 * np.max(imap),
-            5 * np.max(imap),
+            5 * np.max(np.abs(imap)),
+            5 * np.max(np.abs(imap)),
             cast(float, guess.fwhm_xi) * 3,
             cast(float, guess.fwhm_eta) * 3,
             2 * np.pi,
@@ -164,15 +164,18 @@ def fit_gauss_map(
     #     chisq = np.nansum(resid**2)
     #     return chisq
 
-    res = least_squares(
-        _resid,
-        x0,
-        bounds=np.array(bounds).T,
-        method="trf",
-        x_scale="jac",
-    )
-    if not res.success:
-        print(res)
+    try:
+        res = least_squares(
+            _resid,
+            x0,
+            bounds=np.array(bounds).T,
+            method="trf",
+            x_scale="jac",
+        )
+        if not res.success:
+            print(res)
+            return None, None
+    except ValueError:
         return None, None
 
     # Convert to aman
