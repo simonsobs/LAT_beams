@@ -465,7 +465,7 @@ def main():
 
                 if h5_file is not None and myrank == 0 and obs["obs_id"] not in h5_file:
                     h5_file.create_group(obs["obs_id"])
-
+                logger.log(25, "Debug Det Restriction, %s detectors", cfg.debug_dets)
                 # Load and process the TOD
                 aman = load_aman(
                     obs["obs_id"],
@@ -476,10 +476,11 @@ def main():
                     logger,
                     fp_flag=False,
                     save=(nproc == 1),
+                    debug_dets=cfg.debug_dets,
                 )
                 if aman is None:
                     continue
-
+                logger.info(f"Available fields in aman: {list(aman._fields.keys())}")
                 # Downsample
                 aman.signal = aman.signal.astype(np.float32)
                 aman = downsample_obs(aman, cfg.ds)

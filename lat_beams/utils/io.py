@@ -6,7 +6,8 @@ import logging
 from typing import Optional
 
 import numpy as np
-from sotodlib.core import AxisManager
+from sotodlib.core import AxisManager, Context
+from sotodlib.preprocess import Pipeline
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 
@@ -23,6 +24,7 @@ def load_aman(
     logger: LoggerLike,
     fp_flag: bool = False,
     save: bool = False,
+    debug_dets=None,
 ) -> Optional[AxisManager]:
     """
     Load and preprocess an observation.
@@ -51,6 +53,9 @@ def load_aman(
         If `True` then keep only detectors with valid pointing.
     save : bool, default: False
         If `True` then try to save the preprocess result.
+    debug_dets : int or str, default: None
+        If `int` then will load first N dets from meta.dets.vals
+        If string of comma-separated readout_ids, will load only those.
 
     Returns
     -------
@@ -58,36 +63,83 @@ def load_aman(
         If we loaded and preprocessed successfully this is the loaded observation.
         If something failed this is `None`.
     """
-    try:
-        with log_lvl(logger, logging.ERROR):
-            aman, _, _, err = preproc_or_load_group(
-                obs_id,
-                preprocess_cfg,
-                dets=dets,
-                save_archive=save,
-                save_proc_aman=save,
-                overwrite=True,
-                logger=logger,
+    if debug_dets is not None:
+        try:
+            ctx = Context(preprocess_cfg["context_file"])
+            meta = ctx.get_meta(obs_id, dets)
+            try:
+                debug_dets = int(debug_dets)
+                meta.restrict("dets", meta.dets.vals[:debug_dets])
+                if min_dets > int(debug_dets):
+                    _msg = "min_dets is more than number of dets selected for debugging"
+                    logger.error("%s", _msg)
+                    min_dets = int(debug_dets) // 10
+
+            except ValueError:
+                restrict_list = [det for det in debug_dets.split(",")]
+                meta.restrict("dets", restrict_list)
+                if min_dets > len(restrict_list):
+                    _msg = "min_dets is more than number of dets selected for debugging"
+                    logger.error("%s", _msg)
+                    min_dets = len(restrict_list) // 10
+
+            aman = ctx.get_obs(meta)
+            pipe = Pipeline(preprocess_cfg["process_pipe"], logger=logger)
+            proc_aman, success = pipe.run(aman)
+            aman.wrap("preprocess", proc_aman)
+        except Exception as e:
+            msg = "failed to preprocess aman"
+            fail(job, ErrCode.PREPROC, msg, logger)
+            return aman
+        if aman is None:
+            msg = f"Preprocess failed with error {err}"
+            fail(job, ErrCode.PREPROC, msg, logger)
+            return None
+
+        if fp_flag:
+            aman.restrict(
+                "dets",
+                np.isfinite(aman.focal_plane.xi)
+                * np.isfinite(aman.focal_plane.eta)
+                * np.isfinite(aman.focal_plane.gamma),
             )
-    except Exception as e:
-        msg = f"Failed to load or preprocess with error {e}"
-        fail(job, ErrCode.PREPROC, msg, logger)
-        return None
-    if aman is None:
-        msg = f"Preprocess failed with error {err}"
-        fail(job, ErrCode.PREPROC, msg, logger)
-        return None
+        if aman.dets.count < min_dets:
+            msg = f"Only {aman.dets.count} dets!"
+            fail(job, ErrCode.MIN_DETS, msg, logger)
+            return None
+        return aman
 
-    if fp_flag:
-        aman.restrict(
-            "dets",
-            np.isfinite(aman.focal_plane.xi)
-            * np.isfinite(aman.focal_plane.eta)
-            * np.isfinite(aman.focal_plane.gamma),
-        )
+    else:
+        try:
+            with log_lvl(logger, logging.ERROR):
+                aman, _, _, err = preproc_or_load_group(
+                    obs_id,
+                    preprocess_cfg,
+                    dets=dets,
+                    save_archive=save,
+                    save_proc_aman=save,
+                    overwrite=True,
+                    logger=logger,
+                )
+        except Exception as e:
+            msg = f"Failed to load or preprocess with error {e}"
+            fail(job, ErrCode.PREPROC, msg, logger)
+            return None
+        if aman is None:
+            msg = f"Preprocess failed with error {err}"
+            fail(job, ErrCode.PREPROC, msg, logger)
+            return None
 
-    if aman.dets.count < min_dets:
-        msg = f"Only {aman.dets.count} dets!"
-        fail(job, ErrCode.MIN_DETS, msg, logger)
-        return None
-    return aman
+        if fp_flag:
+            aman.restrict(
+                "dets",
+                np.isfinite(aman.focal_plane.xi)
+                * np.isfinite(aman.focal_plane.eta)
+                * np.isfinite(aman.focal_plane.gamma),
+            )
+
+        if aman.dets.count < min_dets:
+            msg = f"Only {aman.dets.count} dets!"
+            fail(job, ErrCode.MIN_DETS, msg, logger)
+            return None
+        return aman

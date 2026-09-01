@@ -87,6 +87,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
         cfg["start_time"] = time.time() - 3600 * args.lookback
     cfg["stop_time"] = cfg.get("stop_time", 20000000000)
     cfg["max_dur"] = cfg.get("max_dur", 2)
+    cfg["debug_dets"] = cfg.get("debug_dets", None)
 
     # Get paths to stuff
     cfg["preprocess_cfg"] = cfg.get("preprocess_cfg", None)
