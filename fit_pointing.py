@@ -13,6 +13,7 @@ Still somewhat LAT specific but could be genralized if desired.
 
 import logging
 import os
+import re
 import sys
 import time
 from functools import partial, reduce
@@ -24,6 +25,8 @@ import sqlalchemy as sqy
 import yaml
 from pshmem.locking import MPILock
 from scipy.sparse.linalg import svds
+from scipy.special import ndtri
+from so3g.proj import Ranges, RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
 from sotodlib.core import AxisManager, Context, metadata
@@ -58,6 +61,8 @@ nproc = comm.Get_size()
 
 band_names = {"l": ["f030", "f040"], "m": ["f090", "f150"], "u": ["f220", "f280"]}
 ufm_rad_cache = {}
+
+WORD_PATTERN = re.compile(r"[A-Za-z0-9]+(?:[_.-][A-Za-z0-9]+)*")
 
 
 def get_jobdict(jdb):
@@ -145,7 +150,72 @@ def get_ufm_rad(nominal, ufm):
     return np.nanmax(r)
 
 
-def src_flag_cut(source_name, aman, nominal, ufm, res, mask, logger):
+def iter_svd(signal, n_modes=5, n_iter=5, n_std=5, positive_src=True):
+    data = np.asarray(signal, float).copy()
+    src_msk = np.zeros_like(data, dtype=bool)
+    n_det, n_t = data.shape
+    k = min(n_modes, min(n_det, n_t) - 1)
+    x = np.arange(n_t)
+    common_mode = data.copy()
+    mad_to_sigma = 1 / ndtri(0.75)
+
+    for _ in range(n_iter):
+        filled = common_mode.copy()
+        for i in range(n_det):
+            good = ~src_msk[i]
+            if good.sum() > 1:
+                r = data[i] - common_mode[i]
+                filled[i, ~good] += np.interp(x[~good], x[good], r[good])
+
+        U, S, Vt = svds(filled, k=k)
+        order = np.argsort(S)[::-1]
+        U, S, Vt = U[:, order], S[order], Vt[order]
+        common_mode = (U * S) @ Vt
+
+        r = data - common_mode
+        rr = np.where(src_msk, np.nan, r)
+        med = np.nanmedian(rr, axis=1, keepdims=True)
+        sigma = mad_to_sigma * np.nanmedian(np.abs(rr - med), axis=1, keepdims=True)
+        threshold = n_std * np.maximum(sigma, np.finfo(float).eps)
+        new_msk = r - med > threshold if positive_src else np.abs(r - med) > threshold
+        src_msk = (src_msk + new_msk).astype(bool)
+
+    return common_mode, src_msk
+
+
+def match_shape(flag, target_shape):
+    if isinstance(flag, RangesMatrix) and flag.shape == target_shape:
+        return flag
+    if isinstance(flag, Ranges) and flag.shape == target_shape:
+        return RangesMatrix([flag])
+
+    if isinstance(flag, (Ranges, RangesMatrix)):
+        flag = flag.mask()
+    try:
+        np.broadcast_shapes(flag.shape, target_shape)
+        broadcastable = True
+    except ValueError:
+        broadcastable = False
+    if broadcastable:
+        flag = np.broadcast_to(flag, target_shape)
+        return RangesMatrix.from_mask(flag)
+    if flag.ndim == len(target_shape):
+        if all(t % f == 0 for f, t in zip(flag.shape, target_shape)):
+            repeats = tuple(t // f for f, t in zip(flag.shape, target_shape))
+            flag = np.tile(flag, repeats)
+            return RangesMatrix.from_mask(flag)
+
+    raise ValueError(f"Cannot match shape {flag.shape} to {target_shape}")
+
+
+def cent_source_flag(aman, cfg, logger, info):
+    source_name, nominal, ufm, res, mask = (
+        info["source_name"],
+        info["nominal"],
+        info["ufm"],
+        info["res"],
+        info["mask"],
+    )
     # See how much of the source we saw...
     # Mask is made massive. This ONLY helps if you have prior knowledge of where source is.
     aman_dummy = aman.restrict("dets", [aman.dets.vals[0]], in_place=False)
@@ -176,13 +246,68 @@ def src_flag_cut(source_name, aman, nominal, ufm, res, mask, logger):
             max_pix=4e8,
             wrap=None,
         )
-    if len(source_flags.ranges[0].ranges()) == 0:
-        start = -1
-        stop = -1
-    else:
-        start = source_flags.ranges[0].ranges()[0][0]
-        stop = source_flags.ranges[0].ranges()[-1][-1]
-    return start, stop
+    return source_flags
+
+
+def blind_source_flag(aman, cfg, logger, info):
+    flagged = aman.sig_filt > cfg.n_std * aman.std_est
+    samp_idx = np.where(np.any(flagged, 0))[0]
+
+    # TODO: Keep the block with the highest sum?
+    # Lets kill spurs by only keeping chunks that are mostly continous
+    # Spur definition: Glitch leftovers effectively (ie. samples with high signal randomly that are not sources).
+    # GLitch + fast jumps finder is NOT run on planet data for lat because sources look like glitches!
+    if len(samp_idx) > 2 * cfg.block_size:
+        diff_idx = np.diff(samp_idx, prepend=1)
+        m = np.r_[False, diff_idx < cfg.block_size // 2, False]
+        idx = np.flatnonzero(m[:-1] != m[1:])
+        max_idx = (idx[1::2] - idx[::2]).argmax()
+        samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
+    flagged = np.zeros(cast(int, aman.samps.count), dtype=bool)
+    flagged[samp_idx] = True
+    source_flag = Ranges.from_mask(flagged).buffer(block_size)
+    return source_flag
+
+
+def svd_source_flag(aman, cfg, logger, info):
+    _ = info
+    common_mode, source_flag = iter_svd(
+        aman.signal, cfg.svd_modes, cfg.n_std, cfg.std_iters, True
+    )
+    if cfg.iter_svd_sub:
+        aman.signal -= common_mode
+    return source_flag
+
+
+flag_funcs = {
+    "cent": cent_source_flag,
+    "blind": blind_source_flag,
+    "svd": svd_source_flag,
+}
+
+
+def get_source_flag(aman, source_flag_exp, cfg, logger, info, buffer):
+    flags = {}
+    words = WORD_PATTERN.findall(source_flag_exp)
+    if len(words) == 0:
+        return np.ones(len(aman.signal), dtype=bool)
+    for word in words:
+        if word in aman:
+            flags[word] = aman[word]
+        elif word in flag_funcs:
+            flags[word] = flag_funcs[word](aman, cfg, logger, info)
+        else:
+            raise ValueError(f"Unknown source flag: {word}")
+    flags = {
+        k: match_shape(v, aman.signal.shape).buffer(buffer // 2)
+        for k, v in flags.items()
+    }
+    expression_for_eval = WORD_PATTERN.sub(
+        lambda match: f"values[{match.group()!r}]", source_flag_exp
+    )
+    return eval(expression_for_eval, {"__builtins__": {}}, {"flags": flags}).buffer(
+        buffer // 2
+    )
 
 
 def main():
@@ -449,7 +574,6 @@ def main():
                 source = src_names[0]
                 set_tag(job, "source", source)
 
-                # TODO: Make sure to make this tagging work for sat format too
                 wafers = np.unique(
                     [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]]
                     + cfg.forced_ws
@@ -479,10 +603,27 @@ def main():
                 )
                 if aman is None:
                     continue
+                bp = (aman.det_cal.bg % 4) // 2
+                aman = aman.wrap("bp", bp, [(0, "dets")])
 
                 # Downsample
                 aman.signal = aman.signal.astype(np.float32)
                 aman = downsample_obs(aman, cfg.ds)
+
+                # Filter
+                filt = tod_ops.filters.identity_filter()
+                if cfg.hp_fc is not None:
+                    filt *= tod_ops.filters.high_pass_sine2(cfg.hp_fc)
+                if cfg.lp_fc is not None:
+                    filt *= tod_ops.filters.low_pass_sine2(cfg.lp_fc)
+                sig_filt = tod_ops.filters.fourier_filter(aman, filt)
+                aman.wrap("sig_filt", [(0, "dets"), (1, "samps")])
+
+                # Trim edges in case of FFT ringing
+                aman = aman.restrict(
+                    "samps",
+                    slice(cfg.trim_samps + aman.samps.offset, -1 * cfg.trim_samps),
+                )
 
                 # Source flags
                 source_name = source
@@ -495,50 +636,85 @@ def main():
                 elif source == "3c279":
                     source_name = "J194.0409868m5.79174024"
 
-                if cfg.src_msk:
+                std_est = tod_ops.jumps.std_est(aman.sig_filt, ds=1)
+                aman.wrap("std_est", std_est, [(0, "dets")])
+                if cfg.source_flag_exp != "" and (
+                    cfg.src_msk
+                    or cfg.filter_for_sources
+                    or (cfg.iter_svd_sub and "svd" in cfg.source_flag_exp)
+                ):
                     to_skip = False
-                    start, stop = src_flag_cut(
-                        source_name,
-                        aman,
-                        nominal,
-                        ufm,
-                        cfg.res,
-                        cfg.pointing_mask,
-                        logger,
+                    (
+                        info["source_name"],
+                        info["nominal"],
+                        info["ufm"],
+                        info["res"],
+                        info["mask"],
+                    ) = (source_name, nominal, ufm, res, mask)
+                    source_flag = get_source_flag(
+                        aman, source_flag_exp, cfg, logger, info, cfg.block_size
                     )
-                    msg = ""
-                    if start < 0 or stop < 0:
-                        if not args.plot_only:
-                            msg = "No samples flagged in source flags!"
-                            to_skip = True
-                        else:
+                    if cfg.filter_for_sources:
+                        if cfg.cvd_modes <= 0:
                             logger.warning(
-                                "No samples flagged! But running in plot_only mode so will continue with all samples"
+                                "filter_for_sources is True but svd_modes is <=0 so not running!"
                             )
-                            start = 0
-                            stop = int(cast(int, aman.samps.count))
-                    if stop - start < cfg.min_samps:
-                        if not args.plot_only:
-                            msg = f"Too few samples flagged in source flags! {start} to {stop}"
-                            to_skip = True
-                        else:
-                            logger.debug(
-                                "Only %s flagged samples! But running in plot_only mode so will continue",
-                                stop - start,
+                        for b in np.unique(aman.bp):
+                            bmsk = aman.bp == b
+                            aman.signal[b] = cp.filter_for_sources(
+                                tod=None,
+                                signal=aman.signal,
+                                source_flags=source_flag,
+                                n_modes=cfg.svd_modes,
                             )
-                    if to_skip:
-                        logger.error("%s", msg)
-                        set_tag(job, "message", msg)
-                        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
-                        continue
-                    logger.debug("%s samps flagged in the source range", stop - start)
-                    aman = aman.restrict(
-                        "samps",
-                        slice(
-                            start + cast(int, aman.samps.offset),
-                            stop + cast(int, aman.samps.offset),
-                        ),
-                    )
+
+                    if cfg.src_msk:
+                        src_msk = source_flag.mask()
+                        start, stop = np.percentile(
+                            np.where(np.any(src_msk, 0))[0], [5, 95]
+                        )
+                        start = np.max(start - 3 * cfg.block_size, 0)
+                        stop = np.min(
+                            stop + 3 * cfg.block_size, cast(int, aman.samps.count)
+                        )
+                        det_msk = np.sum(src_msk, axis=1) < cfg.min_samps / 2
+                        msg = ""
+                        if np.sum(src_msk) == 0:
+                            if not args.plot_only:
+                                msg = "No samples flagged in source flags!"
+                                to_skip = True
+                            else:
+                                logger.warning(
+                                    "No samples flagged! But running in plot_only mode so will continue with all samples"
+                                )
+                                start = 0
+                                stop = int(cast(int, aman.samps.count))
+                        if stop - start < cfg.min_samps:
+                            if not args.plot_only:
+                                msg = f"Too few samples flagged in source flags! {start} to {stop}"
+                                to_skip = True
+                            else:
+                                logger.debug(
+                                    "Only %s flagged samples! But running in plot_only mode so will continue",
+                                    stop - start,
+                                )
+                        if to_skip:
+                            logger.error("%s", msg)
+                            set_tag(job, "message", msg)
+                            job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
+                            continue
+                        logger.debug(
+                            "%s samps flagged in the source range", stop - start
+                        )
+                        logger.debug("%s dets after source_flags", np.sum(det_msk))
+                        aman = aman.restrict(
+                            "samps",
+                            slice(
+                                start + cast(int, aman.samps.offset),
+                                stop + cast(int, aman.samps.offset),
+                            ),
+                        )
+                        aman = aman.restrict("dets", det_msk)
 
                 # Setup plot dirs
                 tod_plot_dir = os.path.join(
@@ -553,14 +729,13 @@ def main():
                 # Now loop by band
                 # We do this because noise properties and source responce will be band dependant
                 aman_full = aman
-                bp = (aman_full.det_cal.bg % 4) // 2
                 # TODO: This variable name needs to be updated to something more global. Also should check if there is better way than grabbing a hard coded character in string.
                 # This just extracts if it's m or u for mf or uhf
                 tube_band = ufm[4]
                 outdt[0] = ("dets:readout_id", np.array(aman_full.dets.vals).dtype)
                 rsets = []
                 msg = ""
-                for band in np.unique(bp):
+                for band in np.unique(aman_full.bp):
                     if msg != "":
                         msg += " "
                     band_name = band_names[tube_band][band]
@@ -569,122 +744,30 @@ def main():
                     )
                     logger.log(25, "Fitting")
                     aman = aman_full.restrict("dets", bp == band, in_place=False)
-
-                    # Filter
-                    filt = tod_ops.filters.identity_filter()
-                    if cfg.hp_fc is not None:
-                        filt *= tod_ops.filters.high_pass_sine2(cfg.hp_fc)
-                    if cfg.lp_fc is not None:
-                        filt *= tod_ops.filters.low_pass_sine2(cfg.lp_fc)
-                    sig_filt = tod_ops.filters.fourier_filter(aman, filt)
-
-                    # Trim edges in case of FFT ringing
-                    aman = aman.restrict(
-                        "samps",
-                        slice(cfg.trim_samps + aman.samps.offset, -1 * cfg.trim_samps),
-                    )
-                    sig_filt = sig_filt[:, cfg.trim_samps : (-1 * cfg.trim_samps)]
+                    logger.log(25, "%s detectors in band", aman.dets.count)
 
                     # Kill dets with really high noise
-                    std = np.std(sig_filt, axis=-1)
-                    # Threshold determined from config file n_med
-                    # Since boxy instead of gaussians, so quantiles are cool. Pseudo sigma is e.g. ~33%-50% [median based thing so that outliers are not included]. Then can do e.g. a 4sigma cut or whatever (but shouldnt have a high percentage of outliers).
-                    thresh = cfg.n_med * np.median(std[std > 0])
-                    aman.restrict("dets", std < thresh)
-                    sig_filt = sig_filt[std < thresh]
+                    thresh = cfg.n_med * np.median(aman.std_est[aman.std_est > 0])
+                    aman.restrict("dets", aman.std_est < thresh)
                     if aman.dets.count < cfg.min_dets:
                         _msg = f"{band_name} Noise too high."
                         logger.error("%s", _msg)
                         msg += _msg
                         continue
-
-                    # SVD filter
-                    if cfg.svd_modes > 0:
-                        U, S, V = svds(
-                            aman.signal, k=min(cfg.svd_modes, len(aman.signal) // 2)
-                        )
-                        if U is None or V is None:
-                            raise ValueError("SVD didn't compute U or V")
-                        # Scipy does ascending order for some reason...
-                        S, U, V = S[::-1], U[:, ::-1], V[::-1, :]
-                        aman.signal -= (U * S) @ V
+                    logger.log(25, "%s detectors after noise cuts", aman.dets.count)
 
                     # Get median std of all dets after cuts
-                    std_all = np.median(std[(std < thresh) * (std > 0)])
-
-                    # Lets try to find the source blind
-                    # Check for places where signal is high compared to noise (ie how many times the std)
-                    # Might not work for SAT if SNR is too low. CHECK THIS.
-                    if cfg.blind_search:
-                        flagged = sig_filt > cfg.n_std * std_all
-                        samp_idx = np.where(np.any(flagged, 0))[0]
-
-                        # TODO: Keep the block with the highest sum?
-                        # Lets kill spurs by only keeping chunks that are mostly continous
-                        # Spur definition: Glitch leftovers effectively (ie. samples with high signal randomly that are not sources).
-                        # GLitch + fast jumps finder is NOT run on planet data for lat because sources look like glitches!
-                        if len(samp_idx) > 2 * cfg.block_size:
-                            diff_idx = np.diff(samp_idx, prepend=1)
-                            m = np.r_[False, diff_idx < cfg.block_size, False]
-                            idx = np.flatnonzero(m[:-1] != m[1:])
-                            max_idx = (idx[1::2] - idx[::2]).argmax()
-                            samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
-                            logger.debug(
-                                "Found %s continously flagged samples",
-                                len(samp_idx),
-                            )
-
-                        # Not enough samples flagged => won't bother fitting
-                        if len(samp_idx) < min(cfg.block_size, cfg.min_samps / 2):
-                            if args.plot_only:
-                                logger.warning(
-                                    "Looks like you didn't see the source at all! But running in plot_only mode so will continue"
-                                )
-                            else:
-                                _msg = f"{band_name} Failed to find source blind."
-                                logger.error("%s", _msg)
-                                msg += msg
-                                continue
-                        start = int(
-                            max(0, np.percentile(samp_idx, 10) - (cfg.block_size * 5))
-                        )
-                        stop = int(
-                            min(
-                                cast(int, aman.samps.count),
-                                np.percentile(samp_idx, 90) + (cfg.block_size * 5),
-                            )
-                        )
-                        if stop - start < cfg.min_samps:
-                            if not args.plot_only:
-                                _msg = f"{band_name} Too few samples found in blind flagging."
-                                logger.error("%s", _msg)
-                                msg += _msg
-                                continue
-                            logger.warning(
-                                "Only %s flagged samples! But running in plot_only mode so will continue",
-                                stop - start,
-                            )
-                        logger.debug("%s samps flagged blind", stop - start)
-                        # Restricting to samples where we think we see a source now. The block above this is probs hardest to generalize between LAT and SAT
-                        aman = aman.restrict(
-                            "samps",
-                            slice(
-                                start + cast(int, aman.samps.offset),
-                                stop + cast(int, aman.samps.offset),
-                            ),
-                        )
-                        sig_filt = sig_filt[:, start:stop]
+                    std_all = np.median(
+                        aman.std_est[(aman.std_est < thresh) * (aman.std_est > 0)]
+                    )
 
                     # Make a p2p cut
-                    # TODO: This cut might be different for SAT and LAT.
                     # Do some final cuts to kill dets that didn't see the source
-                    logger.log(25, "%s detectors", aman.dets.count)
-                    ptp = np.ptp(sig_filt, axis=-1)
-                    std = np.std(sig_filt, axis=-1)
+                    ptp = np.ptp(aman.sig_filt, axis=-1)
+                    std = np.std(aman.sig_filt, axis=-1)
                     thresh = 0.01 * np.percentile(ptp, 90)
                     msk = (ptp > thresh) * (std > 0)
                     aman = aman.restrict("dets", msk)
-                    sig_filt = sig_filt[msk]
                     if aman.dets.count < cfg.min_dets:
                         _msg = (
                             f"{band_name} Too few detectors after final sanity check."
@@ -692,13 +775,12 @@ def main():
                         logger.error("%s", _msg)
                         msg += _msg
                         continue
-
-                    logger.log(25, "Attempting to fit %s detectors", aman.dets.count)
+                    logger.log(25, "%s detectors after ptp ccuts", aman.dets.count)
 
                     # Plot the TOD
                     plot_tod(
                         aman,
-                        sig_filt,
+                        aman.sig_filt,
                         tod_plot_dir,
                         f"{ufm}_{band_name}",
                         cfg.min_dets * 10,
@@ -722,6 +804,7 @@ def main():
                             aman.move(field, None)
 
                     # Now submit to the workers
+                    logger.log(25, "Attempting to fit %s detectors", aman.dets.count)
                     t0 = time.time()
                     det_splits = np.array_split(aman.dets.vals, P)
                     fp_futures = [
