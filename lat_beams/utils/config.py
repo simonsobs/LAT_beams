@@ -119,7 +119,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["n_med"] = cfg.get("n_med", 5)
     cfg["n_std"] = cfg.get("n_std", 10)
     cfg["min_samps"] = cfg.get("min_samps", 1000) / ds
-    cfg["block_size"] = cfg.get("block_size", 5000) / ds
+    cfg["block_size"] = int(cfg.get("block_size", 6000) // ds)
     cfg["min_dets"] = cfg.get("min_dets", 30)
     cfg["trim_samps"] = cfg.get("time_samps", 200) // ds
     cfg["min_hits"] = cfg.get("min_hits", 1)
@@ -135,6 +135,10 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["ufm_rad"] = cfg.get("ufm_rad", 0.01)
     cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
     cfg["svd_modes"] = cfg.get("svd_modes", 10)
+    cfg["svd_iters"] = cfg.get("svd_iters", 5)
+    cfg["iter_svd_sub"] = cfg.get("iter_svd_sub", False)
+    cfg["filter_for_sources"] = cfg.get("filter_for_sources", False)
+    cfg["source_flag_exp"] = cfg.get("source_flag_exp", "(svd + blind) * cent")
 
     # Geometry
     cfg["extent"] = cfg.get("extent", 600)
@@ -187,7 +191,6 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["fit_pars"] = cfg.get("fit_pars", {})
     cfg["pad"] = cfg.get("pad", True)
     cfg["src_msk"] = cfg.get("src_msk", True)
-    cfg["blind_search"] = cfg.get("blind_search", True)
 
     # Misc
     cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
@@ -199,7 +202,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["r_step"] = cfg.get("r_step", 1)
-    cfg["min_stack_snr"] = cfg.get("min_stack_snr", 100)
+    cfg["min_stack_snr"] = cfg.get("min_stack_snr", 10)
 
     # Rename for our scope
     for o, n in replace.items():
