@@ -19,5 +19,5 @@ export OMP_PLACES=sockets
 # srun -n 32 -c 8 --cpu-bind=sockets --distribution=block:block python make_source_map.py configs/make_source_map/nersc_atm.yaml
 # srun -n 32 -c 8 --cpu-bind=sockets --distribution=block:block python fit_source_map.py configs/make_source_map/nersc_atm.yaml -r
 
-srun -n 32 -c 8 --cpu-bind=sockets --distribution=block:block preempt-make_maps.sh 
-srun -n 32 -c 8 --cpu-bind=sockets --distribution=block:block preempt-fit_maps.sh 
+# srun -n 32 -c 8 --cpu-bind=sockets --distribution=block:block preempt-make_maps.sh 
+srun -n 32 -c 8 --cpu-bind=sockets --distribution=block:block preempt-fit_maps.sh -r 
