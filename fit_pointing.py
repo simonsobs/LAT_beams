@@ -168,6 +168,8 @@ def iter_svd(signal, n_modes=5, n_iter=5, n_std=5, positive_src=True):
                 filled[i, ~good] += np.interp(x[~good], x[good], r[good])
 
         U, S, Vt = svds(filled, k=k)
+        if U is None:
+            break
         order = np.argsort(S)[::-1]
         U, S, Vt = U[:, order], S[order], Vt[order]
         common_mode = (U * S) @ Vt
@@ -249,25 +251,60 @@ def cent_source_flag(aman, cfg, logger, info):
     return source_flags
 
 
+# def blind_source_flag(aman, cfg, logger, info):
+#     _ = logger, info
+#     flagged = aman.sig_filt > cfg.n_std * aman.std_est[..., None]
+#     samp_idx = np.where(np.any(flagged, 0))[0]
+#
+#     # TODO: Keep the block with the highest sum?
+#     # Lets kill spurs by only keeping chunks that are mostly continous
+#     # Spur definition: Glitch leftovers effectively (ie. samples with high signal randomly that are not sources).
+#     # GLitch + fast jumps finder is NOT run on planet data for lat because sources look like glitches!
+#     if len(samp_idx) > 2 * cfg.block_size:
+#         diff_idx = np.diff(samp_idx, prepend=1)
+#         m = np.r_[False, diff_idx < cfg.block_size // 2, False]
+#         idx = np.flatnonzero(m[:-1] != m[1:])
+#         max_idx = (idx[1::2] - idx[::2]).argmax()
+#         samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
+#     flagged = np.zeros(cast(int, aman.samps.count), dtype=bool)
+#     flagged[samp_idx] = True
+#     source_flag = RangesMatrix.from_mask(flagged).buffer(int(cfg.block_size))
+#     return source_flag
+
+
 def blind_source_flag(aman, cfg, logger, info):
     _ = logger, info
-    flagged = aman.sig_filt > cfg.n_std * aman.std_est[..., None]
-    samp_idx = np.where(np.any(flagged, 0))[0]
+    snr = aman.sig_filt / aman.std_est[..., None]
+    sample_flagged = np.any(snr > cfg.n_std, axis=0)
+    samp_idx = np.flatnonzero(sample_flagged)
 
-    # TODO: Keep the block with the highest sum?
-    # Lets kill spurs by only keeping chunks that are mostly continous
-    # Spur definition: Glitch leftovers effectively (ie. samples with high signal randomly that are not sources).
-    # GLitch + fast jumps finder is NOT run on planet data for lat because sources look like glitches!
-    if len(samp_idx) > 2 * cfg.block_size:
-        diff_idx = np.diff(samp_idx, prepend=1)
-        m = np.r_[False, diff_idx < cfg.block_size // 2, False]
-        idx = np.flatnonzero(m[:-1] != m[1:])
-        max_idx = (idx[1::2] - idx[::2]).argmax()
-        samp_idx = samp_idx[idx[2 * max_idx] : idx[2 * max_idx + 1]]
+    if samp_idx.size == 0:
+        return RangesMatrix.from_mask(np.zeros(cast(int, aman.samps.count), dtype=bool))
+
+    max_gap = cfg.block_size
+    gaps = np.diff(samp_idx)
+    split = np.flatnonzero(gaps >= max_gap) + 1
+    chunks = np.split(samp_idx, split)
+
+    # Figure out what to keep
+    keep = []
+    for chunk in chunks:
+        if np.ptp(chunk) < cfg.block_size:
+            continue
+        # RMS excess SNR over channels and samples
+        excess = np.maximum(
+            snr[:, chunk] - cfg.n_std,
+            0,
+        )
+        block_snr = np.sqrt(np.mean(excess**2))
+        if block_snr >= cfg.n_std:
+            keep += [chunk]
+
     flagged = np.zeros(cast(int, aman.samps.count), dtype=bool)
-    flagged[samp_idx] = True
-    source_flag = RangesMatrix.from_mask(flagged).buffer(int(cfg.block_size))
-    return source_flag
+    if len(keep) > 0:
+        flagged[np.concatenate(keep)] = True
+
+    return RangesMatrix.from_mask(flagged)  # .buffer(int(cfg.block_size))
 
 
 def svd_source_flag(aman, cfg, logger, info):
@@ -605,11 +642,11 @@ def main():
                 )
                 if aman is None:
                     continue
-                bp = (aman.det_cal.bg % 4) // 2
+                bp = (np.asarray(aman.det_cal.bg) % 4) // 2
                 aman = aman.wrap("bp", bp, [(0, "dets")])
 
                 # Downsample
-                aman.signal = aman.signal.astype(np.float32)
+                aman.signal = np.asarray(aman.signal).astype(np.float32)
                 aman = downsample_obs(aman, cfg.ds)
 
                 # Filter
@@ -677,9 +714,9 @@ def main():
                         start, stop = np.percentile(
                             np.where(np.any(src_msk, 0))[0], [5, 95]
                         )
-                        start = max(start - 3 * cfg.block_size, 0)
-                        stop = min(
-                            stop + 3 * cfg.block_size, cast(int, aman.samps.count)
+                        start = int(max(start - 3 * cfg.block_size, 0))
+                        stop = int(
+                            min(stop + 3 * cfg.block_size, cast(int, aman.samps.count))
                         )
                         det_msk = np.sum(src_msk, axis=1) >= cfg.min_samps / 2
                         msg = ""
@@ -739,7 +776,7 @@ def main():
                 outdt[0] = ("dets:readout_id", np.array(aman_full.dets.vals).dtype)
                 rsets = []
                 msg = ""
-                for band in np.unique(aman_full.bp):
+                for band in np.unique(np.asarray(aman_full.bp)):
                     if msg != "":
                         msg += " "
                     band_name = band_names[tube_band][band]
@@ -747,11 +784,15 @@ def main():
                         f" [{obs_id} {ufm} {band_name} ({i+1}/{len(joblist) - 1})]"
                     )
                     logger.log(25, "Fitting")
-                    aman = aman_full.restrict("dets", bp == band, in_place=False)
+                    aman = aman_full.restrict(
+                        "dets", aman_full.bp == band, in_place=False
+                    )
                     logger.log(25, "%s detectors in band", aman.dets.count)
 
                     # Kill dets with really high noise
-                    thresh = cfg.n_med * np.median(aman.std_est[aman.std_est > 0])
+                    thresh = cfg.n_med * np.median(
+                        np.asarray(aman.std_est[np.asarray(aman.std_est) > 0])
+                    )
                     aman.restrict("dets", aman.std_est < thresh)
                     if aman.dets.count < cfg.min_dets:
                         _msg = f"{band_name} Noise too high."
@@ -760,16 +801,11 @@ def main():
                         continue
                     logger.log(25, "%s detectors after noise cuts", aman.dets.count)
 
-                    # Get median std of all dets after cuts
-                    std_all = np.median(
-                        aman.std_est[(aman.std_est < thresh) * (aman.std_est > 0)]
-                    )
-
                     # Make a p2p cut
                     # Do some final cuts to kill dets that didn't see the source
-                    ptp = np.ptp(aman.sig_filt, axis=-1)
-                    std = np.std(aman.sig_filt, axis=-1)
-                    thresh = 0.01 * np.percentile(ptp, 90)
+                    ptp = np.ptp(np.asarray(aman.sig_filt), axis=-1)
+                    std = np.std(np.asarray(aman.sig_filt), axis=-1)
+                    thresh = 0.01 * np.mean(ptp)
                     msk = (ptp > thresh) * (std > 0)
                     aman = aman.restrict("dets", msk)
                     if aman.dets.count < cfg.min_dets:
@@ -784,7 +820,7 @@ def main():
                     # Plot the TOD
                     plot_tod(
                         aman,
-                        aman.sig_filt,
+                        np.asarray(aman.sig_filt),
                         tod_plot_dir,
                         f"{ufm}_{band_name}",
                         cfg.min_dets * 10,
@@ -797,7 +833,7 @@ def main():
 
                     # Make the fft a fast length (ie like a prime number)
                     _ = tod_ops.filters.fft_trim(aman, prefer="center")
-                    if aman.dets.count > 10 and args.profile:
+                    if cast(int, aman.dets.count) > 10 and args.profile:
                         logger.log(25, "Restricting to 10 dets for profile")
                         aman.restrict("dets", aman.dets.vals[:10])
 
@@ -810,7 +846,7 @@ def main():
                     # Now submit to the workers
                     logger.log(25, "Attempting to fit %s detectors", aman.dets.count)
                     t0 = time.time()
-                    det_splits = np.array_split(aman.dets.vals, P)
+                    det_splits = np.array_split(np.asarray(aman.dets.vals), P)
                     fp_futures = [
                         executor.submit(
                             fit_tod_pointing,
@@ -827,7 +863,7 @@ def main():
                         aman.restrict("dets", det_splits[0], in_place=False),
                         (cfg.hp_fc, cfg.lp_fc),
                         fwhm=np.deg2rad(cfg.nominal_fwhm[band_name] / 60.0),
-                        source=source_name,
+                        source=source_name,  # type: ignore
                         **cfg.fit_pars,
                     )
                     wait(fp_futures)

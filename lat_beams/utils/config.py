@@ -119,7 +119,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["n_med"] = cfg.get("n_med", 5)
     cfg["n_std"] = cfg.get("n_std", 10)
     cfg["min_samps"] = cfg.get("min_samps", 1000) / ds
-    cfg["block_size"] = int(cfg.get("block_size", 6000) // ds)
+    cfg["block_size"] = int(cfg.get("block_size", 200) // ds)
     cfg["min_dets"] = cfg.get("min_dets", 30)
     cfg["trim_samps"] = cfg.get("time_samps", 200) // ds
     cfg["min_hits"] = cfg.get("min_hits", 1)
