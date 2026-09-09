@@ -441,6 +441,9 @@ for split in jobdict.keys():
                 if jobstr not in stack_jobs:
                     msg = "Stack job missing"
                     fail(job, ErrCode.NO_JOB, msg, logger)
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
                     continue
                 stack_job = stack_jobs[jobstr]
 
@@ -451,6 +454,9 @@ for split in jobdict.keys():
                 if not os.path.isfile(map_path) or not os.path.isfile(ivar_path):
                     msg = "Map missing"
                     fail(job, ErrCode.MAP_MISSING, msg, logger)
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
                     continue
                 imap = enmap.read_map(map_path)[0]  # Just T for now
                 ivar = enmap.read_map(ivar_path)[0]  # Just T for now
@@ -487,10 +493,16 @@ for split in jobdict.keys():
                 if gauss_params is None or model is None:
                     msg = "Gauss fit failed!"
                     fail(job, ErrCode.FIT_FAILED, msg, logger)
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
                     continue
                 if abs(gauss_params.amp.value - 1) >= 0.2:  # type: ignore
                     msg = "Gauss fit looks bad!"
                     fail(job, ErrCode.FIT_FAILED, msg, logger)
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
                     continue
                 aman.wrap("gauss", gauss_params)
                 for to_parent in ["amp", "off", "xi0", "eta0"]:
@@ -513,6 +525,9 @@ for split in jobdict.keys():
                 if np.isnan(data_fwhm):
                     msg = "Data FWHM is bad! Skipping!"
                     fail(job, ErrCode.FWHM_TOL, msg, logger)
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
                     continue
                 aman.wrap("data_fwhm", data_fwhm)
                 aman.wrap("r", r * u.arcsec)
@@ -538,6 +553,9 @@ for split in jobdict.keys():
                 if bessel_beam_params is None or model is None:
                     msg = "Bessel fit failed!"
                     fail(job, ErrCode.FIT_FAILED, msg, logger)
+                    with jdb.session_scope() as session:
+                        session.merge(job)
+                        session.commit()
                     continue
                 aman.wrap("bessel", bessel_beam_params)
                 aman.wrap("final_model", "bessel")
@@ -738,6 +756,9 @@ for split in jobdict.keys():
 
     # Plot profiles and windows
     logger.info("Plotting %s", split)
+    if len(to_plot_r["r"]) == 0:
+        logger.warning("to_plot is empty! Skipping")
+        continue
     row = "tube_slot" if "tube_slot" in split else None
     col = "band" if "band" in split else None
     combine = (

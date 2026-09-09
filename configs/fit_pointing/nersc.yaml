@@ -33,8 +33,7 @@ min_hits: 1
 svd_modes: 10
 min_dets: 10
 
-src_msk: False
-blind_search: False
+filter_for_sources: True
 pointing_mask:
   shape: "circle"
   xyr:

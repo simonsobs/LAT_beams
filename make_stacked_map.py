@@ -93,7 +93,7 @@ def get_tags(info):
     return tags
 
 
-def view_TQU(imap):
+def view_TQU(imap) -> enmap.ndmap:
     padded = imap
     if len(imap) == 1:
         padded = enmap.zeros((3,) + imap.shape[1:], imap.wcs)
@@ -132,29 +132,43 @@ os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, "beam_pars.h5")
 jdb = make_jobdb(comm, data_dir)
 
-# Get jobs
-mjobdict = {
-    f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
-    for job in jdb.get_jobs(jclass="beam_map", jstate="done")
-}
-fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
-
+# Load fits
+logger.info("Loading map metadata and fits")
+all_fits = None
+fjobs = None
+mjobdict = None
+if myrank == 0:
+    mjobdict = {
+        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
+        for job in jdb.get_jobs(jclass="beam_map", jstate="done")
+    }
+    logger.info("Map jobs loaded")
+    fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
+    logger.info("Fit jobs loaded")
+    all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist())
+    logger.info("Fits loaded")
+    snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
+    solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
+    fwhm_exp = (
+        np.array([cfg.nominal_fwhm[band] for band in all_fits["band"]]) * u.arcmin
+    )
+    data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
+    msk = snr > cfg.min_stack_snr
+    msk *= data_fwhm < 1.3 * fwhm_exp
+    msk *= data_fwhm > 0.7 * fwhm_exp
+    msk *= solid_angle > 0
+    pwv = np.array(bu.get_split_vec(all_fits, "pwv_mean", ctx), float)
+    el = np.deg2rad(np.array(bu.get_split_vec(all_fits, "el_center", ctx), float))
+    msk *= pwv / np.sin(el) <= 2.0
+    all_fits = all_fits[msk]
+    fjobs = fjobs[msk]
+logger.info("Broadcasting")
+all_fits = comm.bcast(all_fits)
+fjobs = comm.bcast(fjobs)
+mjobdict = comm.bcast(mjobdict)
 logger.info("%d maps to add", len(fjobs))
 if len(fjobs) == 0:
     sys.exit(0)
-
-# Load fits
-all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist())
-snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
-solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
-msk = snr > cfg.min_stack_snr
-msk *= solid_angle > 0
-fwhm_exp = np.array([cfg.nominal_fwhm[band] for band in all_fits["band"]]) * u.arcmin
-data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
-msk *= data_fwhm < 2 * fwhm_exp
-msk *= data_fwhm > 0.5 * fwhm_exp
-all_fits = all_fits[msk]
-fjobs = fjobs[msk]
 
 # Det splits
 det_split_names = ["full"] + cfg.det_splits
@@ -284,12 +298,40 @@ for job in all_jobs:
             imap = view_TQU(imap)
             ivar = view_TQU(ivar)
 
-            # Crop, recenter, and normalize
+            # Get center and see how close to the edge we are
             cent = np.array(
                 (
                     fit["aman"].gauss.eta0.to(u.rad).value,
                     fit["aman"].gauss.xi0.to(u.rad).value,
                 )
+            )
+            pix = imap.sky2pix(cent)
+            ny, nx = imap.shape[-2:]
+            y, x = pix
+            d_top = y
+            d_bottom = ny - 1 - y
+            d_left = x
+            d_right = nx - 1 - x
+            pixscale = np.abs(imap.pixshape())
+            distance_rad = min(
+                d_top * pixscale[0],
+                d_bottom * pixscale[0],
+                d_left * pixscale[1],
+                d_right * pixscale[1],
+            )
+            if distance_rad < 0.1 * ext_rad:
+                logger.debug(
+                    "%s (%s) too close to edge! Skipping!",
+                    fjobstr,
+                    mjob.tags["source"],
+                )
+                break
+
+            # Crop, recenter, and normalize
+            norm = (
+                fit["aman"].gauss.amp.value
+                + fit["aman"].gauss.off.value
+                - fit["aman"].bessel.off.value
             )
             imap = (
                 reproject.thumbnails(
@@ -300,7 +342,7 @@ for job in all_jobs:
                     owcs=twcs,
                     oversample=1,
                 )
-                / fit["aman"].gauss.amp.value
+                / norm
             )
             ivar = (
                 reproject.thumbnails_ivar(
@@ -310,16 +352,27 @@ for job in all_jobs:
                     oshape=(pix_extent, pix_extent),
                     owcs=twcs,
                 )
-                * fit["aman"].gauss.amp.value**2
+                * norm**2
             )
 
-            # If the new center seems very far from the origin then lets skip
             if map_type == "":
-                cent_est = bu.estimate_cent(imap[0], sigma=10, buf=1)
+                cent_est, smoothed = bu.estimate_cent(
+                    imap[0], sigma=10, buf=1, ret_smooth=True
+                )
                 dist = np.linalg.norm(cent_est - imap.wcs.wcs.crpix)
                 if dist > cfg.miscenter_thresh:
                     logger.debug(
                         "%s (%s) seems miscentered! Skipping!",
+                        fjobstr,
+                        mjob.tags["source"],
+                    )
+                    break
+                if (
+                    imap[0, cent_est[0], cent_est[1]] < 0
+                    or imap[0, cent_est[0], cent_est[1]] / smoothed[cent_est] < 0.7
+                ):
+                    logger.debug(
+                        "%s (%s) looks like bad weather! Skipping!",
                         fjobstr,
                         mjob.tags["source"],
                     )

@@ -126,18 +126,13 @@ def fit_gauss_map(
     bounds = [(lb, ub) for lb, ub in zip(*bounds)]
 
     # Mask out things too far from the starting center
+    msk = ivar > 0
     if mask_size > 0:
         r = np.sqrt((x - x0[0]) ** 2 + (y - x0[1]) ** 2)
-        msk = r < mask_size
-
-        fit_imap = np.asarray(imap)[msk]
-        fit_ivar = np.asarray(ivar)[msk]
-        fit_posmap = np.asarray(posmap)[:, msk]
-    else:
-        fit_imap = np.asarray(imap)
-        fit_ivar = np.asarray(ivar)
-        fit_posmap = np.asarray(posmap)
-
+        msk *= r < mask_size
+    fit_imap = np.asarray(imap)[msk]
+    fit_ivar = np.asarray(ivar)[msk]
+    fit_posmap = np.asarray(posmap)[:, msk]
     w = np.sqrt(fit_ivar)
 
     def _to_pars(coeffs):
