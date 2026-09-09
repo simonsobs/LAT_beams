@@ -1,3 +1,14 @@
+## 5.4.0 (2026-09-09)
+
+### Feat
+
+- new filtering scheme
+
+### Fix
+
+- map fitting tweaks
+- more robust blind search and some typing fixes
+
 ## 5.3.0 (2026-09-01)
 
 ### Feat
