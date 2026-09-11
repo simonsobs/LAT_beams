@@ -3,14 +3,14 @@ Utilities for reading and writing data to disk.
 """
 
 import logging
-from typing import Optional
 from copy import deepcopy
+from typing import Optional
 
 import numpy as np
 from sotodlib.core import AxisManager, Context
+from sotodlib.preprocess import Pipeline
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
-from sotodlib.preprocess import Pipeline
 
 from .jobs import ErrCode, fail, set_tag
 from .log import LoggerLike, log_lvl
@@ -25,7 +25,7 @@ def load_aman(
     logger: LoggerLike,
     fp_flag: bool = False,
     save: bool = False,
-    debug_dets: Optional[int|str] = None
+    debug_dets: Optional[int | str] = None,
 ) -> Optional[AxisManager]:
     """
     Load and preprocess an observation.
@@ -56,7 +56,7 @@ def load_aman(
         If `True` then try to save the preprocess result.
     debug_dets : Optional[int|str], default: None
         If `int` then will load first N dets from meta.dets.vals
-        If string of comma-separated readout_ids, will load only those. 
+        If string of comma-separated readout_ids, will load only those.
 
     Returns
     -------
@@ -65,21 +65,23 @@ def load_aman(
         If something failed this is `None`.
     """
     if debug_dets is not None:
-        save = False  #Don't save preprocess if a subset of dets.
+        save = False  # Don't save preprocess if a subset of dets.
         with log_lvl(logger, logging.ERROR):
             ctx = Context(preprocess_cfg["context_file"])
             all_dets = ctx.get_det_info(obs_id, dets=dets)
         if isinstance(debug_dets, int):
             if debug_dets <= 0:
-                  raise ValueError ("Non-positive number of debug dets passed")
-            detlist = all_dets[:min(len(all_dets), debug_dets)]
+                raise ValueError("Non-positive number of debug dets passed")
+            detlist = all_dets[: min(len(all_dets), debug_dets)]
         elif isinstance(debug_dets, str):
-            detlist = all_dets[np.isin(np.asarray(all_dets["readout_id"]), debug_dets.split(","))]
+            detlist = all_dets[
+                np.isin(np.asarray(all_dets["readout_id"]), debug_dets.split(","))
+            ]
         else:
-             raise ValueError("Invalid debug dets") # or something
+            raise ValueError("Invalid debug dets")  # or something
         if len(detlist) == 0:
             raise ValueError("No debug dets in obs")
-        min_dets = int(len(detlist)//2)
+        min_dets = int(len(detlist) // 2)
         dets = deepcopy(dets)
         dets["readout_id"] = detlist["readout_id"]
 
