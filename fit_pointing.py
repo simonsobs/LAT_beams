@@ -444,7 +444,6 @@ def main():
     # Load nominal pointing [i.e. template pointing from the zemax model
     nominal = h5py.File(cfg.nominal_path)
     # JobDB stuff
-    breakpoint()
     jdb, all_jobs = setup_jobs(
         comm,
         data_dir,
@@ -630,7 +629,6 @@ def main():
                 if h5_file is not None and myrank == 0 and obs["obs_id"] not in h5_file:
                     h5_file.create_group(obs["obs_id"])
 
-                logger.log(25, "Debug Det Restriction")
                 # Load and process the TOD
                 aman = load_aman(
                     obs["obs_id"],

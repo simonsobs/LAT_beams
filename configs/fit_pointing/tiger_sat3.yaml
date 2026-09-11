@@ -18,7 +18,7 @@ stop_time: 1723409000
 plot_only: False
 forced_ws: "ws3"
 try_all: False
-debug_dets: 500
+debug_dets: 200 #500
 
 ds: 1
 
