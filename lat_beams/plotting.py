@@ -336,39 +336,88 @@ def plot_focal_plane(
         ]
     }
 
-    # Define plots with tuples (data, xlabel, ylabel, filename, plot_type)
+    # Define plots with tuples (data, xlabel, ylabel, color_ax, c_ax_label, filename, plot_type)
     plots = [
         (
             (fp_data["xi"], fp_data["eta"]),
             "Xi (rad)",
             "Eta (rad)",
+            fp_data["R2"],
+            "R2",
             f"{ufm}_fp.png",
+            "scatter",
+        ),
+        (
+            (fp_data["xi"], fp_data["eta"]),
+            "Xi (rad)",
+            "Eta (rad)",
+            fp_data["hits"],
+            "hits",
+            f"{ufm}_fp_by_hits.png",
             "scatter",
         ),
         (
             (fp_data["az"], fp_data["el"]),
             "Az (rad)",
             "El (rad)",
+            fp_data["R2"],
+            "R2",
             f"{ufm}_enc.png",
             "scatter",
         ),
-        (fp_data["amp"], "Amp (pW)", "Dets (#)", f"{ufm}_fp_amp.png", "hist"),
-        (fp_data["fwhm"], "FWHM (rad)", "Dets (#)", f"{ufm}_fp_fwhm.png", "hist"),
-        (fp_data["hits"], "Hits (#)", "Dets (#)", f"{ufm}_fp_hits.png", "hist"),
+        (
+            (fp_data["az"] * 180 / np.pi, fp_data["el"] * 180 / np.pi),
+            "Az (deg)",
+            "El (deg)",
+            fp_data["hits"],
+            "hits",
+            f"{ufm}_enc_deg.png",
+            "scatter",
+        ),
+        (
+            fp_data["amp"],
+            "Amp (pW)",
+            "Dets (#)",
+            None,
+            None,
+            f"{ufm}_fp_amp.png",
+            "hist",
+        ),
+        (
+            fp_data["fwhm"],
+            "FWHM (rad)",
+            "Dets (#)",
+            None,
+            None,
+            f"{ufm}_fp_fwhm.png",
+            "hist",
+        ),
+        (
+            fp_data["hits"],
+            "Hits (#)",
+            "Dets (#)",
+            None,
+            None,
+            f"{ufm}_fp_hits.png",
+            "hist",
+        ),
         (
             fp_data["reduced_chisq"],
             "Reduced Chi Squared",
             "Dets (#)",
+            None,
+            None,
             f"{ufm}_fp_red_chisq.png",
             "hist",
         ),
-        (fp_data["R2"], "R2", "Dets (#)", f"{ufm}_fp_r2.png", "hist"),
+        (fp_data["R2"], "R2", "Dets (#)", None, None, f"{ufm}_fp_r2.png", "hist"),
     ]
 
-    for data, xlabel, ylabel, filename, plot_type in plots:
+    for data, xlabel, ylabel, color_ax, c_ax_label, filename, plot_type in plots:
         plt.clf()
         if plot_type == "scatter":
-            plt.scatter(*data, alpha=0.25)
+            plt.scatter(*data, c=color_ax, cmap="viridis", alpha=0.25)
+            plt.colorbar(label=c_ax_label)
         elif plot_type == "hist":
             plt.hist(data, bins=30, alpha=0.25)
         plt.xlabel(xlabel)

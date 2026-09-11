@@ -3,10 +3,12 @@ Utilities for reading and writing data to disk.
 """
 
 import logging
+from copy import deepcopy
 from typing import Optional
 
 import numpy as np
-from sotodlib.core import AxisManager
+from sotodlib.core import AxisManager, Context
+from sotodlib.preprocess import Pipeline
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
 
@@ -23,6 +25,7 @@ def load_aman(
     logger: LoggerLike,
     fp_flag: bool = False,
     save: bool = False,
+    debug_dets: Optional[int | str] = None,
 ) -> Optional[AxisManager]:
     """
     Load and preprocess an observation.
@@ -51,6 +54,9 @@ def load_aman(
         If `True` then keep only detectors with valid pointing.
     save : bool, default: False
         If `True` then try to save the preprocess result.
+    debug_dets : Optional[int|str], default: None
+        If `int` then will load first N dets from meta.dets.vals
+        If string of comma-separated readout_ids, will load only those.
 
     Returns
     -------
@@ -58,6 +64,27 @@ def load_aman(
         If we loaded and preprocessed successfully this is the loaded observation.
         If something failed this is `None`.
     """
+    if debug_dets is not None:
+        save = False  # Don't save preprocess if a subset of dets.
+        with log_lvl(logger, logging.ERROR):
+            ctx = Context(preprocess_cfg["context_file"])
+            all_dets = ctx.get_det_info(obs_id, dets=dets)
+        if isinstance(debug_dets, int):
+            if debug_dets <= 0:
+                raise ValueError("Non-positive number of debug dets passed")
+            detlist = all_dets[: min(len(all_dets), debug_dets)]
+        elif isinstance(debug_dets, str):
+            detlist = all_dets[
+                np.isin(np.asarray(all_dets["readout_id"]), debug_dets.split(","))
+            ]
+        else:
+            raise ValueError("Invalid debug dets")  # or something
+        if len(detlist) == 0:
+            raise ValueError("No debug dets in obs")
+        min_dets = int(len(detlist) // 2)
+        dets = deepcopy(dets)
+        dets["readout_id"] = detlist["readout_id"]
+
     try:
         with log_lvl(logger, logging.ERROR):
             aman, _, _, err = preproc_or_load_group(

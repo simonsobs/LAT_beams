@@ -1,0 +1,53 @@
+fit_source_list:
+  - "jupiter"
+
+
+ctx_path: "/scratch/gpfs/SIMONSOBS/users/eshaw/mymetadata/satp3/context_for_fitpointing.yaml"
+#ctx_path: "/scratch/gpfs/SIMONSOBS/so/tracked/metadata/satp3/contexts/use_this_local.yaml"
+preprocess_cfg: "/scratch/gpfs/SIMONSOBS/users/eshaw/repos/LAT_beams/preproc/preproc_fit_point_jupiter_sat3_tiger.yaml"
+nominal_path: "/scratch/gpfs/SIMONSOBS/users/eshaw/ffp_per_obs/satp3/nominal/nominal.h5"
+
+tel: "satp3"
+root_dir: "/scratch/gpfs/SIMONSOBS/users/eshaw/lattype_process_brightsrc/"
+
+start_time: 1723197800
+stop_time: 1723292800
+
+plot_only: False
+forced_ws: "ws6"
+try_all: False
+debug_dets:
+
+ds: 1
+
+nominal_fwhm: # arcmin LAT; change per platform
+  f090: 28.6
+  f150: 19.6
+    
+#maybe remove the high pass? 
+hp_fc: 0.0005
+lp_fc: 1.1
+
+min_hits: 5
+svd_modes: 0 #10
+min_dets: 10
+
+src_msk: False
+blind_search: False
+pointing_mask:
+  shape: "circle"
+  xyr:
+    - 0 #-0.013 #satp3 az offset
+    - 0.
+    - 8 #or 2.5 (LAT)
+
+fit_pars:
+  bin_priors: True 
+  min_snr: 3
+
+fwhm_tol_pointing: 100 #.6
+n_std: 5 #10
+n_med: 5 #10
+
+trim_samps: 4000
+min_samps: 5000

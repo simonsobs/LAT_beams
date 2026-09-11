@@ -79,7 +79,10 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["tel"] = cfg.get("tel", "lat")
     cfg["forced_ws"] = args.forced_ws if args.forced_ws is not None else []
     if cfg.get("try_all", False):
-        cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws."]
+        if cfg.get("tel") == "lat":
+            cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws."]
+        elif "sat" in cfg.get("tel"):
+            cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws3", "ws4", "ws5", "ws6"]
     cfg["fit_source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
     cfg["map_source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
     cfg["start_time"] = cfg.get("start_time", 0)
@@ -87,6 +90,7 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
         cfg["start_time"] = time.time() - 3600 * args.lookback
     cfg["stop_time"] = cfg.get("stop_time", 20000000000)
     cfg["max_dur"] = cfg.get("max_dur", 2)
+    cfg["debug_dets"] = cfg.get("debug_dets", None)
 
     # Get paths to stuff
     cfg["preprocess_cfg"] = cfg.get("preprocess_cfg", None)
