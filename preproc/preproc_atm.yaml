@@ -33,7 +33,7 @@ process_pipe:
 
     - name: "det_bias_flags"
       calc:
-        rfrac_range: [0.2, 0.8]
+        rfrac_range: [0.05, 0.95]
       save: True
       select: True
 
@@ -62,7 +62,7 @@ process_pipe:
       save:
         jumps_name: "jumps_2pi"
       select:
-        max_n_jumps: 10
+        max_n_jumps: 100
 
     - name: "fix_jumps"
       process:
