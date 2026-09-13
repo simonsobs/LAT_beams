@@ -44,6 +44,9 @@ class ErrCode(Enum):
     DET_SECS = 13
     NO_MAPS = 14
     NO_JOB = 15
+    FILT_FAILED = 16
+    MAP_FAILED = 17
+    OMEGA_FAILED = 18
 
 
 def set_tag(job, key, new_val):
@@ -296,20 +299,21 @@ def setup_jobs(
             jdb.commit_jobs(jobs_to_make)
             jdb.clear_locks(jobs=joblist)
             if len(jobs_to_open) > 0:
+                jdb.update_jobs(jobs_to_open)
                 with jdb.session_scope() as session:
-                    updated_jobs = []
-                for job in jobs_to_open:
-                    merged_job = session.merge(job)
-                    updated_jobs.append(merged_job)
+                    # updated_jobs = []
+                    # for job in jobs_to_open:
+                    #     merged_job = session.merge(job)
+                    #     updated_jobs.append(merged_job)
+                    #
+                    # # Single commit for all jobs in this rank
+                    # session.commit()
 
-                # Single commit for all jobs in this rank
-                session.commit()
-
-                for job in updated_jobs:
-                    jid = job.id
-                    refreshed_job = session.get(jobdb.Job, jid)
-                    session.expunge(refreshed_job)
-                    joblist.append(refreshed_job)
+                    for job in jobs_to_open:  # updated_jobs:
+                        jid = job.id
+                        refreshed_job = session.get(jobdb.Job, jid)
+                        session.expunge(refreshed_job)
+                        joblist.append(refreshed_job)
         if comm is not None:
             comm.barrier()
     t1 = time.time()
