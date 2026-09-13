@@ -1,3 +1,6 @@
 __pycache__
 LAT_beams.egg-info
 build/
+/*.slurm
+/preempt*.sh
+/*.out
