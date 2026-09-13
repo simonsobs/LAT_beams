@@ -385,6 +385,8 @@ for i, j in enumerate(joblist):
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
             solved = cast(enmap.ndmap, solved)
+            wmap = enmap.read_map(os.path.join(data_dir, job.tags["weights"]))
+            wmap = cast(enmap.ndmap, wmap)
         except FileNotFoundError:
             fail(
                 job, ErrCode.MAP_MISSING, "Missing map files in plot_only mode", logger
@@ -394,7 +396,7 @@ for i, j in enumerate(joblist):
         obs_plot_dir = os.path.join(
             plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
         )
-        cent = estimate_cent(solved[0], cfg.smooth_kern / pixsize, cfg.buf)
+        cent = estimate_cent(solved[0], wmap[0][0], cfg.smooth_kern / pixsize, cfg.buf)
         posmap = solved.posmap()
         posmap = np.rad2deg(posmap) * 3600
         if solved.wcs is None:
@@ -506,7 +508,12 @@ for i, j in enumerate(joblist):
 
     # Do an aggressive filter and flag dets without the source
     cuts = lbm.make_cuts(
-        aman, source_flags, min(len(aman.signal), 2 * cfg.n_modes), job, logger, cfg
+        aman,
+        source_flags,
+        min(len(np.asarray(aman.signal)), 2 * cfg.n_modes),
+        job,
+        logger,
+        cfg,
     )
     if cuts is None:
         continue
@@ -515,12 +522,12 @@ for i, j in enumerate(joblist):
     info = {"obs_id": obs["obs_id"], "ufm": ufm, "band": band}
     out, cent, _ = lbm.make_map(
         aman,
-        src_to_map,
+        src_to_map,  # type: ignore
         cfg.res,
         cuts,
         source_flags,
         "T",
-        min(len(aman.signal), cfg.n_modes),
+        min(len(np.asarray(aman.signal)), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         None,
@@ -565,12 +572,12 @@ for i, j in enumerate(joblist):
     # Make final map
     out, cent, X = lbm.make_map(
         aman,
-        src_to_map,
+        src_to_map,  # type: ignore
         cfg.res,
         cuts,
         source_flags,
         cfg.comps,
-        min(len(aman.signal), cfg.n_modes),
+        min(len(np.asarray(aman.signal)), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
