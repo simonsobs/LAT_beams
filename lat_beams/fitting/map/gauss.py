@@ -94,7 +94,7 @@ def fit_gauss_map(
             np.max(x) + cast(float, guess.fwhm_xi),
             np.max(y) + cast(float, guess.fwhm_eta),
             5 * np.max(np.abs(imap)),
-            5 * np.max(np.abs(imap)),
+            5 * cast(float, guess.amp),
             cast(float, guess.fwhm_xi) * 3,
             cast(float, guess.fwhm_eta) * 3,
             2 * np.pi,
@@ -168,9 +168,10 @@ def fit_gauss_map(
             x_scale="jac",
         )
         if not res.success:
-            print(res)
             return None, None
-    except ValueError:
+    except ValueError as e:
+        print(e)
+        print(x0, bounds)
         return None, None
 
     # Convert to aman
