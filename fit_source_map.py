@@ -10,7 +10,6 @@ from astropy import constants as const
 from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
-from pshmem.locking import MPILock
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
@@ -35,6 +34,7 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    update_jobs_retry,
 )
 
 comm = MPI.COMM_WORLD
@@ -195,7 +195,6 @@ map_jobdict = {
     for job in map_jobs
 }
 job = None
-mpilock = MPILock(comm)
 for i, j in enumerate(joblist):
     comm.barrier()
     sys.stdout.flush()
@@ -209,18 +208,13 @@ for i, j in enumerate(joblist):
         outfile.flush()
     comm.barrier()
 
-    # To avoid multiproc issues where the database is locked we lock and unlock serially
-    mpilock.lock()
-    if job is not None:
-        with jdb.session_scope() as session:
-            session.merge(job)
-            session.commit()
+    logger.debug("Writing to db")
+    update_jobs_retry(jdb, [job], nproc * 10, logger)
     job = None
     if j is not None:
         with jdb.session_scope() as session:
             job = session.get(Job, j.id)
             session.expunge(job)
-    mpilock.unlock()
 
     if job is None:
         to_save = (None, None)
@@ -405,20 +399,26 @@ for i, j in enumerate(joblist):
 
     # Get bessel beam if we want
     if cfg.bessel_beam:
-        bessel_beam_params, model = fb.fit_bessel_map(
-            solved,
-            weights,
-            posmap,
-            gauss_params,
-            "pW",
-            cfg.n_bessel,
-            cfg.n_multipoles,
-            cfg.aperature,
-            const.c / (float(band[1:]) * u.GHz),  # type: ignore
-            band_mask_size,
-            np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
-            cfg.skip_multipoles,
-        )
+        try:
+            bessel_beam_params, model = fb.fit_bessel_map(
+                solved,
+                weights,
+                posmap,
+                gauss_params,
+                "pW",
+                cfg.n_bessel,
+                cfg.n_multipoles,
+                cfg.aperature,
+                const.c / (float(band[1:]) * u.GHz),  # type: ignore
+                band_mask_size,
+                np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
+                cfg.skip_multipoles,
+            )
+        except Exception as e:
+            msg = f"Bessel fit failed with error {str(e)}"
+            fail(job, ErrCode.FIT_FAILED, msg, logger)
+            to_save = (None, None)
+            continue
         if bessel_beam_params is None or model is None:
             msg = "Bessel fit failed"
             fail(job, ErrCode.FIT_FAILED, msg, logger)

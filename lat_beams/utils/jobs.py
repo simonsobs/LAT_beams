@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, c
 
 import sqlalchemy as sqy
 from sotodlib.site_pipeline import jobdb
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
 from .log import LoggerLike
@@ -301,14 +302,6 @@ def setup_jobs(
             if len(jobs_to_open) > 0:
                 jdb.update_jobs(jobs_to_open)
                 with jdb.session_scope() as session:
-                    # updated_jobs = []
-                    # for job in jobs_to_open:
-                    #     merged_job = session.merge(job)
-                    #     updated_jobs.append(merged_job)
-                    #
-                    # # Single commit for all jobs in this rank
-                    # session.commit()
-
                     for job in jobs_to_open:  # updated_jobs:
                         jid = job.id
                         refreshed_job = session.get(jobdb.Job, jid)
@@ -328,3 +321,82 @@ def setup_jobs(
     logger.info("%s jobs to run!", len(all_jobs))
 
     return jdb, all_jobs
+
+
+def update_jobs_retry(jdb, jobs, max_retries, logger):
+    t0 = time.time()
+    attempt = 0
+    success = False
+    for attempt in range(max_retries):
+        try:
+            jdb.update_jobs(jobs)
+            success = True
+            break
+        except OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(1)
+                continue
+            raise
+    if not success:
+        logger.error("Failed to write with %d attempts", attempt + 1)
+    else:
+        logger.debug(
+            "Took %s seconds to write with %d attempts",
+            str(time.time() - t0),
+            attempt + 1,
+        )
+
+
+def update_jobs_retry(
+    jdb: jobdb.JobManager,
+    jobs: Sequence[jobdb.Job],
+    max_retries: int,
+    logger: LoggerLike,
+):
+    """
+    Update jobs in the job database, retrying on database lock errors.
+
+    The update is retried up to `max_retries` times when the database
+    reports that it is locked. A one-second delay is inserted between
+    retries. Other operational errors are propagated immediately.
+
+    Parameters
+    ----------
+    jdb : jobdb.JobManager
+        Job database manager used to update the jobs.
+    jobs : Sequence[jobdb.Job]
+        Jobs to update in the database.
+    max_retries : int
+        Maximum number of attempts to make when updating the jobs.
+    logger : LoggerLike
+        Logger used to report failures and successful updates.
+
+    Raises
+    ------
+    OperationalError
+        If an operational database error occurs that is not caused by
+        the database being locked.
+    """
+    t0 = time.time()
+    attempt = 0
+    success = False
+
+    for attempt in range(max(1, max_retries)):
+        try:
+            jdb.update_jobs(jobs)
+            success = True
+            break
+        except OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(1)
+                continue
+            raise
+
+    if not success:
+        logger.error("Failed to write with %d attempts", attempt + 1)
+    else:
+        logger.debug(
+            "Took %s seconds to write with %d attempts",
+            str(time.time() - t0),
+            attempt + 1,
+        )

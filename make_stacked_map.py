@@ -1,7 +1,5 @@
 import os
-import sqlite3
 import sys
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from functools import partial
@@ -32,6 +30,7 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    update_jobs_retry,
 )
 
 comm = MPI.COMM_WORLD
@@ -474,7 +473,7 @@ def stack_job(
             os.makedirs(plot_dir_spl, exist_ok=True)
             path = os.path.join(
                 data_dir_spl,
-                f"{job.tags['split_str']}_ {job.tags['det_split']}_ {job.tags['epoch_start']}_ {job.tags['epoch_end']} {'_' * bool(map_type)} {map_type}_{name}.fits",
+                f"{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}{'_' * bool(map_type)}{map_type}_{name}.fits",
             )
 
             enmap.write_map(path, omap, "fits", allow_modify=True)
@@ -493,7 +492,7 @@ def stack_job(
                     cfg.extent * z,
                     (0, 0),
                     plot_dir_spl,
-                    f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} {' ' * bool(map_type)} {map_type} {name}",
+                    f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} {' ' * bool(map_type)}{map_type} {name}",
                     log_thresh=cfg.log_thresh,
                     append=name + append,
                     qrur=True,
@@ -663,27 +662,7 @@ pending_job = None
 for i, j in enumerate(joblist):
     if pending_job is not None:
         logger.debug("Writing to db")
-        t0 = time.time()
-        attempt = 0
-        success = False
-        for attempt in range(nproc * 100):
-            try:
-                jdb.update_jobs([pending_job])
-                success = True
-                break
-            except sqlite3.OperationalError as e:
-                if "database is locked" in str(e):
-                    time.sleep(1)
-                    continue
-                raise
-        if not success:
-            logger.error("Failed to write with %d attempts", attempt + 1)
-        else:
-            logger.debug(
-                "Took %s seconds to write with %d attempts",
-                str(time.time() - t0),
-                attempt + 1,
-            )
+        update_jobs_retry(jdb, [pending_job], nproc * 10, logger)
     pending_job = None
     job = None
     if j is not None:

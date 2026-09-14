@@ -1,5 +1,4 @@
 import os
-import sqlite3
 import sys
 import time
 from collections import defaultdict
@@ -17,7 +16,6 @@ from astropy import constants as const
 from healpy.sphtfunc import beam2bl
 from mpi4py import MPI
 from pixell import enmap
-from pshmem.locking import MPILock
 from sotodlib.core import AxisManager
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
@@ -42,6 +40,7 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    update_jobs_retry,
 )
 
 comm = MPI.COMM_WORLD
@@ -70,7 +69,10 @@ def get_jobit(jdb, cfg):
         jstate="done",
         locked=False,
     )
-
+    maplist = np.array_split(
+        maplist,
+        nproc,
+    )[myrank]
     to_ret = [
         job
         for job in maplist
@@ -998,27 +1000,7 @@ def main():
 
         if pending_job is not None:
             logger.debug("Writing to db")
-            t0 = time.time()
-            attempt = 0
-            success = False
-            for attempt in range(nproc * 100):
-                try:
-                    jdb.update_jobs([pending_job])
-                    success = True
-                    break
-                except sqlite3.OperationalError as e:
-                    if "database is locked" in str(e):
-                        time.sleep(1)
-                        continue
-                    raise
-            if not success:
-                logger.error("Failed to write with %d attempts", attempt + 1)
-            else:
-                logger.debug(
-                    "Took %s seconds to write with %d attempts",
-                    str(time.time() - t0),
-                    attempt + 1,
-                )
+            update_jobs_retry(jdb, [pending_job], nproc * 10, logger)
         pending_job = None
         job = None
         if j is not None:
@@ -1035,7 +1017,7 @@ def main():
 
         # Replot mode
         if args.plot_only:
-            logger.log(25, "Replotting", jobstr)
+            logger.log(25, "Replotting")
             replot_job(job, stack_jobs, cfg, data_dir, plot_dir, out_file, pixsize)
             continue
 
@@ -1069,6 +1051,8 @@ def main():
     if outfile is not None:
         outfile.close()
     comm.barrier()
+    sys.stdout.flush()
+    logger.info("Done with all fits")
 
     # Summary plots
     if myrank == 0:
@@ -1081,9 +1065,6 @@ def main():
             cfg,
             logger,
         )
-    comm.barrier()
-    sys.stdout.flush()
-    logger.info("Done with all fits")
 
 
 if __name__ == "__main__":
