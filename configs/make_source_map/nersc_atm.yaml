@@ -29,7 +29,7 @@ search_mask:
   xyr:
     - 0.
     - 0.
-    - .5
+    - 0.5
 epochs:
     - [1749600000, 1756699200]
     - [1756699200, 1767243600]
@@ -53,16 +53,15 @@ metasplits:
     - "source"
     - ["mars", "uranus", "neptune", "3c279", "saturn"]
 split_by:
-  # # - "band"
-  # # - "tube_slot+band"
   - "source+band"
   - "mainsrc+band"
-  # - "nojup+band"
-  # - "source+tube_slot+band"
+  - "nojup+band"
+  - "source+tube_slot+band"
   - "mainsrc+tube_slot+band"
-  # - "nojup+tube_slot+band"
+  - "nojup+tube_slot+band"
+  - "source+array+band"
+  - "mainsrc+array+band"
+  - "nojup+array+band"
 det_splits:
   - inout0
   - inout1
-  # - left
-  # - right

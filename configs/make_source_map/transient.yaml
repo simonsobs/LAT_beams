@@ -1,0 +1,44 @@
+map_source_list:
+  - "2026yeh"
+fit_source_list:
+  - "2026yeh"
+pointing_type: "pointing_model" 
+preprocess_cfg: "preproc/preproc_atm.yaml"
+force_zero_cent: True
+min_det_secs: 100
+min_dets: 20
+min_hits: 1
+min_snr: 0
+ctx_path: 'contexts/nersc_pointing_model_atm.yaml'
+start_time: 1789012800 
+stop_time: 20000000000 
+n_med: 3
+map_mask_size: .1
+n_modes: 10
+search_mask:
+  shape: "circle"
+  xyr:
+    - 0.
+    - 0.
+    - 0.5
+epochs:
+    - [1789012800, 200000000000]
+append: "transient_prelim_test2"
+cgiters_single: 0
+cgiters_full: 200
+mlpass: 3
+sym_gauss: False
+n_bessel: 20
+n_multipoles: 6
+bessel_wing_n_sigma: 8
+extent: 1200
+det_split_dir: "det_lists"
+gauss_multipole: False
+buf: 100
+split_by:
+  - "source+band"
+  - "source+tube_slot+band"
+  - "source+array+band"
+# det_splits:
+  # - inout0
+  # - inout1

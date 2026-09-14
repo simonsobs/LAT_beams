@@ -81,7 +81,10 @@ def make_cuts(
     no_src = ~np.any(smsk, axis=-1)
     sdets = ~(all_src + no_src)
     peak_snr = np.zeros(len(sig_filt))
-    if np.sum(sdets) > 0:
+    if (
+        np.sum(sdets) > 0
+        and np.sum(np.isfinite(sig_filt_src[sdets])) > cfg.min_dets / 2
+    ):
         with np.errstate(divide="ignore"):
             peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
                 np.diff(sig_filt[sdets], axis=-1)
@@ -233,10 +236,21 @@ def make_map(
     X = {k: float(v) for k, v in X.items() if isinstance(v, np.floating)}
     X_str = yaml.dump(X)
 
+    if cfg.force_zero_cent:
+        posmap = omap.posmap()
+        c = np.unravel_index(
+            np.argmin(
+                posmap[0] ** 2 + posmap[1] ** 2,
+                axis=None,
+            ),
+            posmap[0].shape,
+        )
+        cent = (int(c[0]), int(c[1]))
+
     # Estimate SNR
     maxval = np.max(omap)
     peak = np.nan_to_num(smoothed[cent].item(), True, maxval, maxval, maxval)
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0]
+    snr = peak / (1e-10 + tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0])
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
     logger.debug(
         "%s map SNR approximately %s (centered at idx %s)",
