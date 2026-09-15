@@ -9,10 +9,11 @@
 #SBATCH --mail-type=begin,end,fail
 #SBATCH --mail-user=haridas@sas.upenn.edu
 
-export OMP_NUM_THREADS=8
-export OMP_PROC_BIND=master
-export OMP_PLACES=sockets
+# OMP_NUM_THREADS=2
+# NUM_FUTURES=8
+# OMP_PLACES=cores
+# OMP_PROC_BIND=close
+# srun -n 16 -c 16 --cpu-bind=cores --distribution=block:block python make_stacked_map.py configs/make_source_map/nersc_atm.yaml
 
-srun -n 32 -c 8 --cpu-bind=cores --distribution=block:block python make_stacked_map.py configs/make_source_map/nersc_atm.yaml
-# export OMP_NUM_THREADS=32
-# python fit_stacked_map.py configs/make_source_map/nersc_atm.yaml
+OMP_NUM_THREADS=16
+srun -n 8 -c 16 --cpu-bind=cores --distribution=block:block python fit_stacked_map.py configs/make_source_map/nersc_atm.yaml
