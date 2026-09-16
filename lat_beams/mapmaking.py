@@ -62,12 +62,17 @@ def make_cuts(
         The calculated cuts.
         If the number of uncut detectors is less than `cfg.min_dets` then `None` is returned.
     """
-    sig_filt = cp.filter_for_sources(
-        tod=aman,
-        signal=aman.signal.copy(),
-        source_flags=source_flags,
-        n_modes=n_modes,
-    )
+    try:
+        sig_filt = cp.filter_for_sources(
+            tod=aman,
+            signal=aman.signal.copy(),
+            source_flags=source_flags,
+            n_modes=n_modes,
+        )
+    except Exception as e:
+        msg = f"Filter for sources failed with error: {str(e)}"
+        fail(job, ErrCode.FILT_FAILED, msg, logger)
+        return None
     smsk = source_flags.mask()
     sig_filt_src = sig_filt.copy()
     sig_filt_src[~smsk] = np.nan
@@ -76,7 +81,10 @@ def make_cuts(
     no_src = ~np.any(smsk, axis=-1)
     sdets = ~(all_src + no_src)
     peak_snr = np.zeros(len(sig_filt))
-    if np.sum(sdets) > 0:
+    if (
+        np.sum(sdets) > 0
+        and np.sum(np.isfinite(sig_filt_src[sdets])) > cfg.min_dets / 2
+    ):
         with np.errstate(divide="ignore"):
             peak_snr[sdets] = np.nanmax(sig_filt_src[sdets], axis=-1) / np.nanstd(
                 np.diff(sig_filt[sdets], axis=-1)
@@ -87,10 +95,7 @@ def make_cuts(
     logger.debug("Cutting %s detectors from map", np.sum(to_cut))
     if np.sum(~to_cut) < cfg.min_dets:
         msg = f"Not enough detectors after source flag cuts!"
-        logger.error("%s", msg)
-        set_tag(job, "message", msg)
-        job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
-
+        fail(job, ErrCode.MIN_DETS, msg, logger)
         return None
     return cuts
 
@@ -208,15 +213,17 @@ def make_map(
             )
         except Exception as e:
             msg = f"Failed to make map with error {e}"
-            logger.error("%s", msg)
+            fail(job, ErrCode.MAP_FAILED, msg, logger)
             return None, None, ""
 
     # Smooth and find the center
     if len(det_splits) == 0:
         omap = out["solved"][0]
+        wmap = out["weights"][0][0]
     else:
         omap = out["splits"]["full"]["solved"][0]
-    cent, smoothed = estimate_cent(omap, fwhm_nom / pixsize, cfg.buf, True)
+        wmap = out["splits"]["full"]["weights"][0][0]
+    cent, smoothed = estimate_cent(omap, wmap, fwhm_nom / pixsize, cfg.buf, True)
 
     # Serialize coord info
     X = out["X"]
@@ -229,9 +236,21 @@ def make_map(
     X = {k: float(v) for k, v in X.items() if isinstance(v, np.floating)}
     X_str = yaml.dump(X)
 
+    if cfg.force_zero_cent:
+        posmap = omap.posmap()
+        c = np.unravel_index(
+            np.argmin(
+                posmap[0] ** 2 + posmap[1] ** 2,
+                axis=None,
+            ),
+            posmap[0].shape,
+        )
+        cent = (int(c[0]), int(c[1]))
+
     # Estimate SNR
-    peak = smoothed[cent]
-    snr = peak / tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0]
+    maxval = np.max(omap)
+    peak = np.nan_to_num(smoothed[cent].item(), True, maxval, maxval, maxval)
+    snr = peak / (1e-10 + tod_ops.jumps.std_est(np.atleast_2d(omap.ravel()), ds=1)[0])
     ndets = np.sum(np.all(~cuts.mask(), axis=-1))
     logger.debug(
         "%s map SNR approximately %s (centered at idx %s)",

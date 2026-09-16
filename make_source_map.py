@@ -10,7 +10,6 @@ import sqlalchemy as sqy
 import yaml
 from mpi4py import MPI
 from pixell import enmap
-from pshmem.locking import MPILock
 from so3g.proj import RangesMatrix
 from sotodlib import tod_ops
 from sotodlib.coords import planets as cp
@@ -32,6 +31,7 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    update_jobs_retry,
 )
 
 tod_ops.filters.logger.setLevel(logging.ERROR)
@@ -352,21 +352,16 @@ if args.profile:
 # Mapping loop
 source_list = set(cfg.source_list)
 job = None
-mpilock = MPILock(comm)
 for i, j in enumerate(joblist):
-    # To avoid multiproc issues where the database is locked we lock and unlock serially
-    mpilock.lock()
     if job is not None:
-        with jdb.session_scope() as session:
-            session.merge(job)
-            session.commit()
+        logger.debug("Writing to db")
+        update_jobs_retry(jdb, [job], nproc * 10, logger)
     job = None
     if j is not None:
         with jdb.session_scope() as session:
             job = session.get(Job, j.id)
-            session.expunge(job)
-    mpilock.unlock()
-
+            if job is not None:
+                session.expunge(job)
     if job is None:
         continue
 
@@ -385,6 +380,8 @@ for i, j in enumerate(joblist):
         try:
             solved = enmap.read_map(os.path.join(data_dir, job.tags["solved"]))
             solved = cast(enmap.ndmap, solved)
+            wmap = enmap.read_map(os.path.join(data_dir, job.tags["weights"]))
+            wmap = cast(enmap.ndmap, wmap)
         except FileNotFoundError:
             fail(
                 job, ErrCode.MAP_MISSING, "Missing map files in plot_only mode", logger
@@ -394,7 +391,7 @@ for i, j in enumerate(joblist):
         obs_plot_dir = os.path.join(
             plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
         )
-        cent = estimate_cent(solved[0], cfg.smooth_kern / pixsize, cfg.buf)
+        cent = estimate_cent(solved[0], wmap[0][0], cfg.smooth_kern / pixsize, cfg.buf)
         posmap = solved.posmap()
         posmap = np.rad2deg(posmap) * 3600
         if solved.wcs is None:
@@ -468,6 +465,8 @@ for i, j in enumerate(joblist):
         src_to_map = ("tauA", 83.6272579, 22.02159891)
     elif src_to_map == "3c279":
         src_to_map = "J194.0409868m5.79174024"
+    elif src_to_map == "2026yeh":
+        src_to_map = "J12.3065339p35.5610483"
 
     # Load and process the TOD
     aman = load_aman(
@@ -506,7 +505,12 @@ for i, j in enumerate(joblist):
 
     # Do an aggressive filter and flag dets without the source
     cuts = lbm.make_cuts(
-        aman, source_flags, min(len(aman.signal), 2 * cfg.n_modes), job, logger, cfg
+        aman,
+        source_flags,
+        min(len(np.asarray(aman.signal)), 2 * cfg.n_modes),
+        job,
+        logger,
+        cfg,
     )
     if cuts is None:
         continue
@@ -515,12 +519,12 @@ for i, j in enumerate(joblist):
     info = {"obs_id": obs["obs_id"], "ufm": ufm, "band": band}
     out, cent, _ = lbm.make_map(
         aman,
-        src_to_map,
+        src_to_map,  # type: ignore
         cfg.res,
         cuts,
         source_flags,
         "T",
-        min(len(aman.signal), cfg.n_modes),
+        min(len(np.asarray(aman.signal)), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         None,
@@ -565,12 +569,12 @@ for i, j in enumerate(joblist):
     # Make final map
     out, cent, X = lbm.make_map(
         aman,
-        src_to_map,
+        src_to_map,  # type: ignore
         cfg.res,
         cuts,
         source_flags,
         cfg.comps,
-        min(len(aman.signal), cfg.n_modes),
+        min(len(np.asarray(aman.signal)), cfg.n_modes),
         pixsize,
         cfg.nominal_fwhm[band] * 60,
         os.path.join(obs_data_dir, "{obs_id}_{ufm}_{band}_{map}.fits"),
@@ -692,4 +696,3 @@ if args.profile and profiler is not None:
 
 logger.extra["extra"] = ""
 comm.barrier()
-mpilock.close()

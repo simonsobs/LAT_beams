@@ -488,10 +488,20 @@ def auto_relplot(
             mask = group == g
             signatures[g] = tuple(sorted(map(str, values[mask])))
         signatures = {str(k): np.unique(v) for k, v in signatures.items()}
-        unique_values = [list(x) for x in {tuple(x) for x in list(signatures.values())}]
+        unique_values = list({tuple(x) for x in signatures.values()})
+        unique_values = [list(x) for x in unique_values]
+
+        max_n = max(len(v) for v in unique_values)
+
+        for i in range(max_n):
+            uvs = [u[i] for u in unique_values if len(u) > i]
+            label = "+".join(uvs)
+            msk = np.isin(values, uvs)
+            result[msk] = label
+
         max_n = np.max([len(l) for l in unique_values])
         for i in range(max_n):
-            uvs = [u[i] for u in unique_values if len(unique_values) > i]
+            uvs = [u[i] for u in unique_values if len(u) > i]
             label = "+".join(uvs)
             msk = np.isin(values, uvs)
             result[msk] = label

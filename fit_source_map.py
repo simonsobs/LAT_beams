@@ -10,7 +10,6 @@ from astropy import constants as const
 from astropy import units as u
 from mpi4py import MPI
 from pixell import enmap
-from pshmem.locking import MPILock
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
@@ -35,6 +34,7 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    update_jobs_retry,
 )
 
 comm = MPI.COMM_WORLD
@@ -61,9 +61,14 @@ def get_jobit(jdb, det_splits, obs_ids, start_time, stop_time):
     if obs_ids is not None:
         sub_ids = [obs_id.split(":") for obs_id in obs_ids]
         obs_list = [obs_id[0] for obs_id in sub_ids]
-        ws_list = [sub_id[1] if len(sub_id) > 1 else None for sub_id in sub_ids]
-        ba_list = [sub_id[2] if len(sub_id) > 2 else None for sub_id in sub_ids]
+        ws_list = []
+        ba_list = []
         maplist = [info for info in maplist if info.tags["obs_id"] in obs_list]
+        for info in maplist:
+            idx = obs_list.index(info.tags["obs_id"])
+            sub_id = sub_ids[idx]
+            ws_list += [sub_id[1] if len(sub_id) > 1 else None]
+            ba_list += [sub_id[2] if len(sub_id) > 2 else None]
     else:
         ws_list = [None] * len(maplist)
         ba_list = [None] * len(maplist)
@@ -190,7 +195,6 @@ map_jobdict = {
     for job in map_jobs
 }
 job = None
-mpilock = MPILock(comm)
 for i, j in enumerate(joblist):
     comm.barrier()
     sys.stdout.flush()
@@ -204,18 +208,13 @@ for i, j in enumerate(joblist):
         outfile.flush()
     comm.barrier()
 
-    # To avoid multiproc issues where the database is locked we lock and unlock serially
-    mpilock.lock()
-    if job is not None:
-        with jdb.session_scope() as session:
-            session.merge(job)
-            session.commit()
+    logger.debug("Writing to db")
+    update_jobs_retry(jdb, [job], nproc * 10, logger)
     job = None
     if j is not None:
         with jdb.session_scope() as session:
             job = session.get(Job, j.id)
             session.expunge(job)
-    mpilock.unlock()
 
     if job is None:
         to_save = (None, None)
@@ -280,7 +279,7 @@ for i, j in enumerate(joblist):
 
     # Estimatr SNR
     snr_extent_pix = int(cfg.snr_extent // pixsize)
-    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf)
+    cent = estimate_cent(solved, weights, cfg.smooth_kern / pixsize, cfg.buf)
     sig = solved[cent]
     noise = solved.copy()
     xmin = max(0, cent[0] - snr_extent_pix)
@@ -300,7 +299,7 @@ for i, j in enumerate(joblist):
     # Slice things
     solved, weights = crop_maps([solved, weights], cent, int(cfg.extent // pixsize))
     posmap = enmap.posmap(solved.shape, solved.wcs)
-    cent = estimate_cent(solved, cfg.smooth_kern / pixsize, cfg.buf_cropped)
+    cent = estimate_cent(solved, weights, cfg.smooth_kern / pixsize, cfg.buf_cropped)
     fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
     band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
 
@@ -315,10 +314,11 @@ for i, j in enumerate(joblist):
 
     # Fit gaussian model
     cent, smoothed = estimate_cent(
-        solved, cfg.smooth_kern / pixsize, cfg.buf_cropped, True
+        solved, weights, cfg.smooth_kern / pixsize, cfg.buf_cropped, True
     )
+    maxval = np.max(solved)
     guess = make_guess(
-        amp=smoothed[cent].item(),
+        amp=np.nan_to_num(smoothed[cent].item(), True, maxval, maxval, maxval),
         fwhm_xi=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
         fwhm_eta=np.deg2rad(cfg.nominal_fwhm[band] / 60.0),
         xi0=posmap[1][cent[0], cent[1]].item(),
@@ -399,20 +399,26 @@ for i, j in enumerate(joblist):
 
     # Get bessel beam if we want
     if cfg.bessel_beam:
-        bessel_beam_params, model = fb.fit_bessel_map(
-            solved,
-            weights,
-            posmap,
-            gauss_params,
-            "pW",
-            cfg.n_bessel,
-            cfg.n_multipoles,
-            cfg.aperature,
-            const.c / (float(band[1:]) * u.GHz),  # type: ignore
-            band_mask_size,
-            np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
-            cfg.skip_multipoles,
-        )
+        try:
+            bessel_beam_params, model = fb.fit_bessel_map(
+                solved,
+                weights,
+                posmap,
+                gauss_params,
+                "pW",
+                cfg.n_bessel,
+                cfg.n_multipoles,
+                cfg.aperature,
+                const.c / (float(band[1:]) * u.GHz),  # type: ignore
+                band_mask_size,
+                np.log((10**cfg.bessel_wing_n_sigma) / fscale_fac) / np.log(10),
+                cfg.skip_multipoles,
+            )
+        except Exception as e:
+            msg = f"Bessel fit failed with error {str(e)}"
+            fail(job, ErrCode.FIT_FAILED, msg, logger)
+            to_save = (None, None)
+            continue
         if bessel_beam_params is None or model is None:
             msg = "Bessel fit failed"
             fail(job, ErrCode.FIT_FAILED, msg, logger)

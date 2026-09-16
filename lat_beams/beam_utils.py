@@ -17,6 +17,7 @@ from jaxtyping import Float, Shaped
 from pixell.enmap import ndmap
 from scipy import sparse
 from scipy.interpolate import interp1d
+from scipy.ndimage import maximum_filter
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
@@ -346,17 +347,11 @@ def crop_maps(
 @overload
 def estimate_cent(
     imap: Float[np.ndarray, "nx ny"],
-    sigma: float = ...,
-    buf: int = ...,
-    ret_smooth: Literal[True] = True,
-) -> tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
-
-
-@overload
-def estimate_cent(
-    imap: Float[np.ndarray, "nx ny"],
-    sigma: float = ...,
-    buf: int = ...,
+    ivar: Float[np.ndarray, "nx ny"],
+    sigma: float = 5,
+    buf: int = 30,
+    peak_radius: int = 10,
+    min_snr: float = 5,
     ret_smooth: Literal[False] = False,
 ) -> tuple[int, int]: ...
 
@@ -364,57 +359,109 @@ def estimate_cent(
 @overload
 def estimate_cent(
     imap: Float[np.ndarray, "nx ny"],
+    ivar: Float[np.ndarray, "nx ny"],
     sigma: float = 5,
     buf: int = 30,
+    peak_radius: int = 10,
+    min_snr: float = 5,
+    ret_smooth: Literal[True] = True,
+) -> tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
+
+
+@overload
+def estimate_cent(
+    imap: Float[np.ndarray, "nx ny"],
+    ivar: Float[np.ndarray, "nx ny"],
+    sigma: float = 5,
+    buf: int = 30,
+    peak_radius: int = 10,
+    min_snr: float = 5,
     ret_smooth: bool = False,
 ) -> tuple[int, int] | tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
 
 
 def estimate_cent(
     imap: Float[np.ndarray, "nx ny"],
+    ivar: Float[np.ndarray, "nx ny"],
     sigma: float = 5,
     buf: int = 30,
     ret_smooth: bool = False,
 ) -> tuple[int, int] | tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]:
-    """
-    Estimate the location of the central pixel of a beam map.
-    To do this we first smooth the map with a gaussian of size `sigma`,
-    then we take the location of the maximum that is farther than `buf` from the edge of the map.
+    """Estimate the location of the central pixel of a beam map.
+
+    To do this we first construct an inverse-variance weighted SNR map and
+    smooth it with a gaussian of size `sigma`, then we take the location of
+    the maximum that is farther than `buf` from the edge of the map. We also
+    require the candidate peak to have sufficient integrated SNR within
+    `peak_radius` pixels, which helps reject isolated hot pixels.
 
     Parameters
     ----------
     imap : Float[np.ndarray, "nx, ny"]
         The beam map to look for the center of.
+    ivar : Float[np.ndarray, "nx, ny"]
+        The inverse-variance map corresponding to `imap`. Pixels with
+        non-positive or non-finite inverse variance are not searched.
     sigma : float
-        The sigma of the gaussian in pixels to smooth
-        the map by when searching for the max.
+        The sigma of the gaussian in pixels to smooth the map by when
+        searching for the max.
     buf : int
-        Pixels within `buf` of the edge of the map
-        will not be searched. Meant to avoid low hits
-        pixels near the edge of the map.
+        Pixels within `buf` of the edge of the map will not be searched or
+        used when smoothing. Meant to avoid low hits and edge artifacts.
+    peak_radius : int
+        Radius in pixels around a candidate peak used to determine whether
+        the peak has sufficient integrated signal. This helps reject
+        isolated hot pixels.
+    min_snr : float
+        Minimum integrated SNR required for a candidate peak to be accepted.
     ret_smooth : bool
-        If True also return the smoothed map.
+        If True also return the smoothed SNR map.
 
     Returns
     -------
     cent : tuple[int, int]
         The index of the estimated center pixel.
     """
-    smoothed = imap.copy()
-    smoothed[smoothed <= 0] = np.nan
-    kern = Gaussian2DKernel(sigma, sigma)
-    smoothed = convolve_fft(smoothed, kern)
-    smoothed[:buf] = 0
-    smoothed[-1 * buf :] = 0
-    smoothed[:, :buf] = 0
-    smoothed[:, -1 * buf :] = 0
-    cent = np.unravel_index(np.argmax(smoothed, axis=None), smoothed.shape)
-    cent = (int(cent[0]), int(cent[1]))
+    imap = np.asarray(imap, dtype=float)
+    ivar = np.asarray(ivar, dtype=float)
+
+    if imap.shape != ivar.shape:
+        raise ValueError("imap and ivar must have the same shape")
+
+    valid = np.isfinite(imap) * (imap > 0) * np.isfinite(ivar) * (ivar > 0)
+    valid[:buf] = False
+    valid[-buf:] = False
+    valid[:, :buf] = False
+    valid[:, -buf:] = False
+    signal = np.where(valid, imap, 0)
+    weight = np.where(valid, ivar, 0)
+    kern = Gaussian2DKernel(sigma)
+
+    weighted_signal = convolve_fft(
+        signal * weight,
+        kern,
+        normalize_kernel=True,
+    )
+    smoothed_ivar = convolve_fft(
+        weight,
+        kern,
+        normalize_kernel=True,
+    )
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        smoothed = weighted_signal / np.sqrt(smoothed_ivar)
+
+    smoothed[~valid] = -np.inf
+    cent = np.unravel_index(
+        np.argmax(smoothed, axis=None),
+        smoothed.shape,
+    )
+    best_cent = (int(cent[0]), int(cent[1]))
 
     if ret_smooth:
-        return cent, smoothed
+        return best_cent, smoothed
 
-    return cent
+    return best_cent
 
 
 def process_model(
@@ -492,12 +539,22 @@ def process_model(
     aman.wrap("mprof", mprof * map_units)
 
     # Get solid angle
-    (
-        data_solid_angle_meas,
-        model_solid_angle_meas,
-        model_solid_angle_true,
-        data_solid_angle_corr,
-    ) = estimate_solid_angle(solved, model, pixsize, data_fwhm.value, c, min_sigma)
+    try:
+        (
+            data_solid_angle_meas,
+            model_solid_angle_meas,
+            model_solid_angle_true,
+            data_solid_angle_corr,
+        ) = estimate_solid_angle(solved, model, pixsize, data_fwhm.value, c, min_sigma)
+    except ValueError as e:
+        msg = f"Failed to estimate solid angle with error: {e}"
+        if logger is None:
+            print(f"{msg}")
+        elif job is None:
+            logger.error("%s", msg)
+        if job is not None:
+            fail(job, ErrCode.OMEGA_FAILED, msg, logger)
+        return None
     aman.wrap("data_solid_angle_meas", data_solid_angle_meas * u.sr)
     aman.wrap("data_solid_angle_corr", data_solid_angle_corr * u.sr)
     aman.wrap("model_solid_angle_meas", model_solid_angle_meas * u.sr)

@@ -23,7 +23,6 @@ import mpi4py.rc
 import numpy as np
 import sqlalchemy as sqy
 import yaml
-from pshmem.locking import MPILock
 from scipy.sparse.linalg import svds
 from scipy.special import ndtri
 from so3g.proj import Ranges, RangesMatrix
@@ -47,6 +46,7 @@ from lat_beams.utils import (
     setup_cfg,
     setup_jobs,
     setup_paths,
+    update_jobs_retry,
 )
 
 mpi4py.rc.threads = False
@@ -510,7 +510,6 @@ def main():
 
     # Run from the masters
     job = None
-    mpilock = MPILock(master_comm)
     with MPICommExecutor(local_comm, 0) as executor:
         if executor is not None:
             joblist += [None]
@@ -553,17 +552,13 @@ def main():
                 master_comm.barrier()
                 # To avoid multiproc issues where the database is locked we lock and unlock serially
                 to_save = (None, None, None)
-                mpilock.lock()
-                if job is not None:
-                    with jdb.session_scope() as session:
-                        session.merge(job)
-                        session.commit()
+                logger.debug("Writing to db")
+                update_jobs_retry(jdb, [job], nproc * 10, logger)
                 job = None
                 if j is not None:
                     with jdb.session_scope() as session:
                         job = session.get(Job, j.id)
                         session.expunge(job)
-                mpilock.unlock()
                 if job is None:
                     continue
 
