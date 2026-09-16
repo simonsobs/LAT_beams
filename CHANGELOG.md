@@ -1,3 +1,17 @@
+## 6.0.0 (2026-09-16)
+
+### Feat
+
+- add zero cent mode and update configs
+- refactor to new parallelism
+- switch to new update and add errcodes
+
+### Fix
+
+- combine bug
+- switch to new update everywhere and fix some strings
+- estimate cent on snr map
+
 ## 5.4.0 (2026-09-09)
 
 ### Feat
