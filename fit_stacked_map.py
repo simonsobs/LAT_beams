@@ -622,7 +622,9 @@ def make_summary_plots(
     plot_dir,
     cfg,
     logger,
+    out_file,
 ):
+    _ = out_file
     # Reconstruct grouping only for summary plotting.
     jobdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     for job in all_jobs:
@@ -645,12 +647,14 @@ def make_summary_plots(
         to_plot_r["rprof_err"] = []
         to_plot_r["epoch"] = []
         to_plot_r["dataset"] = []
+        to_plot_r["det_split"] = []
         to_plot_l = {s: [] for s in split.split("+")}
         to_plot_l["ell"] = []
         to_plot_l["window"] = []
         to_plot_l["window_err"] = []
         to_plot_l["epoch"] = []
         to_plot_l["dataset"] = []
+        to_plot_l["det_split"] = []
 
         prof_plot_dir = os.path.join(plot_dir, "stack_profiles", split)
         os.makedirs(prof_plot_dir, exist_ok=True)
@@ -673,6 +677,12 @@ def make_summary_plots(
                             "Missing saved beam profile %s. Skipping.", h5_file
                         )
                         continue
+                    # fit_path = os.path.join(
+                    #     job.tags["split"],
+                    #     job.tags["split_str"],
+                    #     f"{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+                    # )
+                    # fit = AxisManager.load(out_file, fit_path)
 
                     prof = AxisManager.load(h5_file)
                     r = np.asarray(prof.data_r)
@@ -687,26 +697,31 @@ def make_summary_plots(
                     bl_sigma = np.asarray(prof.bl_sigma)
                     mmsk = mr < 1.2 * 3600 * np.rad2deg(band_mask_size)
                     dmsk = r < 3600 * np.rad2deg(band_mask_size)
+                    ell_msk = mbl > 0.001 * np.max(mbl)
 
-                    epoch_name = f"{det_split}_{epoch[0]}_{epoch[1]}"
+                    epoch_name = f"{epoch[0]}_{epoch[1]}"
                     to_plot_r["r"] += mr[mmsk].tolist() + r[dmsk].tolist()
                     to_plot_r["rprof"] += mprof[mmsk].tolist() + rprof[dmsk].tolist()
                     to_plot_r["rprof_err"] += (
                         profile_sigma[mmsk].tolist() + np.zeros(np.sum(dmsk)).tolist()
                     )
                     to_plot_r["epoch"] += [epoch_name] * (np.sum(mmsk) + np.sum(dmsk))
+                    to_plot_r["det_split"] += [det_split] * (
+                        np.sum(mmsk) + np.sum(dmsk)
+                    )
                     to_plot_r["dataset"] += ["model"] * np.sum(mmsk) + [
                         "data"
                     ] * np.sum(dmsk)
 
                     plot_ell, plot_mbl, plot_bl, plot_bls = downsample(
-                        ells, mbl, bl, bl_sigma
+                        ells[ell_msk], mbl[ell_msk], bl[ell_msk], bl_sigma[ell_msk]
                     )
                     n = len(plot_ell)
                     to_plot_l["ell"] += plot_ell.tolist() + plot_ell.tolist()
                     to_plot_l["window"] += plot_mbl.tolist() + plot_bl.tolist()
                     to_plot_l["window_err"] += plot_bls.tolist() + np.zeros(n).tolist()
                     to_plot_l["epoch"] += [epoch_name] * (2 * n)
+                    to_plot_l["det_split"] += [det_split] * (2 * n)
                     to_plot_l["dataset"] += ["model"] * n + ["data"] * n
 
                     for sc, si in zip(
@@ -727,138 +742,180 @@ def make_summary_plots(
             else None
         )
 
-        plt.close()
-        to_plot_r = {str(key): np.array(value) for key, value in to_plot_r.items()}
-        plot = auto_relplot(
-            to_plot_r,
-            x="r",
-            y="rprof",
-            errorbar="rprof_err",
-            kind="line",
-            estimator=None,
-            style="dataset",
-            hue="epoch",
-            row=row,
-            col=col,
-            combine=combine,
-            facet_kws={
-                "sharey": True,
-                "sharex": False,
-            },
-        )
-        plot.set_axis_labels('r (")', r"Beam Profile")
-        plot.set(yscale="log")
-        plot.figure.suptitle(
-            f"Beam Profile by {split}",
-            wrap=True,
-        )
-        plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
-        plt.savefig(
-            os.path.join(prof_plot_dir, f"profile_{split}.png"), bbox_inches="tight"
-        )
-        msk = to_plot_r["dataset"] != "data"
-        to_plot_r = {str(key): np.array(value)[msk] for key, value in to_plot_r.items()}
-        to_plot_r["rprof"] = 100 * to_plot_r["rprof_err"] / to_plot_r["rprof"]
-        del to_plot_r["rprof_err"]
-        plot = auto_relplot(
-            to_plot_r,
-            x="r",
-            y="rprof",
-            kind="line",
-            estimator=None,
-            style="dataset",
-            hue="epoch",
-            row=row,
-            col=col,
-            combine=combine,
-            facet_kws={
-                "sharey": True,
-                "sharex": False,
-            },
-        )
-        plot.set_axis_labels('r (")', r"Beam Profile Error (%)")
-        plot.figure.suptitle(
-            f"Beam Profile Error by {split}",
-            wrap=True,
-        )
-        plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
-        plt.savefig(
-            os.path.join(prof_plot_dir, f"profile_err_{split}.png"), bbox_inches="tight"
-        )
-        plt.close()
+        for det_split in np.unique(to_plot_r["det_split"]):
+            plt.close()
+            rmsk = np.array(to_plot_r["det_split"]) == det_split
+            to_plot_r_ds = {
+                str(key): np.array(value)[rmsk]
+                for key, value in to_plot_r.items()
+                if key != "det_split"
+            }
+            plot = auto_relplot(
+                to_plot_r_ds,
+                x="r",
+                y="rprof",
+                errorbar="rprof_err",
+                kind="line",
+                estimator=None,
+                style="dataset",
+                hue="epoch",
+                row=row,
+                col=col,
+                combine=combine,
+                facet_kws={
+                    "sharey": True,
+                    "sharex": False,
+                },
+            )
+            plot.set_axis_labels('r (")', r"Beam Profile")
+            plot.set(yscale="log")
+            plot.figure.suptitle(
+                f"Beam Profile by {split} ({det_split})",
+                wrap=True,
+            )
+            plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
+            plt.savefig(
+                os.path.join(prof_plot_dir, f"profile_{split}_{det_split}.png"),
+                bbox_inches="tight",
+            )
+            msk = to_plot_r_ds["dataset"] != "data"
+            to_plot_r_ds = {
+                str(key): np.array(value)[msk] for key, value in to_plot_r_ds.items()
+            }
+            to_plot_r_ds["rprof"] = to_plot_r_ds["rprof_err"] / to_plot_r_ds["rprof"]
+            del to_plot_r_ds["rprof_err"]
+            plot = auto_relplot(
+                to_plot_r_ds,
+                x="r",
+                y="rprof",
+                kind="line",
+                estimator=None,
+                style="dataset",
+                hue="epoch",
+                row=row,
+                col=col,
+                combine=combine,
+                facet_kws={
+                    "sharey": False,
+                    "sharex": False,
+                },
+            )
+            plot.set(yscale="log")
+            plot.set_axis_labels('r (")', r"Beam Profile Error (%)")
+            for ax in plot.axes.flat:
+                ax.tick_params(labelleft=True)
+            plot.figure.suptitle(
+                f"Beam Profile Error by {split} ({det_split})",
+                wrap=True,
+            )
+            plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
+            plt.savefig(
+                os.path.join(prof_plot_dir, f"profile_err_{split}_{det_split}.png"),
+                bbox_inches="tight",
+            )
+            plt.close()
 
-        to_plot_l = {str(key): np.array(value) for key, value in to_plot_l.items()}
-        plot = auto_relplot(
-            to_plot_l,
-            x="ell",
-            y="window",
-            errorbar="window_err",
-            kind="line",
-            estimator=None,
-            style="dataset",
-            hue="epoch",
-            row=row,
-            col=col,
-            combine=combine,
-            facet_kws={
-                "sharey": False,
-                "sharex": True,
-            },
-        )
-        plot.set_axis_labels(r"$\ell$", r"Beam Window Function ($B_{\ell}^{T}$)")
-        ls = ""
-        for ax in plot.axes.flat:
-            for line in ax.lines:
-                if "model" in line.get_label():
-                    ls = line.get_linestyle()
-                    break
-        for ax in plot.axes.flat:
-            if ls == "":
-                continue
-            ys = []
-            for line in ax.lines:
-                if line.get_linestyle() != ls:
-                    continue
-                d = line.get_data()[1]
-                if len(d) == 0:
-                    continue
-                ys += [np.max(d)]
-            if len(ys) > 0:
-                ax.set_ylim(0, 1.1 * np.max(ys))
-        plot.figure.suptitle(f"Beam Window by {split}", wrap=True)
-        plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
-        plt.savefig(
-            os.path.join(prof_plot_dir, f"window_{split}.png"), bbox_inches="tight"
-        )
+            lmsk = np.array(to_plot_l["det_split"]) == det_split
+            to_plot_l_ds = {
+                str(key): np.array(value)[lmsk]
+                for key, value in to_plot_l.items()
+                if key != "det_split"
+            }
+            plot = auto_relplot(
+                to_plot_l_ds,
+                x="ell",
+                y="window",
+                errorbar="window_err",
+                kind="line",
+                estimator=None,
+                style="dataset",
+                hue="epoch",
+                row=row,
+                col=col,
+                combine=combine,
+                facet_kws={
+                    "sharey": False,
+                    "sharex": False,
+                },
+            )
+            plot.set_axis_labels(r"$\ell$", r"Beam Window Function ($B_{\ell}^{T}$)")
+            for ax in plot.axes.flat:
+                ax.set_ylim(0, None)
+                ax.tick_params(labelleft=True)
+            plot.figure.suptitle(f"Beam Window by {split} ({det_split})", wrap=True)
+            plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
+            plt.savefig(
+                os.path.join(prof_plot_dir, f"window_{split}_{det_split}.png"),
+                bbox_inches="tight",
+            )
 
-        msk = to_plot_l["dataset"] != "data"
-        to_plot_l = {str(key): np.array(value)[msk] for key, value in to_plot_l.items()}
-        to_plot_l["window"] = 100 * to_plot_l["window_err"] / to_plot_l["window"]
-        del to_plot_l["window_err"]
-        plot = auto_relplot(
-            to_plot_l,
-            x="ell",
-            y="window",
-            kind="line",
-            estimator=None,
-            style="dataset",
-            hue="epoch",
-            row=row,
-            col=col,
-            combine=combine,
-            facet_kws={
-                "sharey": False,
-                "sharex": True,
-            },
-        )
-        plot.set_axis_labels(r"$\ell$", r"Beam Window Function Error (%)")
-        plot.set(ylim=(0, 2))
-        plot.figure.suptitle(f"Beam Window Error by {split}", wrap=True)
-        plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
-        plt.savefig(
-            os.path.join(prof_plot_dir, f"window_err_{split}.png"), bbox_inches="tight"
-        )
-        plt.close()
+            msk = to_plot_l_ds["dataset"] != "data"
+            to_plot_l_ds = {
+                str(key): np.array(value)[msk] for key, value in to_plot_l_ds.items()
+            }
+            to_plot_l_ds["window"] = (
+                100 * to_plot_l_ds["window_err"] / to_plot_l_ds["window"]
+            )
+            del to_plot_l_ds["window_err"]
+            plot = auto_relplot(
+                to_plot_l_ds,
+                x="ell",
+                y="window",
+                kind="line",
+                estimator=None,
+                style="dataset",
+                hue="epoch",
+                row=row,
+                col=col,
+                combine=combine,
+                facet_kws={
+                    "sharey": False,
+                    "sharex": False,
+                },
+            )
+            plot.set_axis_labels(r"$\ell$", r"Beam Window Function Error (%)")
+            for ax in plot.axes.flat:
+                ax.tick_params(labelleft=True)
+            plot.figure.suptitle(
+                f"Beam Window Error by {split} ({det_split})", wrap=True
+            )
+            plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
+            plt.savefig(
+                os.path.join(prof_plot_dir, f"window_err_{split}_{det_split}.png"),
+                bbox_inches="tight",
+            )
+            plt.close()
+
+
+def make_summary(logger, args, cfg, data_dir, plot_dir, out_file):
+    logger.info("Making summary profile plots")
+    _, all_jobs = setup_jobs(
+        None,
+        data_dir,
+        "fit_stacks",
+        get_jobdict,
+        partial(
+            get_jobit,
+            cfg=cfg,
+        ),
+        get_jobstr,
+        get_tags,
+        [],
+        args.overwrite,
+        args.retry_failed,
+        args.job_memory,
+        args.job_memory_buffer,
+        True,
+        logger,
+    )
+    make_summary_plots(
+        all_jobs,
+        data_dir,
+        plot_dir,
+        cfg,
+        logger,
+        out_file,
+    )
 
 
 def main():
@@ -915,6 +972,13 @@ def main():
         ),
         twcs,
     )
+
+    # Summary mode
+    if args.summary:
+        if myrank != 0:
+            sys.exit()
+        make_summary(logger, args, cfg, data_dir, plot_dir, out_file)
+        sys.exit()
 
     # Job DB
     jdb = make_jobdb(None, data_dir)
@@ -1056,15 +1120,7 @@ def main():
 
     # Summary plots
     if myrank == 0:
-        logger.info("Making summary profile plots")
-        all_jobs = jdb.get_jobs(jclass="fit_stacks", jstate="done")
-        make_summary_plots(
-            all_jobs,
-            data_dir,
-            plot_dir,
-            cfg,
-            logger,
-        )
+        make_summary(logger, args, cfg, data_dir, plot_dir, out_file)
 
 
 if __name__ == "__main__":
