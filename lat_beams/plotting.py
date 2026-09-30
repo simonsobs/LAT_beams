@@ -5,7 +5,7 @@ they should be refactored to rely on more generic units.
 """
 
 import os
-from typing import Optional, Sequence
+from typing import Optional
 
 import matplotlib
 
@@ -15,7 +15,7 @@ import textwrap
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from jaxtyping import Float
+from jaxtyping import Bool, Float
 from matplotlib.collections import LineCollection
 from matplotlib.colors import SymLogNorm
 from numpy.typing import NDArray
@@ -25,6 +25,101 @@ from sotodlib.core import AxisManager
 from .beam_utils import radial_profile
 
 plt.rcParams["image.cmap"] = "coolwarm"  # "RdGy_r"
+
+
+def plot_debug_map(
+    outdir: str,
+    msg: str,
+    fjobstr: str,
+    imap: Float[enmap.ndmap, "... ny nx"],
+    ivar: Float[enmap.ndmap, "... ny nx"],
+    hot: Bool[np.ndarray, "ny nx"],
+    ps2d: Optional[Float[enmap.ndmap, "ny nx"]],
+    lmap: Optional[Float[enmap.ndmap, "2 ny nx"]],
+    lmin: float,
+    lmax: float,
+    wn: float,
+    cn: float,
+) -> None:
+    """
+    Generate and save a diagnostic plot of a beam map and noise estimates.
+
+    The figure contains the input map with hot-pixel regions overlaid,
+    the two-dimensional power spectrum when available, and the inverse-
+    variance map. The figure title includes the ratio of correlated to
+    white noise and the logarithms of the estimated white and correlated
+    noise amplitudes.
+
+    Parameters
+    ----------
+    outdir : str
+        Directory in which to save the diagnostic plot.
+    msg : str
+        Additional message to include in the figure title.
+    fjobstr : str
+        Identifier used for the plot title and output filename.
+    imap : Float[enmap.ndmap, "... ny nx"]
+        Input map to display.
+    ivar : Float[enmap.ndmap, "... ny nx"]
+        Inverse-variance map corresponding to `imap`.
+    hot : Bool[np.ndarray, "ny nx"]
+        Boolean mask identifying hot pixels in `imap`. These regions are
+        overlaid on the map.
+    ps2d : Optional[Float[enmap.ndmap, "ny nx"]]
+        Two-dimensional power spectrum to display. If `None`, the power
+        spectrum panel is left empty.
+    lmap : Optional[Float[enmap.ndmap, "ny nx"]]
+        Two-dimensional multipole coordinate maps corresponding to `ps2d`.
+        The first element contains the y-direction multipoles and the
+        second contains the x-direction multipoles. If `None`, the power
+        spectrum is not plotted.
+    lmin : float
+        Minimum multipole used to define the white-noise region in the
+        power spectrum.
+    lmax : float
+        Maximum multipole used to define the correlated-noise region in
+        the power spectrum.
+    wn : float
+        Estimated white-noise amplitude.
+    cn : float
+        Estimated correlated-noise amplitude.
+    """
+    ratio = cn / wn
+    plt.close("all")
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    posmap = np.rad2deg(imap.posmap()) * 3600
+    _norm = SymLogNorm(linthresh=1e-4, clip=True, vmin=-1, vmax=1)
+    plt_extent = (posmap[1].max(), posmap[1].min(), posmap[0].min(), posmap[0].max())
+    im0 = axes[0].imshow(imap[0], origin="lower", extent=plt_extent, norm=_norm)
+    axes[0].set_title(f"Map")
+    fig.colorbar(im0, ax=axes[0])
+    hp = hot.astype(float)
+    hp[~hot] = np.nan
+    axes[0].imshow(
+        hp, origin="lower", extent=plt_extent, cmap="Greys", alpha=0.3, vmin=0, vmax=1
+    )
+    if ps2d is not None and lmap is not None:
+        im1 = axes[1].pcolormesh(
+            enmap.fftshift(lmap[1]),
+            enmap.fftshift(lmap[0]),
+            enmap.fftshift(np.log10(ps2d)),
+            shading="auto",
+        )
+        axes[1].axvline(lmin, color="r", ls="--")
+        axes[1].axvline(-lmin, color="r", ls="--")
+        axes[1].axhline(lmax, color="b", ls="--")
+        axes[1].axhline(-lmax, color="b", ls="--")
+        fig.colorbar(im1, ax=axes[1])
+    axes[1].set_title("2D Power Spectrum")
+    im2 = axes[2].imshow(ivar[0], origin="lower", extent=plt_extent, cmap="Purples")
+    axes[2].set_title("Map (ivar)")
+    fig.colorbar(im2, ax=axes[2])
+    plt.suptitle(
+        f"{fjobstr} ({np.round(ratio, 2)}, {np.round(np.log10(wn), 1)}, {np.round(np.log10(cn), 1)})\n{msg}"
+    )
+    plt.tight_layout()
+    plt.savefig(os.path.join(outdir, f"{fjobstr}.png"), dpi=150)
+    plt.close(fig)
 
 
 def plot_map(
@@ -120,7 +215,7 @@ def plot_map(
     plt.grid()
     plt.xlabel(f"Xi ({units})")
     plt.ylabel(f"Eta ({units})")
-    plt.title(f"{title}{label.replace('_', ' ')}")
+    plt.title("\n".join(textwrap.wrap(f"{title}{label.replace('_', ' ')}", 50)))
 
     plt.xlim((cent[0] - extent, cent[0] + extent))
     plt.ylim((cent[1] - extent, cent[1] + extent))
@@ -131,7 +226,7 @@ def plot_map(
     x = np.linspace(0, pixsize * len(rprof), len(rprof))
     plt.plot(x, rprof)
     plt.xlabel(f"Radius ({units})")
-    plt.title("\n".join(textwrap.wrap(f"{title}{label.replace('_', ' ')}")))
+    plt.title("\n".join(textwrap.wrap(f"{title}{label.replace('_', ' ')}", 50)))
     plt.xlim((0, extent))
     plt.savefig(
         os.path.join(plot_dir, f"{title.replace(' ', '_')}_prof{label}.png"),
