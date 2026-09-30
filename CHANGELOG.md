@@ -1,3 +1,15 @@
+## 6.1.0 (2026-09-30)
+
+### Feat
+
+- formalize adri style cuts and dont include offset error in window cov
+- add stack before plotter
+- add summary mode and seperate det splits
+
+### Fix
+
+- checkt hat job is not note before update
+
 ## 6.0.0 (2026-09-16)
 
 ### Feat
