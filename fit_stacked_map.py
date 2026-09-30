@@ -23,7 +23,9 @@ from sotodlib.site_pipeline.jobdb import Job
 import lat_beams.fitting.map.bessel as fb
 import lat_beams.fitting.map.gauss as fg
 from lat_beams.beam_utils import (
+    get_fit_vec,
     get_fwhm_radial_bins,
+    load_beam_fits_from_jobs,
     process_model,
     radial_profile,
     radial_profile_lin,
@@ -237,6 +239,15 @@ def plot_model_maps(
         )
 
 
+def jackknife_cov(X, jk_mean=None):
+    n = X.shape[0]
+    jk = (X.sum(axis=0) - X) / (n - 1)
+    if jk_mean is None:
+        jk_mean = jk.mean(axis=0)
+    cov = (n - 1) / n * (jk - jk_mean).T @ (jk - jk_mean)
+    return cov
+
+
 def fit_job(
     job,
     stack_jobs,
@@ -248,6 +259,7 @@ def fit_job(
     pixsize,
     logger,
     cfg_str,
+    fit_jobs,
 ):
     jobstr = get_jobstr(job)
     job.mark_visited()
@@ -258,30 +270,6 @@ def fit_job(
         fail(job, ErrCode.NO_JOB, msg, logger)
         return None, None
 
-    stack_job = stack_jobs[jobstr]
-    map_path = stack_job.tags["map_stack"]
-    ivar_path = stack_job.tags["ivar_stack"]
-    if not os.path.isfile(map_path) or not os.path.isfile(ivar_path):
-        msg = "Map missing"
-        fail(job, ErrCode.MAP_MISSING, msg, logger)
-        return None, None
-    imap = enmap.read_map(map_path)[0]
-    ivar = enmap.read_map(ivar_path)[0]
-    imap = enmap.unapply_window(
-        imap,
-        order=0,
-    )
-    imap = cast(
-        enmap.ndmap,
-        imap,
-    )
-    ivar = cast(
-        enmap.ndmap,
-        ivar,
-    )
-    posmap = imap.posmap()
-    aman = AxisManager()
-
     split = job.tags["split"]
     spl = job.tags["split_str"]
     det_split = job.tags["det_split"]
@@ -289,6 +277,24 @@ def fit_job(
     epoch_end = job.tags["epoch_end"]
     band_idx = np.where(np.array(split.split("+")) == "band")[0][0]
     band = spl.split("+")[band_idx]
+
+    stack_job = stack_jobs[jobstr]
+    map_path = stack_job.tags["map_stack"]
+    fjobs = [
+        fit_jobs[det_split][fjobstr] for fjobstr in stack_job.tags["obslist"].split(",")
+    ]
+    ivar_path = stack_job.tags["ivar_stack"]
+    if not os.path.isfile(map_path) or not os.path.isfile(ivar_path):
+        msg = "Map missing"
+        fail(job, ErrCode.MAP_MISSING, msg, logger)
+        return None, None
+    imap = enmap.read_map(map_path)[0]
+    ivar = enmap.read_map(ivar_path)[0] / len(fjobs)
+    imap = enmap.unapply_window(imap, order=0)
+    imap = cast(enmap.ndmap, imap)
+    ivar = cast(enmap.ndmap, ivar)
+    posmap = imap.posmap()
+    aman = AxisManager()
 
     fscale_fac = 90.0 / float(band[1:]) if cfg.apply_fscale else 1
     band_mask_size = np.deg2rad(fscale_fac * cfg.mask_size)
@@ -302,32 +308,11 @@ def fit_job(
     cent = (int(c[1]), int(c[0]))
 
     # Data radial profile / FWHM
-    rprof = radial_profile(
-        imap,
-        cent,
-    )
-    rerr = radial_profile(
-        ivar,
-        cent,
-        False,
-    )
-    r = (
-        np.linspace(
-            0,
-            len(rprof),
-            len(rprof),
-        )
-        * pixsize
-    )
+    rprof = radial_profile(imap, cent)
+    rerr = radial_profile(ivar, cent, False)
+    r = np.linspace(0, len(rprof), len(rprof)) * pixsize
     rmsk = r < 3 * 60 * cfg.nominal_fwhm[band] / 2.355
-    data_fwhm = (
-        get_fwhm_radial_bins(
-            r[rmsk],
-            rprof[rmsk],
-            interpolate=True,
-        )
-        * u.arcsec
-    )
+    data_fwhm = get_fwhm_radial_bins(r[rmsk], rprof[rmsk], interpolate=True) * u.arcsec
     if np.isnan(data_fwhm):
         msg = "Data FWHM is bad! Skipping!"
         fail(job, ErrCode.FWHM_TOL, msg, logger)
@@ -430,17 +415,30 @@ def fit_job(
     aman.final_model = "bessel"
     logger.log(25, "Bessel fit complete")
 
+    # Load fits for empirical cov
+    fits = None
+    if len(fjobs) > 5 and cfg.empir_cov:
+        fits = load_beam_fits_from_jobs(os.path.join(data_dir, "beam_pars.h5"), fjobs)[
+            "aman"
+        ].tolist()
     # High-resolution profile
     prof_dir = os.path.join(data_dir, "stack_profiles", split, spl)
     os.makedirs(prof_dir, exist_ok=True)
-    prof_cov, _ = fb.bessel_profile_covariance(
+    prof_cov, _, jk_prof_cov = fb.bessel_profile_covariance(
         aman.bessel,
         posmap_highres,
         cfg.lmax,
         cfg.cov_modes,
         pix_extent // 2,
+        fits=fits,
     )
+    prof_cov_full = AxisManager()
+    prof_cov_full.wrap("prof_cov", prof_cov)
     logger.log(25, "Bessel cov complete")
+
+    # Add empirical cov if we have it
+    if jk_prof_cov is not None:
+        prof_cov_full.wrap("jk_prof_cov", jk_prof_cov)
 
     # Save model profile
     mr = np.asarray(prof_cov.r)
@@ -452,6 +450,14 @@ def fit_job(
     )
     np.savetxt(path, mprofile)
     set_tag(job, "model_profile", path)
+    if jk_prof_cov is not None:
+        jk_profile_modes = np.asarray(jk_prof_cov.profile_modes)
+        jk_mprofile = np.column_stack((mr, mprof, jk_profile_modes))
+        path = os.path.join(
+            prof_dir,
+            f"model_profile_{spl}_{det_split}_{epoch_start}_{epoch_end}_jk.txt",
+        )
+        np.savetxt(path, jk_mprofile)
 
     # Save model window
     ells = np.asarray(prof_cov.ell)
@@ -469,6 +475,20 @@ def fit_job(
         ),
     )
     set_tag(job, "model_window", path)
+    if jk_prof_cov is not None:
+        jk_bl_modes = np.asarray(jk_prof_cov.bl_modes)
+        jk_mwindow = np.column_stack((ells, mbl, jk_bl_modes))
+        path = os.path.join(
+            prof_dir, f"model_window_{spl}_{det_split}_{epoch_start}_{epoch_end}_jk.txt"
+        )
+        np.savetxt(
+            path,
+            jk_mwindow,
+            header=(
+                "ell bl "
+                + " ".join(f"error_mode_{i}" for i in range(bl_modes.shape[1]))
+            ),
+        )
 
     # Data profile
     data_r, data_profile, _ = radial_profile_lin(
@@ -499,17 +519,19 @@ def fit_job(
     set_tag(job, "data_window", path)
 
     # Add data to profile AxisManager
-    prof_cov.wrap("data_r", rprofile[:, 0])
-    prof_cov.wrap("data_profile", rprofile[:, 1])
-    prof_cov.wrap("data_profile_sigma", rerr)
-    prof_cov.wrap("data_window", window[:, 1])
-    prof_cov.wrap("data_ell", ells)
+    data_prof_cov = AxisManager()
+    data_prof_cov.wrap("r", rprofile[:, 0])
+    data_prof_cov.wrap("profile", rprofile[:, 1])
+    data_prof_cov.wrap("profile_sigma", rerr)
+    data_prof_cov.wrap("bl", window[:, 1])
+    data_prof_cov.wrap("ell", ells)
+    prof_cov_full.wrap("data_prof_cov", data_prof_cov)
 
     # Save
     h5_file = os.path.join(
         prof_dir, f"beam_profiles_{spl}_{det_split}_{epoch_start}_{epoch_end}.h5"
     )
-    prof_cov.save(h5_file, overwrite=True)
+    prof_cov_full.save(h5_file, overwrite=True)
     aman_path = os.path.join(split, spl, f"{det_split}_{epoch_start}_{epoch_end}")
     posmap_plot = np.rad2deg(posmap) * 3600
     resid = imap - model
@@ -623,6 +645,7 @@ def make_summary_plots(
     cfg,
     logger,
     out_file,
+    plot_jk=False,
 ):
     _ = out_file
     # Reconstruct grouping only for summary plotting.
@@ -684,20 +707,31 @@ def make_summary_plots(
                     # )
                     # fit = AxisManager.load(out_file, fit_path)
 
-                    prof = AxisManager.load(h5_file)
-                    r = np.asarray(prof.data_r)
-                    rprof = np.asarray(prof.data_profile)
-                    # rerr = np.asarray(prof.data_profile_sigma)
+                    prof_full = AxisManager.load(h5_file)
+                    prof = prof_full.prof_cov
+                    if plot_jk:
+                        if "jk_prof_cov" not in prof_full:
+                            logger.warning(
+                                "Missing jackknife cov in %s. Skipping.", h5_file
+                            )
+                            continue
+                        prof = prof_full.jk_prof_cov
+                    data_prof = prof_full.data_prof_cov
+
+                    r = np.asarray(data_prof.r)
+                    rprof = np.asarray(data_prof.profile)
+                    # rerr = np.asarray(data_prof.profile_sigma)
                     mr = np.asarray(prof.r)
                     mprof = np.asarray(prof.profile)
                     profile_sigma = np.asarray(prof.profile_sigma)
+
                     ells = np.asarray(prof.ell)
-                    bl = np.asarray(prof.data_window)
+                    bl = np.asarray(data_prof.bl)
                     mbl = np.asarray(prof.bl)
                     bl_sigma = np.asarray(prof.bl_sigma)
                     mmsk = mr < 1.2 * 3600 * np.rad2deg(band_mask_size)
                     dmsk = r < 3600 * np.rad2deg(band_mask_size)
-                    ell_msk = mbl > 0.001 * np.max(mbl)
+                    ell_msk = mbl > 0.01 * np.max(mbl)
 
                     epoch_name = f"{epoch[0]}_{epoch[1]}"
                     to_plot_r["r"] += mr[mmsk].tolist() + r[dmsk].tolist()
@@ -775,14 +809,18 @@ def make_summary_plots(
             )
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
-                os.path.join(prof_plot_dir, f"profile_{split}_{det_split}.png"),
+                os.path.join(
+                    prof_plot_dir, f"profile_{split}_{det_split}{plot_jk*'_jk'}.png"
+                ),
                 bbox_inches="tight",
             )
             msk = to_plot_r_ds["dataset"] != "data"
             to_plot_r_ds = {
                 str(key): np.array(value)[msk] for key, value in to_plot_r_ds.items()
             }
-            to_plot_r_ds["rprof"] = to_plot_r_ds["rprof_err"] / to_plot_r_ds["rprof"]
+            to_plot_r_ds["rprof"] = (
+                100 * to_plot_r_ds["rprof_err"] / to_plot_r_ds["rprof"]
+            )
             del to_plot_r_ds["rprof_err"]
             plot = auto_relplot(
                 to_plot_r_ds,
@@ -800,7 +838,7 @@ def make_summary_plots(
                     "sharex": False,
                 },
             )
-            plot.set(yscale="log")
+            # plot.set(yscale="log")
             plot.set_axis_labels('r (")', r"Beam Profile Error (%)")
             for ax in plot.axes.flat:
                 ax.tick_params(labelleft=True)
@@ -810,7 +848,9 @@ def make_summary_plots(
             )
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
-                os.path.join(prof_plot_dir, f"profile_err_{split}_{det_split}.png"),
+                os.path.join(
+                    prof_plot_dir, f"profile_err_{split}_{det_split}{plot_jk*'_jk'}.png"
+                ),
                 bbox_inches="tight",
             )
             plt.close()
@@ -845,7 +885,9 @@ def make_summary_plots(
             plot.figure.suptitle(f"Beam Window by {split} ({det_split})", wrap=True)
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
-                os.path.join(prof_plot_dir, f"window_{split}_{det_split}.png"),
+                os.path.join(
+                    prof_plot_dir, f"window_{split}_{det_split}{plot_jk*'_jk'}.png"
+                ),
                 bbox_inches="tight",
             )
 
@@ -873,6 +915,7 @@ def make_summary_plots(
                     "sharex": False,
                 },
             )
+            # plot.set(yscale="log")
             plot.set_axis_labels(r"$\ell$", r"Beam Window Function Error (%)")
             for ax in plot.axes.flat:
                 ax.tick_params(labelleft=True)
@@ -881,7 +924,9 @@ def make_summary_plots(
             )
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
-                os.path.join(prof_plot_dir, f"window_err_{split}_{det_split}.png"),
+                os.path.join(
+                    prof_plot_dir, f"window_err_{split}_{det_split}{plot_jk*'_jk'}.png"
+                ),
                 bbox_inches="tight",
             )
             plt.close()
@@ -916,6 +961,8 @@ def make_summary(logger, args, cfg, data_dir, plot_dir, out_file):
         logger,
         out_file,
     )
+    if cfg.empir_cov:
+        make_summary_plots(all_jobs, data_dir, plot_dir, cfg, logger, out_file, True)
 
 
 def main():
@@ -952,7 +999,6 @@ def main():
 
     # Coords
     pixsize = 3600 * np.rad2deg(cfg.res)
-    ext_rad = np.deg2rad(cfg.extent_highres / 3600)
     pix_extent = 2 * int(cfg.extent_highres // pixsize)
 
     twcs = enmap.wcsutils.build(
@@ -1017,6 +1063,18 @@ def main():
             job.tags["det_split"],
         ),
     )
+
+    # Get fit jobs
+    fit_jobs = defaultdict(lambda: defaultdict(dict))
+    for fjob in jdb.get_jobs(jclass="fit_map"):
+        fjobstr = (
+            f"{fjob.tags['obs_id']}-"
+            f"{fjob.tags['wafer_slot']}-"
+            f"{fjob.tags['stream_id']}-"
+            f"{fjob.tags['array']}-"
+            f"{fjob.tags['band']}"
+        )
+        fit_jobs[fjob.tags["split"]][fjobstr] = fjob
 
     # Open HDF5 only on rank 0
     outfile = None
@@ -1097,6 +1155,7 @@ def main():
                 pixsize=pixsize,
                 logger=logger,
                 cfg_str=cfg_str,
+                fit_jobs=fit_jobs,
             )
 
             pending_save = (aman, aman_path)
