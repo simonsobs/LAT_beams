@@ -16,6 +16,12 @@ def get_args_cfg():
         action="store_true",
         help="Don't do any fitting or mamaking, just plot TODs or existing maps",
     )
+    parser.add_argument(
+        "--summary",
+        "-s",
+        action="store_true",
+        help="Don't do any fitting or mamaking, just plot a summary of results",
+    )
     # Control which obs are used
     parser.add_argument("--obs_ids", nargs="+", help="Pass a list of obs ids to run on")
     parser.add_argument(
@@ -204,6 +210,14 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["r_step"] = cfg.get("r_step", 1)
     cfg["min_stack_snr"] = cfg.get("min_stack_snr", 10)
+    cfg["max_pwv"] = cfg.get("max_pwv", 2.5)
+    cfg["corr_ratio_cut"] = cfg.get("corr_ratio_cut", 20)
+    cfg["max_cn"] = cfg.get("max_cn", -2.5)
+    cfg["n_lmin"] = cfg.get("n_lmin", 2000)
+    cfg["n_lmax"] = cfg.get("n_lmax", 60000)
+    cfg["max_cut_pix_frac"] = cfg.get("max_cut_pix_frac", 0.15)
+    cfg["min_irat"] = cfg.get("min_irat", 3)
+    cfg["empir_cov"] = cfg.get("empir_cov", False)
 
     # Rename for our scope
     for o, n in replace.items():

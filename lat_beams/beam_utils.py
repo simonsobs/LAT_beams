@@ -13,11 +13,13 @@ import h5py
 import numpy as np
 import sqlalchemy as sqy
 from astropy.convolution import Gaussian2DKernel, convolve_fft
-from jaxtyping import Float, Shaped
+from jaxtyping import Bool, Float, Shaped
+from pixell import enmap
 from pixell.enmap import ndmap
 from scipy import sparse
 from scipy.interpolate import interp1d
-from scipy.ndimage import maximum_filter
+from scipy.ndimage import binary_dilation, label, median_filter
+from scipy.optimize import minimize_scalar
 from sotodlib.core import AxisManager, Context
 from sotodlib.site_pipeline import jobdb
 
@@ -709,7 +711,7 @@ def get_fit_vec(
     else:
         dat = u.Quantity([aman[name] for aman in all_fits["aman"]])
 
-    if dat.unit == u.Unit(3):
+    if dat.unit == u.Unit(3):  # type: ignore
         dat = dat.value * u.pW
     return dat
 
@@ -795,3 +797,283 @@ def get_split_vec(
     split_vecs = np.column_stack(split_vecs)
 
     return np.array(["+".join(v) for v in split_vecs])
+
+
+def get_white_noise(
+    ps2d: Float[np.ndarray, "ny nx"],
+    lmap: Float[np.ndarray, "2 ny nx"],
+    lmin: float,
+    lmax: float,
+) -> float:
+    """
+    Estimate the amplitude of white noise from a two-dimensional power spectrum.
+
+    Parameters
+    ----------
+    ps2d : Float[np.ndarray, "ny nx"]
+        Two-dimensional power spectrum.
+    lmap : Float[np.ndarray, "2 ny nx"]
+        Multipole coordinate map containing ell_y and ell_x for each pixel
+        in `ps2d`.
+    lmin : float
+        Minimum multipole of the white-noise region.
+    lmax : float
+        Maximum multipole of the white-noise region.
+
+    Returns
+    -------
+    white_noise : float
+        Estimated white-noise level.
+    """
+    ps2d_white = ps2d.copy()
+
+    # PSD will have strong vertical feature that we want to avoid.
+    c_ell_mask = np.abs(lmap[1]) > lmin
+    ps2d_white[~c_ell_mask] = 0
+
+    lbin_result = enmap.lbin(ps2d_white)
+    c_ell_white = lbin_result[0]
+    ells = lbin_result[1]
+    ells_cut = ells[ells > lmin]
+
+    # Compute factor that corrects for lost modes from c_ell_mask.
+    # This is just the arclen inside of a box of width 2 * lmin at radius ell.
+    corr_frac = (2 * np.pi * ells_cut) / (
+        2 * np.pi * ells_cut - 4 * ells_cut * np.arcsin(lmin / ells_cut)
+    )
+    c_ell_white[ells > lmin] *= corr_frac
+
+    white_noise = np.mean(c_ell_white[(ells > lmin) & (ells <= lmax)])
+
+    return white_noise
+
+
+def get_corr_noise(
+    ps2d: Float[np.ndarray, "ny nx"],
+    lmap: Float[np.ndarray, "2 ny nx"],
+    lmin: float,
+    lmax: float,
+) -> float:
+    """
+    Estimate the amplitude of correlated noise from a two-dimensional power spectrum.
+
+    Parameters
+    ----------
+    ps2d : Float[np.ndarray, "ny nx"]
+        Two-dimensional power spectrum.
+    lmap : Float[np.ndarray, "2 ny nx"]
+        Multipole coordinate map containing ell_y and ell_x for each pixel
+        in `ps2d`.
+    lmin : float
+        Minimum multipole used to identify the vertical feature in the
+        power spectrum.
+    lmax : float
+        Maximum multipole used to identify the vertical feature in the
+        power spectrum.
+
+    Returns
+    -------
+    corr_noise : float
+        Estimated amplitude of the correlated noise.
+    """
+    # Mask that includes the vertical feature in the PSD.
+    c_ell_mask_corr = (np.abs(lmap[1]) <= lmin) & (np.abs(lmap[0]) < lmax)
+    corr_noise = np.mean(ps2d[c_ell_mask_corr])
+
+    return float(corr_noise)
+
+
+def apodized_disk(
+    imap: Float[ndmap, "... ny nx"],
+    radius: float,
+    width: float,
+    modrmap: Float[ndmap, "ny nx"],
+) -> Float[ndmap, "... ny nx"]:
+    """
+    Cut out a disk and apodize its edge with a cosine apodization.
+
+    Parameters
+    ----------
+    imap : Float[ndmap, "... ny nx"]
+        Input map.
+    radius : float
+        Outer radius of the disk in arcminutes.
+    width : float
+        Width of the cosine apodization in arcminutes.
+    modrmap : Float[ndmap, "ny nx"]
+        Radius from the center at each pixel
+
+    Returns
+    -------
+    omap : Float[ndmap, "... ny nx"]
+        Apodized copy of the input map.
+    """
+    imap = imap.copy()
+    imap[..., modrmap > radius] = 0
+    if width > 0:
+        inner_r = radius - width
+        mask = modrmap > inner_r
+        width = float(width)
+        imap[..., mask] *= 1 + np.cos(
+            -np.pi * inner_r / width + np.pi * modrmap[mask] / width
+        )
+        imap[..., mask] *= 0.5
+
+    return imap
+
+
+def get_map_noise(
+    imap_centered: Float[ndmap, "... ny nx"],
+    ivar: Float[ndmap, "... ny nx"],
+    r: Float[np.ndarray, "nr"],
+    rprof: Float[np.ndarray, "nr"],
+    radius_rad: float,
+    lmin: float,
+    lmax: float,
+    fwhm: float,
+    opt_ang: bool = False,
+) -> tuple[
+    float,
+    float,
+    Float[ndmap, "ny nx"],
+    Float[ndmap, "2 ny nx"],
+    Bool[np.ndarray, "ny nx"],
+]:
+    """
+    Estimate white and correlated noise from residuals of a beam map.
+
+    The radial profile is projected onto the map and subtracted before
+    identifying and masking hot pixels. The residual map is then weighted
+    by the inverse-variance map, masked to an inner and outer radius, and
+    transformed to a two-dimensional power spectrum. The white and
+    correlated
+    noise amplitudes are estimated from this power spectrum.
+
+    Parameters
+    ----------
+    imap_centered : Float[ndmap, "... ny nx"]
+        Centered input map.
+    ivar : Float[ndmap, "... ny nx"]
+        Inverse-variance map corresponding to `imap_centered`. Pixels
+        identified as hot are assigned zero inverse variance.
+    r : Float[np.ndarray, "nr"]
+        Radial coordinates corresponding to `rprof`.
+    rprof : Float[np.ndarray, "nr"]
+        Radial profile of the map.
+        Note that this needs to have the same normalizations applied
+        to it as `imap_centered`.
+    radius_rad : float
+        Outer radius of the region used for the noise estimate, in radians.
+        You probably want this to be the mapmaker radius.
+    lmin : float
+        Minimum multipole used to separate white and correlated noise.
+    lmax : float
+        Maximum multipole used to estimate the noise.
+    fwhm : float
+        Beam full width at half maximum, in radians. Used to define the
+        inner radius excluded from the noise estimate and the width of
+        the apodization.
+    opt_ang : bool, optional
+        If True, optimize the orientation of the correlated-noise stripe
+        in Fourier space. The optimization is restricted to +/- pi/8
+        around the nominal orientation.
+
+    Returns
+    -------
+    white_noise : float
+        Estimated white-noise level.
+    corr_noise : float
+        Estimated amplitude of the correlated noise.
+    ps2d : Float[ndmap, "ny nx"]
+        Two-dimensional power spectrum of the residual map.
+    lmap : Float[ndmap, "2 ny nx"]
+        Two-dimensional multipole coordinate maps corresponding to `ps2d`.
+        The first element contains the y-direction multipoles and the
+        second contains the x-direction multipoles.
+    hot : Bool[np.ndarray, "ny nx"]
+        Boolean mask identifying pixels flagged as hot-pixel outliers.
+    """
+
+    # Project profile and subtract
+    modrmap = enmap.modrmap(imap_centered.shape, imap_centered.wcs)
+    br_interp = interp1d(r, rprof, fill_value=0, bounds_error=False)
+    brmap = enmap.samewcs(
+        br_interp(modrmap.ravel()).reshape(modrmap.shape),
+        modrmap,
+    )
+    imap_sub = cast(ndmap, imap_centered - brmap)
+
+    imap_hot = imap_sub.copy()
+    imap_hot[modrmap < 3 * fwhm] = np.nan
+    med = np.nanmedian(imap_hot)
+    mad = np.nanmedian(np.abs(imap_hot - med))
+    z = (imap_sub - med) / (1.4826 * mad)
+    hot = np.abs(z) > 5
+    hot[modrmap < 3 * fwhm] = False
+    if np.sum(hot) > 0:
+        labeled, _ = label(hot)  # type: ignore
+        labeled = np.asarray(labeled, dtype=np.intp)
+        sizes = np.bincount(labeled.ravel())
+        small = sizes[labeled] < 4
+        hot[small] = False
+        hot = binary_dilation(hot)
+    hot = np.asarray(hot, bool)
+    if np.sum(hot) > 0:
+        imap_clean = imap_centered.copy()
+        imap_clean[hot] = median_filter(imap_clean, size=15)[hot]
+        result = enmap.rbin(imap_clean)
+        br = result[0]
+        radii = result[1]
+        br_interp = interp1d(radii, br, fill_value=0, bounds_error=False)
+        brmap = enmap.samewcs(
+            br_interp(modrmap.ravel()).reshape(modrmap.shape),
+            modrmap,
+        )
+        imap_sub = cast(ndmap, imap_clean - brmap)
+        ivar[hot] = 0
+    w = cast(ndmap, np.sqrt(ivar))
+
+    # Cut out residual.
+    pmask = cast(ndmap, imap_sub.copy() * 0 + 1)
+    pmask -= apodized_disk(pmask, 3 * fwhm, 0.1 * fwhm, modrmap=modrmap)
+    w *= pmask
+
+    # Apodize outer edge.
+    w = apodized_disk(w, radius_rad, 0.1 * radius_rad, modrmap=modrmap)
+
+    # Compute 2d power spectrum.
+    lmap = enmap.lmap(imap_sub.shape, imap_sub.wcs)
+    ps2d = enmap.calc_ps2d(enmap.map2harm(w * imap_sub))
+    norm = np.mean(w[w > 0] ** 2)
+    ps2d /= norm
+
+    lx = lmap[1]
+    ly = lmap[0]
+
+    def rotated_lx(theta):
+        c, s = np.cos(theta), np.sin(theta)
+        return c * lx + s * ly
+
+    def objective(theta):
+        lx_rot = rotated_lx(theta)
+        stripe = np.abs(lx_rot) < lmin
+        return -np.mean(ps2d[stripe])
+
+    theta = 0
+    if opt_ang:
+        result = minimize_scalar(
+            objective,
+            bounds=(-np.pi / 2, np.pi / 2),
+            method="bounded",
+        )
+        theta = result.x
+        c, s = np.cos(theta), np.sin(theta)
+        lx_rot = c * lx + s * ly
+        ly_rot = -s * lx + c * ly
+        lmap[0][:] = ly_rot
+        lmap[1][:] = lx_rot
+
+    white_noise = get_white_noise(ps2d, lmap, lmin, lmax)
+    corr_noise = get_corr_noise(ps2d, lmap, lmin, lmax)
+
+    return white_noise, corr_noise, ps2d, lmap, hot, theta

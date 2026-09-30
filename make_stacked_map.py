@@ -6,19 +6,22 @@ from functools import partial
 from typing import cast
 
 import astropy.units as u
+import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 import sqlalchemy as sqy
 import yaml
 from expiringdict import ExpiringDict
+from matplotlib.colors import SymLogNorm
 from mpi4py import MPI
 from pixell import enmap, reproject
+from sotodlib.coords.planets import get_source_pos
 from sotodlib.core import Context
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
 from lat_beams import beam_utils as bu
-from lat_beams.plotting import plot_map_complete
+from lat_beams.plotting import plot_debug_map, plot_map_complete
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -49,7 +52,7 @@ def get_jobdict(jdb):
     }
 
 
-def get_jobit(jdb, cfg, all_fits, all_fjobs, det_splits):
+def get_jobit(jdb, cfg, all_fits, ctx, det_splits):
     _ = jdb
     jobit = []
     if myrank == 0:
@@ -181,6 +184,50 @@ def view_TQU(imap) -> enmap.ndmap:
     return padded
 
 
+def check_source_overlap(mjob, cfg, imap):
+    # Fudging coordinates a bit here
+    msrc = mjob.tags["source"]
+    X = yaml.safe_load(mjob.tags["X"])
+    t = float(X["timestamp"])
+    ra, dec = float(X["ra"]), float(X["dec"])
+    theta = float(X["psi"] - X["roll"])
+    box = imap.box()
+    corners = np.array(
+        [
+            [box[0, 0], box[0, 1]],
+            [box[0, 0], box[1, 1]],
+            [box[1, 0], box[0, 1]],
+            [box[1, 0], box[1, 1]],
+        ]
+    )
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array([[c, s], [-s, c]])
+    rot_corners = corners @ R.T
+    rot_box = np.array(
+        [
+            rot_corners.min(axis=0),
+            rot_corners.max(axis=0),
+        ]
+    )
+    overlaps = []
+    for source in cfg.map_source_list:
+        if source == msrc:
+            continue
+        src = source
+        if src == "taua":
+            src = "J83.6272579p22.02159891"
+        elif src == "3c279":
+            src = "J194.0409868m5.79174024"
+        elif src == "2026yeh":
+            src = "J12.3065339p35.5610483"
+        ra_src, dec_src, _ = get_source_pos(src.title(), t)
+        coord = (dec_src - dec, ra - ra_src)
+        inside = np.all((coord >= rot_box[0]) & (coord <= rot_box[1]))
+        if inside:
+            overlaps += [source]
+    return overlaps
+
+
 def process_one_map(
     fit,
     fjob,
@@ -201,7 +248,7 @@ def process_one_map(
     )
 
     if fjobstr not in mjobdict:
-        return "Map job not found"
+        return fjobstr, fjob.tags["split"], map_type, "Map job not found"
     mjob = mjobdict[fjobstr]
 
     if map_type == "":
@@ -226,7 +273,7 @@ def process_one_map(
             ivar = ivar[np.diag_indices(len(ivar))]
         ivar = ivar.reshape(imap.shape)
     except FileNotFoundError:
-        return f"Missing map {fjobstr}"
+        return fjobstr, fjob.tags["split"], map_type, f"Missing map {fjobstr}"
 
     imap = view_TQU(imap)
     ivar = view_TQU(ivar)
@@ -248,7 +295,17 @@ def process_one_map(
     )
 
     if distance_rad < 0.1 * ext_rad:
-        return "{fjobstr} ({mjob.tags['source']}) too close to edge! Skipping!"
+        return (
+            fjobstr,
+            fjob.tags["split"],
+            map_type,
+            "{fjobstr} ({mjob.tags['source']}) too close to edge! Skipping!",
+            None,
+        )
+
+    # overlaps = check_source_overlap(mjob, cfg, imap, ext_rad)
+    # if len(overlaps) > 0:
+    #     return fjobstr, fjob.tags["split"], map_type, f"{fjobstr} ({mjob.tags['source']}) has {overlaps} in map!", None
 
     norm = (
         fit["aman"].gauss.amp.value
@@ -280,6 +337,29 @@ def process_one_map(
         * norm**2
     )
 
+    ivar_msk = enmap.upgrade(enmap.downgrade(ivar[0], 2), 2, oshape=imap[0].shape) == 0
+    modrmap = enmap.modrmap(imap.shape, imap.wcs)
+    debug = (
+        fjobstr,
+        imap,
+        ivar,
+        np.zeros_like(ivar_msk),
+        None,
+        None,
+        np.nan,
+        np.nan,
+        np.nan,
+        np.nan,
+    )
+    if np.sum(ivar_msk[modrmap < 3 * fit["aman"].data_fwhm.to(u.radian).value]):
+        return (
+            fjobstr,
+            fjob.tags["split"],
+            map_type,
+            f"{fjobstr} ({mjob.tags['source']}) has poor sampling near the source! Skipping!",
+            debug,
+        )
+
     if map_type == "":
         cent_est = bu.estimate_cent(
             imap[0],
@@ -289,16 +369,94 @@ def process_one_map(
             ret_smooth=False,
         )
         if np.linalg.norm(cent_est - imap.wcs.wcs.crpix) > cfg.miscenter_thresh:
-            return f"{fjobstr} ({mjob.tags['source']}) seems miscentered! Skipping!"
+            return (
+                fjobstr,
+                fjob.tags["split"],
+                map_type,
+                f"{fjobstr} ({mjob.tags['source']}) seems miscentered! Skipping!",
+                debug,
+            )
         if imap[0, cent_est[0], cent_est[1]] < 0:
             return (
-                f"{fjobstr} ({mjob.tags['source']}) looks like bad weather! Skipping!"
+                fjobstr,
+                fjob.tags["split"],
+                map_type,
+                f"{fjobstr} ({mjob.tags['source']}) looks like bad weather! Skipping!",
+                debug,
+            )
+
+        vm = ivar[0] > 0
+        ivar_smooth = enmap.smooth_gauss(
+            ivar[0], 1.0 * fit["aman"].data_fwhm.to(u.radian).value / 2.355
+        )
+        irat = np.median(ivar_smooth[vm]) / np.std(ivar_smooth[vm])
+        if irat < 2 * cfg.min_irat:
+            imsk = np.abs(ivar_smooth - ivar[0]) > 3 * np.std(ivar[0, vm])
+            ivar[:, imsk] = 0
+            ivar_smooth = enmap.smooth_gauss(
+                ivar[0], 1.0 * fit["aman"].data_fwhm.to(u.radian).value / 2.355
+            )
+            irat = np.median(ivar_smooth[vm]) / np.std(ivar_smooth[vm])
+
+        prof = (fit["aman"].rprof.value - fit["aman"].bessel.off.value) / norm
+        wn, cn, ps2d, lmap, hot, theta = bu.get_map_noise(
+            imap[0],
+            ivar[0],
+            fit["aman"].r.to(u.radian).value,
+            prof,
+            ext_rad,
+            cfg.n_lmin,
+            cfg.n_lmax,
+            np.deg2rad(cfg.nominal_fwhm[mjob.tags["band"]] / 60),
+            True,
+        )
+        ivar[:, hot] = 0
+        debug = (fjobstr, imap, ivar, hot, ps2d, lmap, cfg.n_lmin, cfg.n_lmax, wn, cn)
+        ratio = cn / wn
+        high_cn = np.log10(cn) > cfg.max_cn
+        high_wn = np.log10(wn) > cfg.max_cn - 1
+        rat_adj = max(0, -10 * (np.log10(wn) - cfg.max_cn - 1))
+        cut = high_wn + high_cn + (ratio > cfg.corr_ratio_cut + rat_adj)
+        if cut:
+            return (
+                fjobstr,
+                fjob.tags["split"],
+                map_type,
+                f"{fjobstr} ({mjob.tags['source']}) has high noise ({np.round(ratio, 2)}, {np.round(np.log10(wn), 1)}, {np.round(np.log10(cn), 1)})! Skipping!",
+                debug,
+            )
+        if np.abs(theta) > np.pi / 8:
+            return (
+                fjobstr,
+                fjob.tags["split"],
+                map_type,
+                f"{fjobstr} ({mjob.tags['source']}) has high noise clocking ({np.round(np.rad2deg(theta), 2)})! Skipping!",
+                debug,
+            )
+        rmsk = modrmap < ext_rad
+        cut_frac = np.sum(ivar[0, rmsk] == 0) / np.sum(rmsk)
+        if cut_frac > cfg.max_cut_pix_frac:
+            return (
+                fjobstr,
+                fjob.tags["split"],
+                map_type,
+                f"{fjobstr} ({mjob.tags['source']}) has {np.round(cut_frac*100, 2)}% of pixels cut! Skipping!",
+                debug,
+            )
+
+        if irat < cfg.min_irat:
+            return (
+                fjobstr,
+                fjob.tags["split"],
+                map_type,
+                f"{fjobstr} ({mjob.tags['source']}) has a low ivar median-variance ratio: {np.round(irat, 2)}! Skipping!",
+                debug,
             )
 
     np.nan_to_num(imap, copy=False, nan=0, posinf=0, neginf=0)
     np.nan_to_num(ivar, copy=False, nan=0, posinf=0, neginf=0)
 
-    return fjobstr, fjob.tags["split"], map_type, imap, ivar
+    return fjobstr, fjob.tags["split"], map_type, (imap, ivar), debug
 
 
 def stack_job(
@@ -321,6 +479,27 @@ def stack_job(
     map_types,
     logger,
 ):
+    data_dir_spl = os.path.join(
+        data_dir,
+        "stacks",
+        job.tags["split"],
+        job.tags["split_str"],
+        job.tags["det_split"],
+        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+    )
+    plot_dir_spl = os.path.join(
+        plot_dir,
+        "stacks",
+        job.tags["split"],
+        job.tags["split_str"],
+        job.tags["det_split"],
+        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+    )
+    debug_plot_dir = os.path.join(plot_dir_spl, "indiv")
+
+    os.makedirs(data_dir_spl, exist_ok=True)
+    os.makedirs(plot_dir_spl, exist_ok=True)
+    os.makedirs(debug_plot_dir, exist_ok=True)
     job.mark_visited()
     # Make output maps
     jobdict = {
@@ -359,29 +538,55 @@ def stack_job(
     futures = []
     num_fits = len(sfits)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for i, (fit, fjob) in enumerate(zip(sfits, sfjobs)):
-            fjobstr = (
-                f"{fjob.tags['obs_id']}-"
-                f"{fjob.tags['wafer_slot']}-"
-                f"{fjob.tags['stream_id']}-"
-                f"{fjob.tags['array']}-"
-                f"{fjob.tags['band']}"
-            )
-            if fjobstr not in mjobdict:
-                logger.debug("Map job not found for %s", fjobstr)
-                continue
-            for map_type in map_types:
+        for map_type in sorted(map_types):
+            logger.info("Adding %s", f"{map_type}{' '*bool(map_type)}maps")
+            for i, (fit, fjob) in enumerate(zip(sfits, sfjobs)):
+                fjobstr = (
+                    f"{fjob.tags['obs_id']}-"
+                    f"{fjob.tags['wafer_slot']}-"
+                    f"{fjob.tags['stream_id']}-"
+                    f"{fjob.tags['array']}-"
+                    f"{fjob.tags['band']}"
+                )
+                if fjobstr not in mjobdict:
+                    logger.debug("Map job not found for %s", fjobstr)
+                    continue
                 key = (fjobstr, map_type, fjob.tags["split"])
+                if map_type != "":
+                    if fjobstr not in obslist:
+                        logger.debug(
+                            "%s not in obslist from stack of filter-bin maps. Skipping!",
+                            fjobstr,
+                        )
+                        continue
                 # Cache hit
                 if key in cache:
-                    logger.debug("Adding %s from cache (%d/%d)", fjobstr, i, num_fits)
-                    imap, ivar = cache[key]
+                    fjobstr, split, map_type, maps, debug = cache[key]
+                    if isinstance(maps, str):
+                        logger.debug(
+                            "%s marked as bad in cache (%d/%d)",
+                            fjobstr,
+                            i + 1,
+                            num_fits,
+                        )
+                        if debug is not None:
+                            plot_debug_map(debug_plot_dir, maps, *debug)
+                        continue
+                    logger.debug(
+                        "Adding %s from cache (%d/%d)", fjobstr, i + 1, num_fits
+                    )
+                    if debug is not None:
+                        plot_debug_map(debug_plot_dir, "Added to stack", *debug)
+                    imap, ivar = maps
                     add_to_stack(map_type, imap, ivar)
-                    obslist.append(fjobstr)
+                    if map_type == "":
+                        obslist.append(fjobstr)
                     continue
 
                 # Cache miss
-                logger.debug("Submitting future for %s (%d/%d)", fjobstr, i, num_fits)
+                logger.debug(
+                    "Submitting future for %s (%d/%d)", fjobstr, i + 1, num_fits
+                )
                 futures.append(
                     executor.submit(
                         process_one_map,
@@ -397,23 +602,35 @@ def stack_job(
                     )
                 )
 
-            if len(futures) >= max_workers * len(map_types) or (
-                i + 1 == num_fits and len(futures) > 0
-            ):
-                for future in as_completed(futures):
-                    result = future.result()
-                    if isinstance(result, str):
-                        logger.debug("%s", result)
-                        continue
-                    fjobstr, split, map_type, imap, ivar = result
-                    logger.debug("Adding %s from future", fjobstr)
-                    key = (fjobstr, map_type, split)
-                    cache[key] = (imap, ivar)
-                    add_to_stack(map_type, imap, ivar)
-                    obslist.append(fjobstr)
-                logger.log(25, "%d/%d maps added", i + 1, num_fits)
-                del futures
-                futures = []
+                if len(futures) >= max_workers * len(map_types) or (
+                    i + 1 == num_fits and len(futures) > 0
+                ):
+                    for future in as_completed(futures):
+                        result = future.result()
+                        fjobstr, split, map_type, maps, debug = result
+                        key = (fjobstr, map_type, split)
+                        cache[key] = result
+                        if isinstance(maps, str):
+                            logger.warning("%s", maps)
+                            if debug is not None:
+                                plot_debug_map(debug_plot_dir, maps, *debug)
+                            continue
+                        logger.debug("Adding %s from future", fjobstr)
+                        if debug is not None:
+                            plot_debug_map(debug_plot_dir, "Added to stack", *debug)
+                        imap, ivar = maps
+                        add_to_stack(map_type, imap, ivar)
+                        if map_type == "":
+                            obslist.append(fjobstr)
+                    logger.log(
+                        25,
+                        "%d/%d maps added (%d in obslist)",
+                        i + 1,
+                        num_fits,
+                        len(obslist),
+                    )
+                    del futures
+                    futures = []
 
     obslist = np.unique(obslist)
     if len(obslist) == 0:
@@ -426,6 +643,7 @@ def stack_job(
         "%d maps in stack",
         len(obslist),
     )
+    logger.info(obslist)
     # Divide weights and save
     for map_type in map_types:
         with np.errstate(
@@ -452,25 +670,6 @@ def stack_job(
             "map_ivar",
         ):
             omap = cast(enmap.ndmap, jobdict[map_type][name])
-            data_dir_spl = os.path.join(
-                data_dir,
-                "stacks",
-                job.tags["split"],
-                job.tags["split_str"],
-                job.tags["det_split"],
-                f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
-            )
-            plot_dir_spl = os.path.join(
-                plot_dir,
-                "stacks",
-                job.tags["split"],
-                job.tags["split_str"],
-                job.tags["det_split"],
-                f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
-            )
-
-            os.makedirs(data_dir_spl, exist_ok=True)
-            os.makedirs(plot_dir_spl, exist_ok=True)
             path = os.path.join(
                 data_dir_spl,
                 f"{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}{'_' * bool(map_type)}{map_type}_{name}.fits",
@@ -489,10 +688,10 @@ def stack_job(
                     smap,
                     posmap,
                     pixsize,
-                    cfg.extent * z,
+                    min(cfg.extent * z, cfg.extent),
                     (0, 0),
                     plot_dir_spl,
-                    f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} {' ' * bool(map_type)}{map_type} {name}",
+                    f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}{' ' * bool(map_type)}{map_type} {name}",
                     log_thresh=cfg.log_thresh,
                     append=name + append,
                     qrur=True,
@@ -567,14 +766,14 @@ if myrank == 0:
     )
     data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
     msk = snr > cfg.min_stack_snr
-    msk *= data_fwhm < 1.3 * fwhm_exp
-    msk *= data_fwhm > 0.7 * fwhm_exp
+    msk *= data_fwhm < 1.5 * fwhm_exp
+    msk *= data_fwhm > 0.5 * fwhm_exp
     msk *= solid_angle > 0
     pwv = bu.get_split_vec(all_fits, "pwv_mean", ctx)
     pwv[pwv == "None"] = "1"
     pwv = np.array(pwv, float)
     el = np.deg2rad(np.array(bu.get_split_vec(all_fits, "el_center", ctx), float))
-    msk *= pwv / np.sin(el) <= 2.0
+    msk *= pwv / np.sin(el) <= cfg.max_pwv
     all_fits = all_fits[msk]
     fjobs = fjobs[msk]
     logger.info("Fits filtered")
@@ -600,7 +799,7 @@ jdb, all_jobs = setup_jobs(
         get_jobit,
         cfg=cfg,
         all_fits=all_fits,
-        all_fjobs=fjobs,
+        ctx=ctx,
         det_splits=det_split_names,
     ),
     get_jobstr,
@@ -617,7 +816,7 @@ all_jobs = np.array(all_jobs)
 
 # Make template map
 ext_rad = np.deg2rad(cfg.extent / 3600)
-pix_extent = 2 * cfg.extent
+pix_extent = int(2 * ext_rad // cfg.res)
 twcs = enmap.wcsutils.build(
     [0, 0],
     res=np.rad2deg(cfg.res),
@@ -626,7 +825,7 @@ twcs = enmap.wcsutils.build(
     rowmajor=True,
 )
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
-map_types = ("", "resid")
+map_types = ("",)  # , "resid")
 
 if args.plot_only:
     logger.info("Running in plot only mode!")
@@ -641,19 +840,24 @@ split_dict = {
 }
 
 # Work out which maps each job needs.
-assignments = None
-job_maps = None
-if myrank == 0:
-    logger.info("Building job/map overlap graph")
-    job_maps = [get_job_maps(job, all_fits, split_dict) for job in all_jobs]
-    assignments = distribute_jobs(all_jobs, job_maps, nproc, logger)
-job_idx = comm.scatter(assignments, root=0)
-joblist = all_jobs[job_idx].tolist() + [None]
-job_maps = comm.bcast(job_maps, root=0)
-needed = np.fromiter(set().union(*(job_maps[i] for i in job_idx)), dtype=np.int64)
-fits = all_fits[needed]
-fjobs_local = fjobs[needed]
-split_dict = {key: val[needed] for key, val in split_dict.items()}
+if nproc > 1:
+    assignments = None
+    job_maps = None
+    if myrank == 0:
+        logger.info("Building job/map overlap graph")
+        job_maps = [get_job_maps(job, all_fits, split_dict) for job in all_jobs]
+        assignments = distribute_jobs(all_jobs, job_maps, nproc, logger)
+    job_idx = comm.scatter(assignments, root=0)
+    joblist = all_jobs[job_idx].tolist() + [None]
+    job_maps = comm.bcast(job_maps, root=0)
+    needed = np.fromiter(set().union(*(job_maps[i] for i in job_idx)), dtype=np.int64)
+    fits = all_fits[needed]
+    fjobs_local = fjobs[needed]
+    split_dict = {key: val[needed] for key, val in split_dict.items()}
+else:
+    joblist = all_jobs.tolist() + [None]
+    fits = all_fits
+    fjobs_local = fjobs
 
 max_len = get_cache_max_len(tmap, nproc)
 cache = ExpiringDict(max_len=max_len, max_age_seconds=3600)
@@ -677,7 +881,7 @@ for i, j in enumerate(joblist):
     logger.extra["extra"] = f" [{job_str} ({i + 1}/{len(joblist) - 1})]"
     logger.log(25, "Making stack")
 
-    with log_lvl(logger, 20):
+    with log_lvl(logger, 15):
         pending_job = stack_job(
             job=job,
             fits=fits,

@@ -45,6 +45,7 @@ bessel_wing_n_sigma: 8
 extent: 1200
 det_split_dir: "det_lists"
 gauss_multipole: False
+corr_ratio_cut: 20
 metasplits:
   mainsrc:
     - "source"
@@ -56,12 +57,13 @@ split_by:
   - "source+band"
   - "mainsrc+band"
   - "nojup+band"
+  - "tube_slot+band"
   - "source+tube_slot+band"
   - "mainsrc+tube_slot+band"
   - "nojup+tube_slot+band"
-  - "source+array+band"
-  - "mainsrc+array+band"
-  - "nojup+array+band"
+#   - "source+array+band"
+#   - "mainsrc+array+band"
+#   - "nojup+array+band"
 det_splits:
   - inout0
   - inout1

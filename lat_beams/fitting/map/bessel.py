@@ -89,7 +89,7 @@ profiles and beam window functions.
 See the individual function docstrings for details.
 """
 
-from typing import cast
+from typing import Optional, cast
 
 import numba
 import numpy as np
@@ -184,6 +184,8 @@ def bessel_beam(
     bessel_off: float,
     wing_params: Float[NDArray, "n_wing_params"],
     off: float,
+    base_beams: Optional[Float[NDArray, "n_terms nx ny"]] = None,
+    f_basis: Optional[tuple[Float[NDArray, "nx*ny 1+2*n_terms"], list, list]] = None,
 ) -> Float[ndmap, "nx ny"]:
     r"""
     Evaluate a fitted Bessel-core plus smooth $r^{-3}$-wing beam model.
@@ -244,33 +246,37 @@ def bessel_beam(
     n_pixels = r_flat.size
 
     # Fourier basis for the angular dependence.
-    F_mat = np.empty((n_ang, n_pixels), dtype=float)
-    F_mat[0] = 1.0
+    if f_basis is None:
+        F_mat = np.empty((n_ang, n_pixels), dtype=float)
+        F_mat[0] = 1.0
+        cos_m_theta, sin_m_theta = [], []
+        if n_multipoles:
+            m = np.arange(1, n_multipoles + 1)[:, None]
+            cos_m_theta = np.cos(m * theta_flat)
+            sin_m_theta = np.sin(m * theta_flat)
 
-    cos_m_theta, sin_m_theta = [], []
-    if n_multipoles:
-        m = np.arange(1, n_multipoles + 1)[:, None]
-        cos_m_theta = np.cos(m * theta_flat)
-        sin_m_theta = np.sin(m * theta_flat)
-
-        for i in range(n_multipoles):
-            F_mat[1 + 2 * i] = cos_m_theta[i]
-            F_mat[2 + 2 * i] = sin_m_theta[i]
-
-    F_mat_T = F_mat.T
+            for i in range(n_multipoles):
+                F_mat[1 + 2 * i] = cos_m_theta[i]
+                F_mat[2 + 2 * i] = sin_m_theta[i]
+        F_mat_T = F_mat.T
+    else:
+        F_mat_T, cos_m_theta, sin_m_theta = f_basis
 
     # Construct the Bessel pair basis.
-    b_terms = np.column_stack(
-        [bessel_term_cached(r_flat, ell_max, n) for n in range(n_bessel)]
-    )
     n0, n1 = np.triu_indices(n_bessel)
-    base_beams = np.nan_to_num(
-        b_terms[:, n0] * b_terms[:, n1],
-        copy=False,
-        nan=0.0,
-        posinf=0.0,
-        neginf=0.0,
-    )
+    if base_beams is None:
+        b_terms = np.column_stack(
+            [bessel_term_cached(r_flat, ell_max, n) for n in range(n_bessel)]  # type: ignore
+        )
+        base_beams = np.nan_to_num(
+            b_terms[:, n0] * b_terms[:, n1],
+            copy=False,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+    if base_beams is None:
+        raise ValueError("Didn't compute base beams?")
 
     # Reconstruct the pure Bessel/multipole core.
     core_flat = np.full(n_pixels, bessel_off, dtype=float)
@@ -318,6 +324,8 @@ def bessel_beam(
 def bessel_beam_from_aman(
     posmap: Float[ndmap, "2 nx ny"],
     aman: AxisManager,
+    base_beams: Optional[Float[NDArray, "n_terms nx ny"]] = None,
+    f_basis: Optional[tuple[Float[NDArray, "nx*ny 1+2*n_terms"], list, list]] = None,
 ) -> Float[ndmap, "nx ny"]:
     """
     Evaluate a fitted Bessel beam from an `AxisManager`.
@@ -352,6 +360,8 @@ def bessel_beam_from_aman(
         bessel_off,
         wing_params,
         off,
+        base_beams,
+        f_basis=f_basis,
     )
 
 
@@ -1479,8 +1489,124 @@ def compute_full_covariance(
         check_finite=False,
     )
     sigma2 = 1
-
     return cast(NDArray[np.floating], covariance / sigma2)
+
+
+def empirical_profile_covariance(
+    all_prof: Float[NDArray, "n_samp n_radial"],
+    radial_centers: Float[NDArray, "n_radial"],
+    lmax: int,
+    n_modes: int = -1,
+) -> Optional[AxisManager]:
+    r"""
+    Estimate profile and beam-window covariance directly from an ensemble
+    of normalized radial profiles.
+
+    This is the sample-space analogue of `bessel_profile_covariance`.
+    Rather than estimating a covariance in the potentially degenerate
+    parameter space, the covariance is estimated directly from the
+    ensemble of model profiles.
+
+    Parameters
+    ----------
+    all_prof : Float[NDArray, "n_samp n_radial"]
+        Ensemble of normalized radial profile realizations. Each row is
+        one realization and each column corresponds to `radial_centers`.
+    radial_centers : Float[NDArray, "n_radial"]
+        Radial coordinates corresponding to the profile bins, in radians.
+    lmax : int
+        Maximum multipole for the beam window function.
+    n_modes : int, optional
+        Number of covariance modes to retain in `profile_modes` and
+        `bl_modes`. If <= 0, all modes are retained.
+
+    Returns
+    -------
+    out : Optional[AxisManager]
+        AxisManager with a structure matching `bessel_profile_covariance`
+        as closely as possible.
+
+        Fields include:
+
+        - `r`: radial bin centers.
+        - `profile`: mean normalized profile.
+        - `profile_sigma`: empirical 1-sigma profile uncertainty.
+        - `profile_cov`: empirical profile covariance.
+        - `profile_modes`: covariance modes including their 1-sigma
+          amplitudes.
+        - `ell`: multipoles from 0 through `lmax`.
+        - `bl`: beam window function of the mean profile.
+        - `bl_sigma`: empirical 1-sigma window-function uncertainty.
+        - `bl_modes`: covariance modes of the window function including
+          their 1-sigma amplitudes.
+        - `cov_eigenvalues`: profile covariance eigenvalues.
+        - `n_modes`: number of retained covariance modes.
+        - `n_samp`: number of profile realizations.
+
+        The eigenvalues/eigenvectors correspond to the profile-space
+        covariance, rather than the original parameter-space covariance.
+        If `len(all_prof) == 1` then `None` is returned.
+    """
+    all_prof = np.asarray(all_prof, dtype=float)
+    radial_centers = np.asarray(radial_centers, dtype=float)
+    n_samp, n_radial = all_prof.shape
+
+    if n_samp < 2:
+        return None
+    if len(radial_centers) != n_radial:
+        raise ValueError(
+            "all_prof and radial_centers have incompatible shapes: "
+            f"{n_radial} != {len(radial_centers)}"
+        )
+    profile_mean = np.mean(all_prof, axis=0)
+    centered = all_prof - profile_mean[None, :]
+    _, s, Vt = np.linalg.svd(centered, full_matrices=False)
+    evals_full = s**2 / (n_samp - 1)
+    evecs_full = Vt.T
+
+    if n_modes <= 0:
+        n_modes_actual = len(evals_full)
+    else:
+        n_modes_actual = min(n_modes, len(evals_full))
+
+    evals = evals_full[:n_modes_actual]
+    evecs = evecs_full[:, :n_modes_actual]
+    profile_modes = evecs * np.sqrt(evals)[None, :]
+    profile_sigma = np.sqrt(np.sum(profile_modes**2, axis=1))
+
+    ell = np.arange(lmax + 1)
+    bl = np.asarray(beam2bl(profile_mean, radial_centers, lmax=lmax))
+    bl_modes = np.empty((len(ell), n_modes_actual), dtype=float)
+
+    for i in range(n_modes_actual):
+        bl_modes[:, i] = np.asarray(
+            beam2bl(
+                profile_modes[:, i],
+                radial_centers,
+                lmax=lmax,
+            )
+        )
+    bl_sigma = np.sqrt(np.sum(bl_modes**2, axis=1))
+
+    r_ax = IndexAxis("r", n_radial)
+    ell_ax = IndexAxis("ell", len(ell))
+    mode_ax = IndexAxis("mode", n_modes_actual)
+    out = AxisManager(r_ax, ell_ax, mode_ax)
+    out.wrap("r", 3600 * np.rad2deg(radial_centers), [(0, "r")])
+    out.wrap("profile_mean", profile_mean, [(0, "r")])
+    out.wrap("profile_sigma", profile_sigma, [(0, "r")])
+    out.wrap("profile_modes", profile_modes, [(0, "r"), (1, "mode")])
+    out.wrap("ell", ell, [(0, "ell")])
+    out.wrap("bl_mean", bl, [(0, "ell")])
+    out.wrap("bl_sigma", bl_sigma, [(0, "ell")])
+    out.wrap("bl_modes", bl_modes, [(0, "ell"), (1, "mode")])
+    out.wrap("cov_eigenvalues", evals, [(0, "mode")])
+    out.wrap("cov_eigenvectors", evecs, [(0, "r"), (1, "mode")])
+    out.wrap("n_modes", n_modes_actual)
+    out.wrap("n_samp", n_samp)
+    out.wrap("lmax", lmax)
+
+    return out
 
 
 def bessel_profile_covariance(
@@ -1489,7 +1615,9 @@ def bessel_profile_covariance(
     lmax: int,
     n_modes: int,
     n_radial: int = 200,
-) -> tuple[AxisManager, Float[ndmap, "nx ny"]]:
+    cov: Optional[Float[np.ndarray, "npar npar"]] = None,
+    fits: Optional[list[AxisManager]] = None,
+) -> tuple[AxisManager, Float[ndmap, "nx ny"], Optional[AxisManager]]:
     r"""
     Propagate the full fit and covariance into a radial beam profile and b_l and their covariances.
     The covariance is propagated using a linearized model,
@@ -1529,6 +1657,11 @@ def bessel_profile_covariance(
         computed from the full best-fit model.
     n_radial : int
         Number of radial bins used for the profile.
+    cov : Optional[Float[np.ndarray, "npar npar"]], default: None
+        Covariance to use. If not provided then `fit.full_cov` is used.
+    fits : Optional[list[AxisManager]], default: None
+        List of loaded fits (the root aman not aman.bessel).
+        If provided will be used to compute an empirical covariance.
 
     Returns
     -------
@@ -1537,13 +1670,18 @@ def bessel_profile_covariance(
         function, covariance eigenmodes, and normalization information.
     model_no_off : Float[ndmap, "nx ny"]
         The model evaluated at posmap without the offset.
+    prof_cov_empirical : Optional[AxisManager]
+        Empirically estimated equivalent of prof_cov.
+        See `empirical_profile_covariance` for detials.
+        If we are unable to calculated this, due to `fits` being `None`
+        or having only one element, then `None` is returned.
     """
+    if cov is None:
+        full_cov = np.asarray(fit.full_cov.copy())
+    else:
+        full_cov = cov.copy()
 
-    def normalize_profile(profile, off):
-        norm = np.max(profile) - off
-        return (profile - off) / norm
-
-    full_cov = np.asarray(fit.full_cov)
+    n_core = int(cast(int, fit.n_core))
     wing_params = np.asarray(fit.wing_params.value)
     linear = np.asarray(fit.linear_coeffs.value)
     amps = np.asarray(fit.amps.value)
@@ -1567,7 +1705,53 @@ def bessel_profile_covariance(
     eta0 = float(cast(u.Quantity, fit.eta0).to(u.rad).value)
     ell_max = float(cast(u.Quantity, fit.ell_max).value)
 
-    model = bessel_beam(posmap, xi0, eta0, ell_max, amps, 0.0, wing_params, off)
+    eta, xi = posmap
+    xi_rel = xi - xi0
+    eta_rel = eta - eta0
+    r_flat = np.hypot(xi_rel, eta_rel).ravel()
+    theta_flat = np.arctan2(eta_rel, xi_rel).ravel()
+    n_bessel = len(amps)
+    n_multipoles = amps.shape[2]
+    n_ang = 1 + 2 * n_multipoles
+    n_pixels = r_flat.size
+
+    F_mat = np.empty((n_ang, n_pixels), dtype=float)
+    F_mat[0] = 1.0
+    cos_m_theta, sin_m_theta = [], []
+    if n_multipoles:
+        m = np.arange(1, n_multipoles + 1)[:, None]
+        cos_m_theta = np.cos(m * theta_flat)
+        sin_m_theta = np.sin(m * theta_flat)
+
+        for i in range(n_multipoles):
+            F_mat[1 + 2 * i] = cos_m_theta[i]
+            F_mat[2 + 2 * i] = sin_m_theta[i]
+    F_mat_T = np.ascontiguousarray(F_mat.T)
+    f_basis = F_mat_T, cos_m_theta, sin_m_theta
+    b_terms = np.column_stack(
+        [bessel_term_cached(r_flat, fit.ell_max, n) for n in range(n_bessel)]  # type: ignore
+    )
+    n0, n1 = np.triu_indices(n_bessel)
+    base_beams = np.nan_to_num(
+        b_terms[:, n0] * b_terms[:, n1],
+        copy=False,
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+
+    model = bessel_beam(
+        posmap,
+        xi0,
+        eta0,
+        ell_max,
+        amps,
+        0.0,
+        wing_params,
+        off,
+        base_beams=base_beams,
+        f_basis=f_basis,
+    )
     model_flat = np.asarray(model).ravel()
     radial_centers, profile, R = radial_profile_lin(
         model,
@@ -1576,22 +1760,23 @@ def bessel_profile_covariance(
         eta0=eta0,
         n_bins=n_radial,
     )
-    profile_norm = np.max(profile) - off
-    profile = normalize_profile(profile, off)
+    peak = np.argmax(model_flat)
+    profile_norm = model_flat[peak] - off
+    # profile = normalize_profile(profile, off)
+    profile = (profile - off) / profile_norm
 
     n_pix = len(model_flat)
     n_modes_actual = len(evals)
     J_mode = np.empty((n_pix, n_modes_actual), dtype=float)
     idx = np.asarray(fit.bessel_idx)
-    n_core = int(cast(int, fit.n_core))
 
+    amps_plus, amps_minus = np.zeros_like(amps), np.zeros_like(amps)
     for i, (direction, eval_i) in enumerate(zip(evecs.T, evals)):
         sigma = np.sqrt(eval_i)
         if sigma == 0:
             J_mode[:, i] = 0.0
             continue
         p_plus, p_minus = p + sigma * direction, p - sigma * direction
-        amps_plus, amps_minus = np.zeros_like(amps), np.zeros_like(amps)
         for a, ind in zip(p_plus[:n_core], idx):
             amps_plus[tuple(ind)] = a
         for a, ind in zip(p_minus[:n_core], idx):
@@ -1605,7 +1790,9 @@ def bessel_profile_covariance(
             0.0,
             p_plus[n_core + 1 :],
             p_plus[n_core],
-        )
+            base_beams=base_beams,
+            f_basis=f_basis,
+        ).ravel()  # - p_plus[n_core]
         model_minus = bessel_beam(
             posmap,
             xi0,
@@ -1615,28 +1802,28 @@ def bessel_profile_covariance(
             0.0,
             p_minus[n_core + 1 :],
             p_minus[n_core],
+            base_beams=base_beams,
+            f_basis=f_basis,
+        ).ravel()  # - p_minus[n_core]
+        J_mode[:, i] = (np.asarray(model_plus) - np.asarray(model_minus)) / (
+            2 * sigma * profile_norm
         )
-        J_mode[:, i] = (
-            normalize_profile(np.asarray(model_plus).ravel(), p_plus[n_core])
-            - normalize_profile(np.asarray(model_minus).ravel(), p_minus[n_core])
-        ) / (2.0 * sigma)
 
     J_profile_mode = R @ J_mode
-
-    profile_cov = (J_profile_mode * evals[None, :]) @ J_profile_mode.T
-    profile_sigma = np.sqrt(np.maximum(np.diag(profile_cov), 0.0))
+    profile_modes = J_profile_mode * np.sqrt(evals)[None, :]
+    profile_sigma = np.sqrt(np.sum(profile_modes**2, axis=1))
 
     ell = np.arange(lmax + 1)
     bl = np.asarray(beam2bl(profile, radial_centers, lmax=lmax))
-    bl_mode = np.empty((len(ell), n_modes_actual), dtype=float)
+    bl_modes = np.empty((len(ell), n_modes_actual), dtype=float)
 
-    for i, (mode, eval_i) in enumerate(zip(J_profile_mode.T, evals)):
-        bl_mode[:, i] = (
-            0.0 if eval_i <= 0 else np.asarray(beam2bl(mode, radial_centers, lmax=lmax))
-        )
-
-    bl_cov = (bl_mode * evals[None, :]) @ bl_mode.T
-    bl_sigma = np.sqrt(np.maximum(np.diag(bl_cov), 0.0))
+    w = radial_centers * np.gradient(radial_centers)
+    area = np.sum(w)
+    mean_modes = np.sum(profile_modes * w[:, None], axis=0) / area
+    residual_modes = profile_modes - mean_modes[None, :]
+    for i in range(n_modes_actual):
+        bl_modes[:, i] = beam2bl(residual_modes[:, i], radial_centers, lmax=lmax)
+    bl_sigma = np.sqrt(np.sum(bl_modes**2, axis=1))
 
     axes = [
         IndexAxis("r", n_radial),
@@ -1649,24 +1836,40 @@ def bessel_profile_covariance(
     out.wrap("r", 3600 * np.rad2deg(radial_centers), [(0, "r")])
     out.wrap("profile", profile, [(0, "r")])
     out.wrap("profile_sigma", profile_sigma, [(0, "r")])
-    out.wrap("profile_cov", profile_cov, [(0, "r"), (1, "r")])
-    out.wrap(
-        "profile_modes",
-        J_profile_mode * np.sqrt(evals)[None, :],
-        [(0, "r"), (1, "mode")],
-    )
+    # out.wrap("profile_cov", profile_cov, [(0, "r"), (1, "r")])
+    out.wrap("profile_modes", profile_modes, [(0, "r"), (1, "mode")])
     out.wrap("ell", ell, [(0, "ell")])
     out.wrap("bl", bl, [(0, "ell")])
     out.wrap("bl_sigma", bl_sigma, [(0, "ell")])
-    out.wrap(
-        "bl_modes",
-        bl_mode * np.sqrt(evals)[None, :],
-        [(0, "ell"), (1, "mode")],
-    )
+    out.wrap("bl_modes", bl_modes, [(0, "ell"), (1, "mode")])
     out.wrap("cov_eigenvalues", evals, [(0, "mode")])
     out.wrap("cov_eigenvectors", evecs, [(0, "param"), (1, "mode")])
     out.wrap("profile_norm", profile_norm)
     out.wrap("lmax", lmax)
     out.wrap("n_modes", n_modes_actual)
 
-    return out, cast(ndmap, model - off)
+    out_empir = None
+    if fits is not None:
+        profiles = np.empty((len(fits), len(radial_centers)))
+        for i, aman in enumerate(fits):
+            aman.gauss.xi0 = xi0 * u.rad
+            aman.gauss.eta0 = eta0 * u.rad
+            fmodel = bessel_beam_from_aman(
+                posmap, aman, base_beams=base_beams, f_basis=f_basis
+            )
+            fmodel -= aman.bessel.off.value
+            norm = aman.gauss.amp.value + aman.gauss.off.value - aman.bessel.off.value  # type: ignore
+            fmodel /= norm
+            profile = R @ fmodel.ravel()
+            profiles[i] = profile * np.mean(out.profile[1:10] / profile[1:10])
+        profiles[:, 0] = 1
+        profile_mean = np.mean(profiles, axis=0)
+        out_empir = empirical_profile_covariance(
+            profiles, radial_centers, lmax, n_modes
+        )
+        if out_empir is not None:
+            out_empir.wrap("profile", profile_mean, [(0, "r")])
+            bl_mean = np.asarray(beam2bl(profile_mean, radial_centers, lmax=lmax))
+            out_empir.wrap("bl", bl_mean, [(0, "ell")])
+
+    return out, cast(ndmap, model - off), out_empir
