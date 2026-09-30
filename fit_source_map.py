@@ -209,6 +209,9 @@ for i, j in enumerate(joblist):
     comm.barrier()
 
     logger.debug("Writing to db")
+    if job is None:
+        to_save = (None, None)
+        continue
     update_jobs_retry(jdb, [job], nproc * 10, logger)
     job = None
     if j is not None:
