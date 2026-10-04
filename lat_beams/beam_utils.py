@@ -410,12 +410,6 @@ def estimate_cent(
     buf : int
         Pixels within `buf` of the edge of the map will not be searched or
         used when smoothing. Meant to avoid low hits and edge artifacts.
-    peak_radius : int
-        Radius in pixels around a candidate peak used to determine whether
-        the peak has sufficient integrated signal. This helps reject
-        isolated hot pixels.
-    min_snr : float
-        Minimum integrated SNR required for a candidate peak to be accepted.
     ret_smooth : bool
         If True also return the smoothed SNR map.
 
@@ -575,9 +569,11 @@ def load_beam_fits_from_jobs(
     ----------
     fpath : str
         The path to the HDF5 file containing the fits.
-    job : list[jobdb.Job]
+    joblist : list[jobdb.Job]
         List of jobs to load fits for.
         Jobs should be of jclass `fit_map`.
+    jdb : Optional[jobdb.JobManager], default: None
+        If passed then jobs that couldn't be loaded are reopened.
 
     Returns
     -------
