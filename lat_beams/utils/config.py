@@ -6,64 +6,61 @@ Module for handling all configuration of scripts.
 ## General pipeline settings
 
 ???+ info cfg.root_dir
-        Root directory for pipeline products.
+    Root directory for output products.
 
 ???+ info cfg.tel
-        Telescope identifier used when constructing the output directory
-        tree.
+    Telescope identifier used when constructing the output directory tree.
 
 ???+ info cfg.pointing_type
-        Pointing/source type used to distinguish beam-analysis products.
+    Pointing type used to distinguish beam-analysis products.
+    ie. pointing_model, raw, etc.
 
 ???+ info cfg.append
-        Optional suffix appended to the output directory name.
+    Optional suffix appended to the output directory name.
 
 ???+ info cfg.fit_append
-        Optional suffix used when naming the HDF5 file containing fitted beam
-        parameters.
+    Optional suffix used when naming the HDF5 file containing fitted beam parameters.
 
 ???+ info cfg.single_det
-        Whether the analysis is operating on single-detector data. When true,
-        `_single_det` is appended to the output directory name.
+    Whether the analysis is operating on single-detector data.
+    When True,`_single_det` is appended to the output directory name.
 
 ???+ info cfg.ctx_path
-        Path to the sotodlib observation context. The context supplies
-        observation metadata and is used when constructing metadata-based
-        splits.
+    Path to the sotodlib context.
 
 ???+ cfg.preprocess_cfg
     Path to the preprocessing configuration used to load and preprocess
     the data before fitting or mapmaking.
 
 ???+ info cfg.source_list
-        List of source names to process.
-        Note that this has the following aliases:
+    List of source names to process.
+    Note that this has the following aliases:
 
-        * `map_source_list`: used in `make_source_map`.
-        * `fit_source_list`: used in `fit_source_map`.
+    * `map_source_list`: used in `make_source_map`.
+    * `fit_source_list`: used in `fit_source_map`.
 
-        This distiction is because there are sources we want to map
-        that we do not want to fit in the standard pipeline (ie. TauA).
+    This distiction is because there are sources we want to map
+    that we do not want to fit in the standard pipeline (ie. TauA).
 
 ???+ info cfg.start_time
-        Lower bound on the observation timestamp used when selecting jobs.
-        If `args.lookback` is passed then this becomes the current time minus the lookback.
+    Lower bound on the observation timestamp used when selecting jobs.
+    If `args.lookback` is passed then this becomes the current time minus the lookback.
 
 ???+ info cfg.stop_time
-        Upper bound on the observation timestamp used when selecting jobs.
-        If `args.lookback` is passed then this becomes the current time.
+    Upper bound on the observation timestamp used when selecting jobs.
+    If `args.lookback` is passed then this becomes the current time.
 
 ???+ info cfg.fwhm_tol
-        Fractional tolerance between the measured radial FWHM and the
-        nominal band FWHM. A fit is rejected when: `abs(1 - data_fwhm / nominal_fwhm) > fwhm_tol`
-        This is aliased to `fwhm_tol_map` for map fitting
-        and `fwhm_tol_pointing` for pointing fits..
+    Fractional tolerance between the measured radial FWHM and the
+    nominal band FWHM. A fit is rejected when: `abs(1 - data_fwhm / nominal_fwhm) > fwhm_tol`
+    This is aliased to `fwhm_tol_map` for map fitting
+    and `fwhm_tol_pointing` for pointing fits..
 
 ???+ info cfg.nominal_fwhm
-        Mapping from observing band to nominal beam FWHM. These values are
-        used for the initial Gaussian fit, FWHM quality cuts, noise
-        estimation, and stacking diagnostics. These should be in arcmins
-        and should be a dict where each key is a bandname (ie. "f090").
+    Mapping from observing band to nominal beam FWHM. These values are
+    used for the initial Gaussian fit, FWHM quality cuts, noise
+    estimation, and stacking diagnostics. These should be in arcmins
+    and should be a dict where each key is a bandname (ie. "f090").
 
 ???+ cfg.min_samps
     Minimum number of source-flagged samples required for a pointing fit
@@ -76,49 +73,48 @@ Module for handling all configuration of scripts.
 ### Mapmaking
 
 ???+ info cfg.extent
-        Angular extent of the map region used for beam fitting and stacking.
-        Also used when generating fitted-model and residual diagnostic plots.
-        Should be in arcseconds.
+    Angular extent of the map region used for beam fitting and stacking.
+    Also used when generating fitted-model and residual diagnostic plots.
+    Should be in arcseconds.
 
 ???+ info cfg.res
-        Target pixel resolution used when constructing the common
-        tangent-plane WCS for beam maps and high-resolution profile
-        calculations. Should be in radians.
+    Target pixel resolution used when constructing the common
+    tangent-plane WCS for beam maps and high-resolution profile
+    calculations. Should be in radians.
 
 ???+ info cfg.mask_size
-        Angular size of the mask used during mapmaking and beam-model fitting.
-        When `cfg.apply_fscale` is enabled, the fitting stage scales this value
-        according to the observing frequency before converting it to radians.
-        This is aliased by `map_mask_size`.
+    Angular size of the mask used during mapmaking and beam-model fitting.
+    When `cfg.apply_fscale` is enabled, the fitting stage scales this value
+    according to the observing frequency before converting it to radians.
+    This is aliased by `map_mask_size`.
 
 ???+ info cfg.apply_fscale
-        Whether beam-mask is adjusted according to
-        observing frequency. When enabled, the mask is scaled by
-        `90 / frequency_GHz`.
+    Whether beam-mask is adjusted according to observing frequency.
+    When enabled, the mask is scaled by `90 / frequency_GHz`.
 
 ???+ info cfg.aperature
-        Aperture size used by the Bessel beam model. The fitting stage
-        converts this value to a `Quantity` in meters before passing it
-        to the Bessel fitting routine.
+    Aperture size used by the Bessel beam model. The fitting stage
+    converts this value to a `Quantity` in meters before passing it
+    to the Bessel fitting routine.
 
 ???+ info cfg.buf
-        Buffer used when estimating the beam center on the original map.
-        In units of pixels.
+    Buffer used when estimating the beam center on the original map.
+    In units of pixels.
 
 ???+ info cfg.buf_cropped
-        Buffer used when estimating the beam center after the map has been
-        cropped, again in pixels.
+    Buffer used when estimating the beam center after the map has been
+    cropped, again in pixels.
 
 ???+ info cfg.smooth_kern
-        Angular smoothing scale used when estimating the beam center.
+    Angular smoothing scale used when estimating the beam center.
 
 ???+ info cfg.snr_extent
-        Angular extent around the estimated beam center excluded when
-        estimating map noise for the initial SNR calculation.
+    Angular extent around the estimated beam center excluded when
+    estimating map noise for the initial SNR calculation.
 
 ???+ info cfg.extent_highres
-        Angular extent of the high-resolution map used for calculating the
-        final profile and covariance.
+    Angular extent of the high-resolution map used for calculating the
+    final profile and covariance.
 
 ???+ cfg.pixsize_highres
     Pixel size for the high-resolution final profile.
@@ -270,44 +266,34 @@ Module for handling all configuration of scripts.
 
 ### Beam-fit configuration
 
-???+ info
-    cfg.sym_gauss:
-        Whether the Gaussian beam fit is constrained to be symmetric.
+???+ info cfg.sym_gauss
+    Whether the Gaussian beam fit is constrained to be symmetric.
 
-???+ info
-    cfg.min_snr:
-        Minimum SNR required for an individual beam map to proceed through
-        the fitting stage.
+???+ info cfg.min_snr
+    Minimum SNR required for an individual beam map to proceed through the fitting stage.
 
-???+ info
-    cfg.bessel_beam:
-        Whether to fit the Bessel-based beam model after the Gaussian fit.
+???+ info cfg.bessel_beam
+    Whether to fit the Bessel-based beam model after the Gaussian fit.
 
-???+ info
-    cfg.min_sigma:
-        Minimum allowed beam-model width used when validating and processing
-        fitted Gaussian and Bessel model parameters.
-        Set to a negetive value to use the whole map.
+???+ info cfg.min_sigma
+    Minimum allowed beam-model width used when validating and processing
+    fitted Gaussian and Bessel model parameters.
+    Set to a negetive value to use the whole map.
 
-???+ info
-    cfg.n_bessel:
-        Number of Bessel terms/components used by the Bessel beam fit.
+???+ info cfg.n_bessel
+    Number of Bessel terms/components used by the Bessel beam fit.
 
-???+ info
-    cfg.n_multipoles:
-        Number of multipoles included in the Bessel beam model. This also
-        controls the number of non-axisymmetric beam modes shown in fitting
-        diagnostics.
+???+ info cfg.n_multipoles
+    Number of multipoles included in the Bessel beam model. This also
+    controls the number of non-axisymmetric beam modes shown in fitting diagnostics.
 
-???+ info
-    cfg.skip_multipoles:
-        Multipoles excluded from the Bessel beam fit.
+???+ info cfg.skip_multipoles
+    Multipoles excluded from the Bessel beam fit.
 
-???+ info
-    cfg.bessel_wing_n_sigma:
-        Controls the extent of the Bessel-model wing relative to the fitted
-        beam. When frequency scaling is enabled, the fitting stage scales
-        this value by the same factor used for the beam mask.
+???+ info cfg.bessel_wing_n_sigma
+    Controls the extent of the Bessel-model wing relative to the fitted
+    beam. When frequency scaling is enabled, the fitting stage scales
+    this value by the same factor used for the beam mask.
 
 ???+ cfg.gauss_multipole
     If True fit for the multipole expansion of the Gauss fit.
@@ -321,58 +307,57 @@ Module for handling all configuration of scripts.
 ### Stacking quality cuts
 
 ???+ info cfg.min_stack_snr
-        Minimum fitted beam SNR required for an observation to contribute to
-        a stack.
+    Minimum fitted beam SNR required for an observation to contribute to a stack.
 
 ???+ info cfg.max_pwv
-        Maximum allowed PWV/elevation-corrected atmospheric loading. Fits are
-        retained only when: `pwv / sin(elevation) <= max_pwv`.
+    Maximum allowed PWV/elevation-corrected atmospheric loading.
+    Fits are retained only when: `pwv / sin(elevation) <= max_pwv`.
 
 ???+ info cfg.max_cut_pix_frac
-        Maximum allowed fraction of pixels masked or removed from a candidate
-        beam map before it is rejected from a stack.
+    Maximum allowed fraction of pixels masked or removed from a candidate
+    beam map before it is rejected from a stack.
 
 ???+ info cfg.min_irat
-        Minimum acceptable inverse-variance median-to-variance ratio. Used to
-        reject maps with poorly behaved or highly structured inverse
-        variance.
+    Minimum acceptable inverse-variance median-to-variance ratio. Used to
+    reject maps with poorly behaved or highly structured inverse
+    variance.
 
 ???+ info cfg.max_cn
-        Threshold on the logarithm of the correlated/white noise levels used
-        during map-quality selection.
+    Threshold on the logarithm of the correlated/white noise levels used
+    during map-quality selection.
 
 ???+ info cfg.corr_ratio_cut
-        Maximum allowed correlated-to-white-noise ratio, subject to the
-        adjustment based on the absolute noise levels.
+    Maximum allowed correlated-to-white-noise ratio, subject to the
+    adjustment based on the absolute noise levels.
 
 ???+ info cfg.miscenter_thresh
-        Maximum allowed displacement, in pixels, between the estimated beam
-        center and the expected center of the reprojected map.
+    Maximum allowed displacement, in pixels, between the estimated beam
+    center and the expected center of the reprojected map.
 
 ### Noise and diagnostic configuration
 
 ???+ info cfg.n_lmin
-        Lower multipole bound used when estimating map noise.
+    Lower multipole bound used when estimating map noise.
 
 ???+ info cfg.n_lmax
-        Upper multipole bound used when estimating map noise.
+    Upper multipole bound used when estimating map noise.
 
 ???+ info cfg.log_thresh
-        Logarithmic threshold used when generating beam-map diagnostic plots.
+    Logarithmic threshold used when generating beam-map diagnostic plots.
 
 ???+ info cfg.empir_cov
-        Whether to calculate empirical covariance information from the
-        individual beam fits. In the fitting stage, empirical covariance is
-        loaded when more than five contributing fits are available. It also
-        controls whether empirical scatter based summary plots are generated.
+    Whether to calculate empirical covariance information from the
+    individual beam fits. In the fitting stage, empirical covariance is
+    loaded when more than five contributing fits are available. It also
+    controls whether empirical scatter based summary plots are generated.
 
 ???+ info cfg.lmax
-        Maximum multipole used when calculating the beam window function and
-        Bessel profile covariance.
+    Maximum multipole used when calculating the beam window function and
+    Bessel profile covariance.
 
 ???+ info cfg.cov_modes
-        Number or configuration of covariance modes retained when calculating
-        the Bessel profile covariance.
+    Number or configuration of covariance modes retained when calculating
+    the Bessel profile covariance.
 
 ### Split and epoch configuration
 
@@ -382,31 +367,112 @@ Module for handling all configuration of scripts.
 
 
 ???+ info cfg.det_splits
-        Detector split names to process. Each script automatically adds
-        `"full"` to this list when selecting stack-map jobs.
+    Detector split names to process. Each script automatically adds
+    `"full"` to this list when selecting stack-map jobs.
 
 ???+ info cfg.split_by
-        Split dimensions used to select stack jobs for fitting.
-        These can be anything that `beam_utils.get_split_vec` can
-        understand.
+    Split dimensions used to select stack jobs for fitting.
+    These can be anything that `beam_utils.get_split_vec` can
+    understand.
 
 ???+ info cfg.metasplits
-        Metadata split definitions passed to the beam-processing utilities
-        when constructing split vectors.
+    Metadata split definitions passed to the beam-processing utilities
+    when constructing split vectors.
 
 ???+ info cfg.epochs
-        Sequence of `(start, end)` time ranges over which stack jobs are
-        constructed or selected. The fitting stage only processes jobs whose
-        epoch range matches one of these configured ranges.
+    Sequence of `(start, end)` time ranges over which stack jobs are
+    constructed or selected. The fitting stage only processes jobs whose
+    epoch range matches one of these configured ranges.
 """
 
 import argparse
 import os
 import time
+from copy import deepcopy
 from typing import Any, Optional
 
 import numpy as np
 import yaml
+
+
+def deep_merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """
+    Recursively merge two dictionaries.
+
+    Values from `b` take precedence over values from `a`. When a key
+    exists in both dictionaries and both corresponding values are
+    dictionaries, those dictionaries are merged recursively. All other
+    values from `b` replace the corresponding values from `a`.
+    Values are deep-copied when inserted into the result, so mutable values
+    in the input dictionaries are not shared with the returned dictionary.
+
+    Parameters
+    ----------
+    a : dict[str, Any]
+        The base dictionary.
+    b : dict[str, Any]
+        The dictionary whose values take precedence.
+
+    Returns
+    -------
+    dict[str, Any]
+        A new dictionary containing the recursively merged values. Neither
+        input dictionary is modified.
+    """
+    result = deepcopy(a)
+    for bk, bv in b.items():
+        av = result.get(bk)
+        if isinstance(av, dict) and isinstance(bv, dict):
+            result[bk] = deep_merge(av, bv)
+        else:
+            result[bk] = deepcopy(bv)
+    return result
+
+
+def load_config(start_cfg: dict[str, Any], cfg_path: str) -> dict[str, Any]:
+    """
+    Load a configuration file and recursively merge its base configuration.
+
+    The configuration at `cfg_path` is loaded and merged with
+    `start_cfg`. If the loaded configuration contains a `base` key then
+    the referenced base configuration is loaded recursively and is merged in.
+
+    Values from the more specific configuration take precedence over values
+    from its base configuration.
+
+    Note that relative ``"base"`` paths are resolved relative to the directory
+    containing the configuration file that references them.
+
+    Parameters
+    ----------
+    start_cfg : dict[str, Any]
+        Configuration values that take precedence over values loaded from `cfg_path`.
+    cfg_path : str
+        Path to the YAML configuration file to load.
+
+    Returns
+    -------
+    dict[str, Any]
+        The fully merged configuration.
+
+    Raises
+    ------
+    FileNotFoundError
+        If `cfg_path` or a referenced base configuration does not exist.
+    yaml.YAMLError
+        If a configuration file contains invalid YAML.
+    """
+    with open(cfg_path) as file:
+        new_cfg = yaml.safe_load(file)
+
+    cfg = deep_merge(new_cfg, start_cfg)
+    if "base" in new_cfg:
+        base_path = new_cfg["base"]
+        if not os.path.isabs(base_path):
+            base_path = os.path.join(os.path.dirname(cfg_path), base_path)
+        return load_config(cfg, base_path)
+
+    return cfg
 
 
 def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
@@ -420,6 +486,7 @@ def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
         Parsed command-line arguments.
     cfg : dict[str, Any]
         Configuration loaded from the YAML file.
+        This is loaded recursively, see `load_config` for details.
     """
     # Only the config is necessary; the rest are just for ease of use.
     parser = argparse.ArgumentParser()
@@ -485,9 +552,7 @@ def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
         help="Per-obs parallelization factor (only for fit_pointing)",
     )
     args = parser.parse_args()
-
-    with open(args.cfg) as f:
-        cfg = yaml.safe_load(f)
+    cfg, _ = load_cfg({}, args.cfg)
 
     return args, cfg
 
