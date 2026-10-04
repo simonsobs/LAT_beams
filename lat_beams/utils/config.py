@@ -135,7 +135,7 @@ Module for handling all configuration of scripts.
     Number of passes to run the ML mapmaker for.
 
 ??? info "cfg.comps"
-   Which comps to mapmake. Should be "T" or "TQU".
+    Which comps to mapmake. Should be "T" or "TQU".
 
 ??? info "cfg.force_zero_cent"
     Whether map-fitting workflows force the beam center to zero
@@ -197,8 +197,8 @@ Module for handling all configuration of scripts.
     unusually noisy detectors within each frequency band.
 
 ??? info "cfg.n_std"
-   Number of standard deviations used by source-flagging logic. It
-   controls the threshold in the blind and SVD source flaggers.
+    Number of standard deviations used by source-flagging logic. It
+    controls the threshold in the blind and SVD source flaggers.
 
 ??? info "cfg.block_size"
     Time/sample block size used by source-flagging logic. It controls the
