@@ -1,0 +1,168 @@
+name: Docs Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+concurrency:
+  group: docs-preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+
+jobs:
+  build-preview:
+    name: Docs Preview
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install mkdocs-material
+          pip install pillow cairosvg mike mkdocstrings[python] \
+            mkdocs-gen-files mkdocs-literate-nav mkdocs-homepage-copier
+
+      - name: Calculate preview URL
+        id: preview
+        run: |
+          echo "path=pr-preview/pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          echo "url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
+
+      - name: Create pending check
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/check-runs" \
+            -f name="Docs Preview" \
+            -f head_sha="${{ github.event.pull_request.head.sha }}" \
+            -f status="in_progress" \
+            -f "output[title]=Building documentation preview" \
+            -f "output[summary]=Building the documentation preview for PR #${{ github.event.pull_request.number }}.%0A%0APreview will be available at ${PREVIEW_URL}"
+
+      - name: Build docs
+        run: |
+          mkdocs build --strict
+
+      - name: Publish preview
+        run: |
+          git fetch origin gh-pages
+
+          git worktree add /tmp/gh-pages origin/gh-pages
+
+          rm -rf "/tmp/gh-pages/${{ steps.preview.outputs.path }}"
+          mkdir -p "/tmp/gh-pages/${{ steps.preview.outputs.path }}"
+
+          cp -r site/. "/tmp/gh-pages/${{ steps.preview.outputs.path }}/"
+
+          cd /tmp/gh-pages
+
+          git config user.name "Docs Deploy"
+          git config user.email "docs.deploy@saianeesh.com"
+
+          git add "${{ steps.preview.outputs.path }}"
+
+          git commit \
+            -m "docs: update PR #${{ github.event.pull_request.number }} preview" \
+            || true
+
+          git push origin HEAD:gh-pages
+
+      - name: Update check - success
+        if: success()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          CHECK_ID=$(gh api \
+            "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs" \
+            --jq '.check_runs[] | select(.name == "Docs Preview") | .id' \
+            | tail -1)
+
+          gh api \
+            --method PATCH \
+            "repos/${{ github.repository }}/check-runs/${CHECK_ID}" \
+            -f status="completed" \
+            -f conclusion="success" \
+            -f "output[title]=Documentation preview is ready" \
+            -f "output[summary]=### 📚 Documentation Preview%0A%0A[Open the documentation preview](${PREVIEW_URL})%0A%0APreview for PR #${{ github.event.pull_request.number }}."
+
+      - name: Update check - failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          CHECK_ID=$(gh api \
+            "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs" \
+            --jq '.check_runs[] | select(.name == "Docs Preview") | .id' \
+            | tail -1)
+
+          gh api \
+            --method PATCH \
+            "repos/${{ github.repository }}/check-runs/${CHECK_ID}" \
+            -f status="completed" \
+            -f conclusion="failure" \
+            -f "output[title]=Documentation build failed" \
+            -f "output[summary]=The documentation build failed. Check the workflow logs for details.%0A%0AThe preview was not published.%0A%0APreview URL: ${PREVIEW_URL}"
+
+
+  cleanup-preview:
+    name: Delete Docs Preview
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Check out gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Delete preview
+        run: |
+          PREVIEW_PATH="pr-preview/pr-${{ github.event.pull_request.number }}"
+
+          if [ -d "$PREVIEW_PATH" ]; then
+            rm -rf "$PREVIEW_PATH"
+
+            git config user.name "Docs Deploy"
+            git config user.email "docs.deploy@saianeesh.com"
+
+            git add -A "$PREVIEW_PATH"
+
+            git commit \
+              -m "docs: remove PR #${{ github.event.pull_request.number }} preview"
+
+            git push origin gh-pages
+          fi
