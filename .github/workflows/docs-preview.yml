@@ -13,6 +13,9 @@ permissions:
   pull-requests: write
   checks: write
 
+env:
+  DISABLE_MKDOCS_2_WARNING: "true"
+
 jobs:
   build-preview:
     name: Docs Preview
