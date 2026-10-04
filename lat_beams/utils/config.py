@@ -5,34 +5,34 @@ Module for handling all configuration of scripts.
 
 ## General pipeline settings
 
-???+ info cfg.root_dir
+??? info "cfg.root_dir"
     Root directory for output products.
 
-???+ info cfg.tel
+??? info "cfg.tel"
     Telescope identifier used when constructing the output directory tree.
 
-???+ info cfg.pointing_type
+??? info "cfg.pointing_type"
     Pointing type used to distinguish beam-analysis products.
     ie. pointing_model, raw, etc.
 
-???+ info cfg.append
+??? info "cfg.append"
     Optional suffix appended to the output directory name.
 
-???+ info cfg.fit_append
+??? info "cfg.fit_append"
     Optional suffix used when naming the HDF5 file containing fitted beam parameters.
 
-???+ info cfg.single_det
+??? info "cfg.single_det"
     Whether the analysis is operating on single-detector data.
     When True,`_single_det` is appended to the output directory name.
 
-???+ info cfg.ctx_path
+??? info "cfg.ctx_path"
     Path to the sotodlib context.
 
-???+ cfg.preprocess_cfg
+??? info "cfg.preprocess_cfg"
     Path to the preprocessing configuration used to load and preprocess
     the data before fitting or mapmaking.
 
-???+ info cfg.source_list
+??? info "cfg.source_list"
     List of source names to process.
     Note that this has the following aliases:
 
@@ -42,344 +42,344 @@ Module for handling all configuration of scripts.
     This distiction is because there are sources we want to map
     that we do not want to fit in the standard pipeline (ie. TauA).
 
-???+ info cfg.start_time
+??? info "cfg.start_time"
     Lower bound on the observation timestamp used when selecting jobs.
     If `args.lookback` is passed then this becomes the current time minus the lookback.
 
-???+ info cfg.stop_time
+??? info "cfg.stop_time"
     Upper bound on the observation timestamp used when selecting jobs.
     If `args.lookback` is passed then this becomes the current time.
 
-???+ info cfg.fwhm_tol
+??? info "cfg.fwhm_tol"
     Fractional tolerance between the measured radial FWHM and the
     nominal band FWHM. A fit is rejected when: `abs(1 - data_fwhm / nominal_fwhm) > fwhm_tol`
     This is aliased to `fwhm_tol_map` for map fitting
     and `fwhm_tol_pointing` for pointing fits..
 
-???+ info cfg.nominal_fwhm
+??? info "cfg.nominal_fwhm"
     Mapping from observing band to nominal beam FWHM. These values are
     used for the initial Gaussian fit, FWHM quality cuts, noise
     estimation, and stacking diagnostics. These should be in arcmins
     and should be a dict where each key is a bandname (ie. "f090").
 
-???+ cfg.min_samps
+??? info "cfg.min_samps"
     Minimum number of source-flagged samples required for a pointing fit
     to proceed. It is also used when deciding which detectors have enough
     source-flagged samples to remain in the fit.
 
-???+ cfg.min_dets
+??? info "cfg.min_dets"
     Minimum number of detectors required after cuts.
 
 ### Mapmaking
 
-???+ info cfg.extent
+??? info "cfg.extent"
     Angular extent of the map region used for beam fitting and stacking.
     Also used when generating fitted-model and residual diagnostic plots.
     Should be in arcseconds.
 
-???+ info cfg.res
+??? info "cfg.res"
     Target pixel resolution used when constructing the common
     tangent-plane WCS for beam maps and high-resolution profile
     calculations. Should be in radians.
 
-???+ info cfg.mask_size
+??? info "cfg.mask_size"
     Angular size of the mask used during mapmaking and beam-model fitting.
     When `cfg.apply_fscale` is enabled, the fitting stage scales this value
     according to the observing frequency before converting it to radians.
     This is aliased by `map_mask_size`.
 
-???+ info cfg.apply_fscale
+??? info "cfg.apply_fscale"
     Whether beam-mask is adjusted according to observing frequency.
     When enabled, the mask is scaled by `90 / frequency_GHz`.
 
-???+ info cfg.aperature
+??? info "cfg.aperature"
     Aperture size used by the Bessel beam model. The fitting stage
     converts this value to a `Quantity` in meters before passing it
     to the Bessel fitting routine.
 
-???+ info cfg.buf
+??? info "cfg.buf"
     Buffer used when estimating the beam center on the original map.
     In units of pixels.
 
-???+ info cfg.buf_cropped
+??? info "cfg.buf_cropped"
     Buffer used when estimating the beam center after the map has been
     cropped, again in pixels.
 
-???+ info cfg.smooth_kern
+??? info "cfg.smooth_kern"
     Angular smoothing scale used when estimating the beam center.
 
-???+ info cfg.snr_extent
+??? info "cfg.snr_extent"
     Angular extent around the estimated beam center excluded when
     estimating map noise for the initial SNR calculation.
 
-???+ info cfg.extent_highres
+??? info "cfg.extent_highres"
     Angular extent of the high-resolution map used for calculating the
     final profile and covariance.
 
-???+ cfg.pixsize_highres
+??? info "cfg.pixsize_highres"
     Pixel size for the high-resolution final profile.
 
-???+ cfg.search_mask
+??? info "cfg.search_mask"
     Mask definition used to search for the source in an initial map.
 
-???+ cfg.del_map
+??? info "cfg.del_map"
     If True delete maps that don't pass cuts in mapmaking.
 
-???+ cfg.cgiters_single
+??? info "cfg.cgiters_single"
     Number of CG iters used when making a single obs ML map.
 
-???+ cfg.cgiters_full
+??? info "cfg.cgiters_full"
     Number of CG iters used when making a full ML map.
 
-???+ cfg.mlpass
+??? info "cfg.mlpass"
     Number of passes to run the ML mapmaker for.
 
-???+ cfg.comps
+??? info "cfg.comps"
    Which comps to mapmake. Should be "T" or "TQU".
 
-???+ cfg.force_zero_cent
+??? info "cfg.force_zero_cent"
     Whether map-fitting workflows force the beam center to zero
     instead of fitting for a recenter.
 
-???+ cfg.n_modes
+??? info "cfg.n_modes"
     Number of modes to remove when mapmaking.
 
-???+ info cfg.relcal_range
+??? info "cfg.relcal_range"
     Allowed relative calibration range.
 
-???+ info cfg.min_det_secs
+??? info "cfg.min_det_secs"
     Minimum number of detector seconds in the source mask needed to mapmake.
 
 ### Pointing fits
 
-???+ cfg.forced_ws
+??? info "cfg.forced_ws"
     Wafer-slot identifiers that are forced to be processed even when they
     are not present in the observation's source tags. The pointing-fit
     script uses these values when constructing the set of wafer slots
     eligible for fitting.
 
 
-???+ cfg.try_all
+??? info "cfg.try_all"
     If True then try all wafer slots.
     This will override forced_ws.
 
-???+ cfg.max_dur
+??? info "cfg.max_dur"
     Maximum allowed observation duration, in hours, when selecting
     pointing-fit observations from the observation database.
 
-???+ cfg.nominal_path
+??? info "cfg.nominal_path"
     Path to the nominal focal-plane pointing model. The pointing-fit script
     loads this HDF5 file and uses it to obtain nominal detector positions,
     calculate the UFM radius, and provide nominal pointing information for
     source masking.
 
-???+ cfg.pointing_mask
+??? info "cfg.pointing_mask"
     Mask definition used when generating source flags with the centered
     source flagger. The pointing-fit script passes this configuration to
     `sotodlib.coords.planets.compute_source_flags` to identify samples
     containing the astronomical source.
 
-???+ cfg.ds
+??? info "cfg.ds"
     Downsampling factor applied to the TOD before filtering and fitting.
 
-???+ cfg.hp_fc
+??? info "cfg.hp_fc"
     High-pass filter cutoff frequency used when filtering the TOD before
     the pointing fit. It is also passed to fit_tod_pointing as part of the
     filter configuration.
 
-???+ cfg.lp_fc
+??? info "cfg.lp_fc"
     Low-pass filter cutoff frequency used when filtering the TOD before
     the pointing fit. It is also passed to fit_tod_pointing as part of the
     filter configuration.
 
-???+ cfg.n_med
+??? info "cfg.n_med"
     Multiplier applied to the median detector noise when rejecting
     unusually noisy detectors within each frequency band.
 
-???+ cfg.n_std
+??? info "cfg.n_std"
    Number of standard deviations used by source-flagging logic. It
    controls the threshold in the blind and SVD source flaggers.
 
-???+ cfg.block_size
+??? info "cfg.block_size"
     Time/sample block size used by source-flagging logic. It controls the
     minimum extent and separation of flagged source regions and the
     buffering applied to source flags.
 
-???+ cfg.trim_samps
+??? info "cfg.trim_samps"
     Number of samples trimmed from each edge of the downsampled TOD to
     avoid Fourier-filter ringing.
 
-???+ cfg.min_hits
+??? info "cfg.min_hits"
     Minimum number of source hits required for an individual detector fit
     to be considered acceptable.
 
-???+ cfg.high_hits
+??? info "cfg.high_hits"
     Higher hit-count threshold used when identifying a sufficiently
     well-sampled set of detectors for estimating the center of the array.
 
-???+ cfg.max_chisq
+??? info "cfg.max_chisq"
     Maximum allowed reduced chi-squared for an individual pointing fit.
     Detectors with reduced chi-squared above this threshold are marked as
     bad.
 
-???+ cfg.min_R2
+??? info "cfg.min_R2"
     Minimum acceptable R2 value for a pointing fit. Fits below this
     threshold are excluded from the focal-plane diagnostic plot and
     treated as bad fits.
 
-???+ cfg.svd_modes
+??? info "cfg.svd_modes"
     Number of SVD modes used by the SVD-based source flagger. When source
     filtering is enabled, the same value is also passed to
     cp.filter_for_sources.
 
-???+ cfg.svd_iters
+??? info "cfg.svd_iters"
     Number of iterations used by the SVD-based source flagger.
 
-???+ cfg.iter_svd_sub
+??? info "cfg.iter_svd_sub"
     Whether the SVD-derived common mode is subtracted from the TOD after
     SVD source identification.
 
-???+ cfg.filter_for_sources
+??? info "cfg.filter_for_sources"
     Whether the pointing-fit TOD is additionally filtered using the source
     flags and SVD modes before fitting.
 
-???+ cfg.source_flag_exp
+??? info "cfg.source_flag_exp"
     Expression defining how source flags are combined. The default
     expression is `(svd + blind) * cent`. The pointing-fit script
     evaluates this expression using source flags supplied by the SVD,
     blind, and centered source flaggers.
 
 
-???+ cfg.fit_pars
+??? info "cfg.fit_pars"
     Additional keyword arguments passed directly to fit_tod_pointing.
 
-???+ cfg.pad
+??? info "cfg.pad"
     Whether the pointing-fit result is padded with detectors that were
     present in the observation metadata but did not produce a fitted
     result. When enabled, missing detectors are added with NaN values for
     floating-point fit fields.
 
-???+ cfg.src_msk
+??? info "cfg.src_msk"
     Whether samples identified by the source-flag expression are used to
     restrict the TOD to the source-crossing region and remove detectors
     with insufficient source-flagged samples.
 
 ### Beam-fit configuration
 
-???+ info cfg.sym_gauss
+??? info "cfg.sym_gauss"
     Whether the Gaussian beam fit is constrained to be symmetric.
 
-???+ info cfg.min_snr
+??? info "cfg.min_snr"
     Minimum SNR required for an individual beam map to proceed through the fitting stage.
 
-???+ info cfg.bessel_beam
+??? info "cfg.bessel_beam"
     Whether to fit the Bessel-based beam model after the Gaussian fit.
 
-???+ info cfg.min_sigma
+??? info "cfg.min_sigma"
     Minimum allowed beam-model width used when validating and processing
     fitted Gaussian and Bessel model parameters.
     Set to a negetive value to use the whole map.
 
-???+ info cfg.n_bessel
+??? info "cfg.n_bessel"
     Number of Bessel terms/components used by the Bessel beam fit.
 
-???+ info cfg.n_multipoles
+??? info "cfg.n_multipoles"
     Number of multipoles included in the Bessel beam model. This also
     controls the number of non-axisymmetric beam modes shown in fitting diagnostics.
 
-???+ info cfg.skip_multipoles
+??? info "cfg.skip_multipoles"
     Multipoles excluded from the Bessel beam fit.
 
-???+ info cfg.bessel_wing_n_sigma
+??? info "cfg.bessel_wing_n_sigma"
     Controls the extent of the Bessel-model wing relative to the fitted
     beam. When frequency scaling is enabled, the fitting stage scales
     this value by the same factor used for the beam mask.
 
-???+ cfg.gauss_multipole
+??? info "cfg.gauss_multipole"
     If True fit for the multipole expansion of the Gauss fit.
 
-???+ cfg.corr_primary
+??? info "cfg.corr_primary"
     Error correlation scale of the mirror in mm.
 
-???+ cfg.eps_primary
+??? info "info" "cfg.eps_primary"
     RMS error of the mirror in um-rms.
 
 ### Stacking quality cuts
 
-???+ info cfg.min_stack_snr
+??? info "cfg.min_stack_snr"
     Minimum fitted beam SNR required for an observation to contribute to a stack.
 
-???+ info cfg.max_pwv
+??? info "cfg.max_pwv"
     Maximum allowed PWV/elevation-corrected atmospheric loading.
     Fits are retained only when: `pwv / sin(elevation) <= max_pwv`.
 
-???+ info cfg.max_cut_pix_frac
+??? info "cfg.max_cut_pix_frac"
     Maximum allowed fraction of pixels masked or removed from a candidate
     beam map before it is rejected from a stack.
 
-???+ info cfg.min_irat
+??? info "cfg.min_irat"
     Minimum acceptable inverse-variance median-to-variance ratio. Used to
     reject maps with poorly behaved or highly structured inverse
     variance.
 
-???+ info cfg.max_cn
+??? info "cfg.max_cn"
     Threshold on the logarithm of the correlated/white noise levels used
     during map-quality selection.
 
-???+ info cfg.corr_ratio_cut
+??? info "cfg.corr_ratio_cut"
     Maximum allowed correlated-to-white-noise ratio, subject to the
     adjustment based on the absolute noise levels.
 
-???+ info cfg.miscenter_thresh
+??? info "cfg.miscenter_thresh"
     Maximum allowed displacement, in pixels, between the estimated beam
     center and the expected center of the reprojected map.
 
 ### Noise and diagnostic configuration
 
-???+ info cfg.n_lmin
+??? info "cfg.n_lmin"
     Lower multipole bound used when estimating map noise.
 
-???+ info cfg.n_lmax
+??? info "cfg.n_lmax"
     Upper multipole bound used when estimating map noise.
 
-???+ info cfg.log_thresh
+??? info "cfg.log_thresh"
     Logarithmic threshold used when generating beam-map diagnostic plots.
 
-???+ info cfg.empir_cov
+??? info "cfg.empir_cov"
     Whether to calculate empirical covariance information from the
     individual beam fits. In the fitting stage, empirical covariance is
     loaded when more than five contributing fits are available. It also
     controls whether empirical scatter based summary plots are generated.
 
-???+ info cfg.lmax
+??? info "cfg.lmax"
     Maximum multipole used when calculating the beam window function and
     Bessel profile covariance.
 
-???+ info cfg.cov_modes
+??? info "cfg.cov_modes"
     Number or configuration of covariance modes retained when calculating
     the Bessel profile covariance.
 
 ### Split and epoch configuration
 
-???+ cfg.det_split_dir
+??? info "cfg.det_split_dir"
     Directory associated with detector splits. This field is initialized
     by setup_cfg but is not directly used by the pointing-fit script.
 
 
-???+ info cfg.det_splits
+??? info "cfg.det_splits"
     Detector split names to process. Each script automatically adds
     `"full"` to this list when selecting stack-map jobs.
 
-???+ info cfg.split_by
+??? info "cfg.split_by"
     Split dimensions used to select stack jobs for fitting.
     These can be anything that `beam_utils.get_split_vec` can
     understand.
 
-???+ info cfg.metasplits
+??? info "cfg.metasplits"
     Metadata split definitions passed to the beam-processing utilities
     when constructing split vectors.
 
-???+ info cfg.epochs
+??? info "cfg.epochs"
     Sequence of `(start, end)` time ranges over which stack jobs are
     constructed or selected. The fitting stage only processes jobs whose
     epoch range matches one of these configured ranges.
