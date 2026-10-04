@@ -1,3 +1,405 @@
+"""
+Module for handling all configuration of scripts.
+
+## Config File Fields
+
+## General pipeline settings
+
+???+ info cfg.root_dir
+        Root directory for pipeline products.
+
+???+ info cfg.tel
+        Telescope identifier used when constructing the output directory
+        tree.
+
+???+ info cfg.pointing_type
+        Pointing/source type used to distinguish beam-analysis products.
+
+???+ info cfg.append
+        Optional suffix appended to the output directory name.
+
+???+ info cfg.fit_append
+        Optional suffix used when naming the HDF5 file containing fitted beam
+        parameters.
+
+???+ info cfg.single_det
+        Whether the analysis is operating on single-detector data. When true,
+        `_single_det` is appended to the output directory name.
+
+???+ info cfg.ctx_path
+        Path to the sotodlib observation context. The context supplies
+        observation metadata and is used when constructing metadata-based
+        splits.
+
+???+ cfg.preprocess_cfg
+    Path to the preprocessing configuration used to load and preprocess
+    the data before fitting or mapmaking.
+
+???+ info cfg.source_list
+        List of source names to process.
+        Note that this has the following aliases:
+
+        * `map_source_list`: used in `make_source_map`.
+        * `fit_source_list`: used in `fit_source_map`.
+
+        This distiction is because there are sources we want to map
+        that we do not want to fit in the standard pipeline (ie. TauA).
+
+???+ info cfg.start_time
+        Lower bound on the observation timestamp used when selecting jobs.
+        If `args.lookback` is passed then this becomes the current time minus the lookback.
+
+???+ info cfg.stop_time
+        Upper bound on the observation timestamp used when selecting jobs.
+        If `args.lookback` is passed then this becomes the current time.
+
+???+ info cfg.fwhm_tol
+        Fractional tolerance between the measured radial FWHM and the
+        nominal band FWHM. A fit is rejected when: `abs(1 - data_fwhm / nominal_fwhm) > fwhm_tol`
+        This is aliased to `fwhm_tol_map` for map fitting
+        and `fwhm_tol_pointing` for pointing fits..
+
+???+ info cfg.nominal_fwhm
+        Mapping from observing band to nominal beam FWHM. These values are
+        used for the initial Gaussian fit, FWHM quality cuts, noise
+        estimation, and stacking diagnostics. These should be in arcmins
+        and should be a dict where each key is a bandname (ie. "f090").
+
+???+ cfg.min_samps
+    Minimum number of source-flagged samples required for a pointing fit
+    to proceed. It is also used when deciding which detectors have enough
+    source-flagged samples to remain in the fit.
+
+???+ cfg.min_dets
+    Minimum number of detectors required after cuts.
+
+### Mapmaking
+
+???+ info cfg.extent
+        Angular extent of the map region used for beam fitting and stacking.
+        Also used when generating fitted-model and residual diagnostic plots.
+        Should be in arcseconds.
+
+???+ info cfg.res
+        Target pixel resolution used when constructing the common
+        tangent-plane WCS for beam maps and high-resolution profile
+        calculations. Should be in radians.
+
+???+ info cfg.mask_size
+        Angular size of the mask used during mapmaking and beam-model fitting.
+        When `cfg.apply_fscale` is enabled, the fitting stage scales this value
+        according to the observing frequency before converting it to radians.
+        This is aliased by `map_mask_size`.
+
+???+ info cfg.apply_fscale
+        Whether beam-mask is adjusted according to
+        observing frequency. When enabled, the mask is scaled by
+        `90 / frequency_GHz`.
+
+???+ info cfg.aperature
+        Aperture size used by the Bessel beam model. The fitting stage
+        converts this value to a `Quantity` in meters before passing it
+        to the Bessel fitting routine.
+
+???+ info cfg.buf
+        Buffer used when estimating the beam center on the original map.
+        In units of pixels.
+
+???+ info cfg.buf_cropped
+        Buffer used when estimating the beam center after the map has been
+        cropped, again in pixels.
+
+???+ info cfg.smooth_kern
+        Angular smoothing scale used when estimating the beam center.
+
+???+ info cfg.snr_extent
+        Angular extent around the estimated beam center excluded when
+        estimating map noise for the initial SNR calculation.
+
+???+ info cfg.extent_highres
+        Angular extent of the high-resolution map used for calculating the
+        final profile and covariance.
+
+???+ cfg.pixsize_highres
+    Pixel size for the high-resolution final profile.
+
+???+ cfg.search_mask
+    Mask definition used to search for the source in an initial map.
+
+???+ cfg.del_map
+    If True delete maps that don't pass cuts in mapmaking.
+
+???+ cfg.cgiters_single
+    Number of CG iters used when making a single obs ML map.
+
+???+ cfg.cgiters_full
+    Number of CG iters used when making a full ML map.
+
+???+ cfg.mlpass
+    Number of passes to run the ML mapmaker for.
+
+???+ cfg.comps
+   Which comps to mapmake. Should be "T" or "TQU".
+
+???+ cfg.force_zero_cent
+    Whether map-fitting workflows force the beam center to zero
+    instead of fitting for a recenter.
+
+???+ cfg.n_modes
+    Number of modes to remove when mapmaking.
+
+???+ info cfg.relcal_range
+    Allowed relative calibration range.
+
+???+ info cfg.min_det_secs
+    Minimum number of detector seconds in the source mask needed to mapmake.
+
+### Pointing fits
+
+???+ cfg.forced_ws
+    Wafer-slot identifiers that are forced to be processed even when they
+    are not present in the observation's source tags. The pointing-fit
+    script uses these values when constructing the set of wafer slots
+    eligible for fitting.
+
+
+???+ cfg.try_all
+    If True then try all wafer slots.
+    This will override forced_ws.
+
+???+ cfg.max_dur
+    Maximum allowed observation duration, in hours, when selecting
+    pointing-fit observations from the observation database.
+
+???+ cfg.nominal_path
+    Path to the nominal focal-plane pointing model. The pointing-fit script
+    loads this HDF5 file and uses it to obtain nominal detector positions,
+    calculate the UFM radius, and provide nominal pointing information for
+    source masking.
+
+???+ cfg.pointing_mask
+    Mask definition used when generating source flags with the centered
+    source flagger. The pointing-fit script passes this configuration to
+    `sotodlib.coords.planets.compute_source_flags` to identify samples
+    containing the astronomical source.
+
+???+ cfg.ds
+    Downsampling factor applied to the TOD before filtering and fitting.
+
+???+ cfg.hp_fc
+    High-pass filter cutoff frequency used when filtering the TOD before
+    the pointing fit. It is also passed to fit_tod_pointing as part of the
+    filter configuration.
+
+???+ cfg.lp_fc
+    Low-pass filter cutoff frequency used when filtering the TOD before
+    the pointing fit. It is also passed to fit_tod_pointing as part of the
+    filter configuration.
+
+???+ cfg.n_med
+    Multiplier applied to the median detector noise when rejecting
+    unusually noisy detectors within each frequency band.
+
+???+ cfg.n_std
+   Number of standard deviations used by source-flagging logic. It
+   controls the threshold in the blind and SVD source flaggers.
+
+???+ cfg.block_size
+    Time/sample block size used by source-flagging logic. It controls the
+    minimum extent and separation of flagged source regions and the
+    buffering applied to source flags.
+
+???+ cfg.trim_samps
+    Number of samples trimmed from each edge of the downsampled TOD to
+    avoid Fourier-filter ringing.
+
+???+ cfg.min_hits
+    Minimum number of source hits required for an individual detector fit
+    to be considered acceptable.
+
+???+ cfg.high_hits
+    Higher hit-count threshold used when identifying a sufficiently
+    well-sampled set of detectors for estimating the center of the array.
+
+???+ cfg.max_chisq
+    Maximum allowed reduced chi-squared for an individual pointing fit.
+    Detectors with reduced chi-squared above this threshold are marked as
+    bad.
+
+???+ cfg.min_R2
+    Minimum acceptable R2 value for a pointing fit. Fits below this
+    threshold are excluded from the focal-plane diagnostic plot and
+    treated as bad fits.
+
+???+ cfg.svd_modes
+    Number of SVD modes used by the SVD-based source flagger. When source
+    filtering is enabled, the same value is also passed to
+    cp.filter_for_sources.
+
+???+ cfg.svd_iters
+    Number of iterations used by the SVD-based source flagger.
+
+???+ cfg.iter_svd_sub
+    Whether the SVD-derived common mode is subtracted from the TOD after
+    SVD source identification.
+
+???+ cfg.filter_for_sources
+    Whether the pointing-fit TOD is additionally filtered using the source
+    flags and SVD modes before fitting.
+
+???+ cfg.source_flag_exp
+    Expression defining how source flags are combined. The default
+    expression is `(svd + blind) * cent`. The pointing-fit script
+    evaluates this expression using source flags supplied by the SVD,
+    blind, and centered source flaggers.
+
+
+???+ cfg.fit_pars
+    Additional keyword arguments passed directly to fit_tod_pointing.
+
+???+ cfg.pad
+    Whether the pointing-fit result is padded with detectors that were
+    present in the observation metadata but did not produce a fitted
+    result. When enabled, missing detectors are added with NaN values for
+    floating-point fit fields.
+
+???+ cfg.src_msk
+    Whether samples identified by the source-flag expression are used to
+    restrict the TOD to the source-crossing region and remove detectors
+    with insufficient source-flagged samples.
+
+### Beam-fit configuration
+
+???+ info
+    cfg.sym_gauss:
+        Whether the Gaussian beam fit is constrained to be symmetric.
+
+???+ info
+    cfg.min_snr:
+        Minimum SNR required for an individual beam map to proceed through
+        the fitting stage.
+
+???+ info
+    cfg.bessel_beam:
+        Whether to fit the Bessel-based beam model after the Gaussian fit.
+
+???+ info
+    cfg.min_sigma:
+        Minimum allowed beam-model width used when validating and processing
+        fitted Gaussian and Bessel model parameters.
+        Set to a negetive value to use the whole map.
+
+???+ info
+    cfg.n_bessel:
+        Number of Bessel terms/components used by the Bessel beam fit.
+
+???+ info
+    cfg.n_multipoles:
+        Number of multipoles included in the Bessel beam model. This also
+        controls the number of non-axisymmetric beam modes shown in fitting
+        diagnostics.
+
+???+ info
+    cfg.skip_multipoles:
+        Multipoles excluded from the Bessel beam fit.
+
+???+ info
+    cfg.bessel_wing_n_sigma:
+        Controls the extent of the Bessel-model wing relative to the fitted
+        beam. When frequency scaling is enabled, the fitting stage scales
+        this value by the same factor used for the beam mask.
+
+???+ cfg.gauss_multipole
+    If True fit for the multipole expansion of the Gauss fit.
+
+???+ cfg.corr_primary
+    Error correlation scale of the mirror in mm.
+
+???+ cfg.eps_primary
+    RMS error of the mirror in um-rms.
+
+### Stacking quality cuts
+
+???+ info cfg.min_stack_snr
+        Minimum fitted beam SNR required for an observation to contribute to
+        a stack.
+
+???+ info cfg.max_pwv
+        Maximum allowed PWV/elevation-corrected atmospheric loading. Fits are
+        retained only when: `pwv / sin(elevation) <= max_pwv`.
+
+???+ info cfg.max_cut_pix_frac
+        Maximum allowed fraction of pixels masked or removed from a candidate
+        beam map before it is rejected from a stack.
+
+???+ info cfg.min_irat
+        Minimum acceptable inverse-variance median-to-variance ratio. Used to
+        reject maps with poorly behaved or highly structured inverse
+        variance.
+
+???+ info cfg.max_cn
+        Threshold on the logarithm of the correlated/white noise levels used
+        during map-quality selection.
+
+???+ info cfg.corr_ratio_cut
+        Maximum allowed correlated-to-white-noise ratio, subject to the
+        adjustment based on the absolute noise levels.
+
+???+ info cfg.miscenter_thresh
+        Maximum allowed displacement, in pixels, between the estimated beam
+        center and the expected center of the reprojected map.
+
+### Noise and diagnostic configuration
+
+???+ info cfg.n_lmin
+        Lower multipole bound used when estimating map noise.
+
+???+ info cfg.n_lmax
+        Upper multipole bound used when estimating map noise.
+
+???+ info cfg.log_thresh
+        Logarithmic threshold used when generating beam-map diagnostic plots.
+
+???+ info cfg.empir_cov
+        Whether to calculate empirical covariance information from the
+        individual beam fits. In the fitting stage, empirical covariance is
+        loaded when more than five contributing fits are available. It also
+        controls whether empirical scatter based summary plots are generated.
+
+???+ info cfg.lmax
+        Maximum multipole used when calculating the beam window function and
+        Bessel profile covariance.
+
+???+ info cfg.cov_modes
+        Number or configuration of covariance modes retained when calculating
+        the Bessel profile covariance.
+
+### Split and epoch configuration
+
+???+ cfg.det_split_dir
+    Directory associated with detector splits. This field is initialized
+    by setup_cfg but is not directly used by the pointing-fit script.
+
+
+???+ info cfg.det_splits
+        Detector split names to process. Each script automatically adds
+        `"full"` to this list when selecting stack-map jobs.
+
+???+ info cfg.split_by
+        Split dimensions used to select stack jobs for fitting.
+        These can be anything that `beam_utils.get_split_vec` can
+        understand.
+
+???+ info cfg.metasplits
+        Metadata split definitions passed to the beam-processing utilities
+        when constructing split vectors.
+
+???+ info cfg.epochs
+        Sequence of `(start, end)` time ranges over which stack jobs are
+        constructed or selected. The fitting stage only processes jobs whose
+        epoch range matches one of these configured ranges.
+"""
+
 import argparse
 import os
 import time
@@ -127,104 +529,27 @@ def setup_cfg(
     if replace is None:
         replace = {}
 
-    # What data to use
+    # General pipeline settings
+    cfg["root_dir"] = os.path.expanduser(cfg.get("root_dir", "~"))
     cfg["tel"] = cfg.get("tel", "lat")
-    cfg["forced_ws"] = args.forced_ws if args.forced_ws is not None else []
-    if cfg.get("try_all", False):
-        cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws."]
-    cfg["fit_source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
+    cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
+    cfg["append"] = cfg.get("append", "")
+    cfg["fit_append"] = cfg.get("fit_append", "")
+    cfg["single_det"] = cfg.get("single_det", False)
+    cfg["ctx_path"] = cfg.get(
+        "ctx_path",
+        f"/global/cfs/cdirs/sobs/metadata/{cfg['tel']}/contexts/"
+        "smurf_detcal_local.yaml",
+    )
+    cfg["preprocess_cfg"] = cfg.get("preprocess_cfg", None)
     cfg["map_source_list"] = cfg.get("map_source_list", ["mars", "saturn"])
+    cfg["fit_source_list"] = cfg.get("fit_source_list", ["mars", "saturn"])
     cfg["start_time"] = cfg.get("start_time", 0)
     if args.lookback is not None:
         cfg["start_time"] = time.time() - 3600 * args.lookback
     cfg["stop_time"] = cfg.get("stop_time", 20000000000)
-    cfg["max_dur"] = cfg.get("max_dur", 2)
-
-    # Get paths to stuff
-    cfg["preprocess_cfg"] = cfg.get("preprocess_cfg", None)
-    cfg["ctx_path"] = cfg.get(
-        "ctx_path",
-        f"/global/cfs/cdirs/sobs/metadata/{cfg['tel']}/contexts/smurf_detcal_local.yaml",
-    )
-    cfg["nominal_path"] = os.path.expanduser(
-        cfg.get("nominal_path", f"~/data/pointing/{cfg['tel']}/nominal/focal_plane.h5")
-    )
-    cfg["root_dir"] = os.path.expanduser(cfg.get("root_dir", "~"))
-    cfg["append"] = cfg.get("append", "")
-    cfg["det_split_dir"] = cfg.get("det_split_dir", "")
-    cfg["det_splits"] = cfg.get("det_splits", [])
-    cfg["fit_append"] = cfg.get("fit_append", "")
-
-    # Source masking and projection settings
-    cfg["res"] = cfg.get("res", (10 / 3600.0) * np.pi / 180.0)
-    cfg["pointing_mask"] = cfg.get(
-        "pointing_mask", {"shape": "circle", "xyr": (0, 0, 0.75)}
-    )
-    cfg["map_mask_size"] = cfg.get("map_mask_size", 0.1)
-    cfg["search_mask"] = cfg.get("search_mask", {"shape": "circle", "xyr": (0, 0, 0.5)})
-
-    # Cuts and processing info
-    cfg["ds"] = cfg.get("ds", 5)
-    ds = cfg["ds"] if apply_ds else 1
-    cfg["hp_fc"] = cfg.get("hp_fc", 4)
-    cfg["lp_fc"] = cfg.get("lp_fc", 30)
-    cfg["n_med"] = cfg.get("n_med", 5)
-    cfg["n_std"] = cfg.get("n_std", 10)
-    cfg["min_samps"] = cfg.get("min_samps", 1000) / ds
-    cfg["block_size"] = int(cfg.get("block_size", 200) // ds)
-    cfg["min_dets"] = cfg.get("min_dets", 30)
-    cfg["trim_samps"] = cfg.get("time_samps", 200) // ds
-    cfg["min_hits"] = cfg.get("min_hits", 1)
-    cfg["high_hits"] = cfg.get("min_hits", 5)
-    cfg["fwhm_tol_pointing"] = cfg.get("fwhm_tol_pointing", 0.2)
-    cfg["fwhm_tol_map"] = cfg.get("fwhm_tol_map", 3)
-    cfg["max_chisq"] = cfg.get("max_chisq", 2.5)
-    cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
-    cfg["min_snr"] = cfg.get("min_snr", 5)
-    cfg["min_R2"] = cfg.get("min_R2", 0.01)
-    cfg["relcal_range"] = cfg.get("relcal_range", [0.3, 2])
-    cfg["min_sigma"] = cfg.get("min_sigma", 3)
-    cfg["ufm_rad"] = cfg.get("ufm_rad", 0.01)
-    cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
-    cfg["svd_modes"] = cfg.get("svd_modes", 10)
-    cfg["svd_iters"] = cfg.get("svd_iters", 5)
-    cfg["iter_svd_sub"] = cfg.get("iter_svd_sub", False)
-    cfg["filter_for_sources"] = cfg.get("filter_for_sources", False)
-    cfg["source_flag_exp"] = cfg.get("source_flag_exp", "(svd + blind) * cent")
-
-    # Geometry
-    cfg["extent"] = cfg.get("extent", 600)
-    cfg["extent_highres"] = cfg.get("extent_highres", 3600)
-    cfg["pixsize_highres"] = cfg.get("pixsize_highres", 1)
-    cfg["snr_extent"] = cfg.get("snr_extent", 500)
-    cfg["buf"] = cfg.get("buf", 30)
-    cfg["buf_cropped"] = cfg.get("buf_cropped", 10)
-    cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
-    cfg["apply_fscale"] = cfg.get("apply_fscale", True)
-
-    # Mapping
-    cfg["n_modes"] = cfg.get("n_modes", 10)
-    cfg["del_map"] = cfg.get("del_map", True)
-    cfg["cgiters_single"] = cfg.get("cgiters_single", 30)
-    cfg["cgiters_full"] = cfg.get("cgiters_full", 400)
-    cfg["mlpass"] = cfg.get("mlpass", 3)
-    cfg["comps"] = cfg.get("comps", "TQU")
-    cfg["single_det"] = cfg.get("single_det", False)
-    cfg["force_zero_cent"] = cfg.get("force_zero_cent", False)
-
-    # Map fits
-    cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
-    cfg["bessel_beam"] = cfg.get("bessel_beam", True)
-    cfg["n_multipoles"] = cfg.get("n_multipoles", 3)
-    cfg["n_bessel"] = cfg.get("n_bessel", 10)
-    cfg["force_bessel_cent"] = cfg.get("force_bessel_cent", False)
-    cfg["bessel_wing_n_sigma"] = cfg.get("bessel_wing_n_sigma", 5)
-    cfg["sym_gauss"] = cfg.get("sym_gauss", True)
-    cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
-    cfg["bessel_powell_bands"] = cfg.get("bessel_powell_bands", ["f090", "f150"])
-    cfg["cov_modes"] = cfg.get("cov_modes", 20)
-
-    # Hardware info
+    if args.lookback is not None:
+        cfg["stop_time"] = time.time()
     cfg["nominal_fwhm"] = cfg.get(
         "nominal_fwhm",
         {
@@ -236,35 +561,117 @@ def setup_cfg(
             "f280": 0.83,
         },
     )
-    cfg["aperature"] = cfg.get("aperature", 6)
-    cfg["corr_primary"] = cfg.get("corr_primary", 280)
-    cfg["eps_primary"] = cfg.get("eps_primary", 17)
+    cfg["min_samps"] = cfg.get("min_samps", 1000)
+    cfg["min_dets"] = cfg.get("min_dets", 30)
 
-    # TOD fits
+    # Mapmaking
+    cfg["extent"] = cfg.get("extent", 600)
+    cfg["res"] = cfg.get("res", (10 / 3600.0) * np.pi / 180.0)
+    cfg["map_mask_size"] = cfg.get("map_mask_size", 0.1)
+    cfg["apply_fscale"] = cfg.get("apply_fscale", True)
+    cfg["aperature"] = cfg.get("aperature", 6)
+    cfg["buf"] = cfg.get("buf", 30)
+    cfg["buf_cropped"] = cfg.get("buf_cropped", 10)
+    cfg["smooth_kern"] = cfg.get("smooth_kern", 60)
+    cfg["snr_extent"] = cfg.get("snr_extent", 500)
+    cfg["extent_highres"] = cfg.get("extent_highres", 3600)
+    cfg["pixsize_highres"] = cfg.get("pixsize_highres", 1)
+    cfg["search_mask"] = cfg.get(
+        "search_mask",
+        {"shape": "circle", "xyr": (0, 0, 0.5)},
+    )
+    cfg["del_map"] = cfg.get("del_map", True)
+    cfg["cgiters_single"] = cfg.get("cgiters_single", 30)
+    cfg["cgiters_full"] = cfg.get("cgiters_full", 400)
+    cfg["mlpass"] = cfg.get("mlpass", 3)
+    cfg["comps"] = cfg.get("comps", "TQU")
+    cfg["force_zero_cent"] = cfg.get("force_zero_cent", False)
+    cfg["n_modes"] = cfg.get("n_modes", 10)
+    cfg["relcal_range"] = cfg.get("relcal_range", [0.3, 2])
+    cfg["min_det_secs"] = cfg.get("min_det_secs", 600)
+
+    # Pointing fits
+    cfg["forced_ws"] = args.forced_ws if args.forced_ws is not None else []
+    if cfg.get("try_all", False):
+        cfg["forced_ws"] = ["ws0", "ws1", "ws2", "ws."]
+    cfg["max_dur"] = cfg.get("max_dur", 2)
+    cfg["nominal_path"] = os.path.expanduser(
+        cfg.get(
+            "nominal_path",
+            f"~/data/pointing/{cfg['tel']}/nominal/focal_plane.h5",
+        )
+    )
+    cfg["pointing_mask"] = cfg.get(
+        "pointing_mask",
+        {"shape": "circle", "xyr": (0, 0, 0.75)},
+    )
+    cfg["ds"] = cfg.get("ds", 5)
+    ds = cfg["ds"] if apply_ds else 1
+    cfg["hp_fc"] = cfg.get("hp_fc", 4)
+    cfg["lp_fc"] = cfg.get("lp_fc", 30)
+    cfg["n_med"] = cfg.get("n_med", 5)
+    cfg["n_std"] = cfg.get("n_std", 10)
+    cfg["block_size"] = int(cfg.get("block_size", 200) // ds)
+    cfg["trim_samps"] = cfg.get("trim_samps", 200) // ds
+    cfg["min_samps"] = cfg["min_samps"] / ds
+    cfg["min_hits"] = cfg.get("min_hits", 1)
+    cfg["high_hits"] = cfg.get("high_hits", 5)
+    cfg["max_chisq"] = cfg.get("max_chisq", 2.5)
+    cfg["min_R2"] = cfg.get("min_R2", 0.01)
+    cfg["svd_modes"] = cfg.get("svd_modes", 10)
+    cfg["svd_iters"] = cfg.get("svd_iters", 5)
+    cfg["iter_svd_sub"] = cfg.get("iter_svd_sub", False)
+    cfg["filter_for_sources"] = cfg.get("filter_for_sources", False)
+    cfg["source_flag_exp"] = cfg.get("source_flag_exp", "(svd + blind) * cent")
     cfg["fit_pars"] = cfg.get("fit_pars", {})
     cfg["pad"] = cfg.get("pad", True)
     cfg["src_msk"] = cfg.get("src_msk", True)
 
-    # Misc
-    cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
-    cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
-    cfg["epochs"] = cfg.get("epochs", [(0, 2e10)])
-    cfg["split_by"] = cfg.get(
-        "split_by",
-        ["band", "tube_slot+band", "source+band", "source+tube_slot+band"],
-    )
-    cfg["metasplits"] = cfg.get("metasplits", {})
-    cfg["lmax"] = cfg.get("lmax", 20000)
-    cfg["r_step"] = cfg.get("r_step", 1)
+    # Beam-fit configuration
+    cfg["sym_gauss"] = cfg.get("sym_gauss", True)
+    cfg["min_snr"] = cfg.get("min_snr", 5)
+    cfg["bessel_beam"] = cfg.get("bessel_beam", True)
+    cfg["min_sigma"] = cfg.get("min_sigma", 3)
+    cfg["n_bessel"] = cfg.get("n_bessel", 10)
+    cfg["n_multipoles"] = cfg.get("n_multipoles", 3)
+    cfg["skip_multipoles"] = cfg.get("skip_multipoles", [])
+    cfg["bessel_wing_n_sigma"] = cfg.get("bessel_wing_n_sigma", 5)
+    cfg["gauss_multipole"] = cfg.get("gauss_multipole", True)
+    cfg["corr_primary"] = cfg.get("corr_primary", 280)
+    cfg["eps_primary"] = cfg.get("eps_primary", 17)
+
+    # Stacking quality cuts
     cfg["min_stack_snr"] = cfg.get("min_stack_snr", 10)
     cfg["max_pwv"] = cfg.get("max_pwv", 2.5)
-    cfg["corr_ratio_cut"] = cfg.get("corr_ratio_cut", 20)
-    cfg["max_cn"] = cfg.get("max_cn", -2.5)
-    cfg["n_lmin"] = cfg.get("n_lmin", 2000)
-    cfg["n_lmax"] = cfg.get("n_lmax", 60000)
     cfg["max_cut_pix_frac"] = cfg.get("max_cut_pix_frac", 0.15)
     cfg["min_irat"] = cfg.get("min_irat", 3)
+    cfg["max_cn"] = cfg.get("max_cn", -2.5)
+    cfg["corr_ratio_cut"] = cfg.get("corr_ratio_cut", 20)
+    cfg["miscenter_thresh"] = cfg.get("miscenter_thresh", 5)
+
+    # Noise and diagnostic configuration
+    cfg["n_lmin"] = cfg.get("n_lmin", 2000)
+    cfg["n_lmax"] = cfg.get("n_lmax", 60000)
+    cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
     cfg["empir_cov"] = cfg.get("empir_cov", False)
+    cfg["lmax"] = cfg.get("lmax", 20000)
+    cfg["cov_modes"] = cfg.get("cov_modes", 20)
+
+    # Split and epoch configuration
+    cfg["det_split_dir"] = cfg.get("det_split_dir", "")
+    cfg["det_splits"] = cfg.get("det_splits", [])
+
+    cfg["split_by"] = cfg.get(
+        "split_by",
+        [
+            "band",
+            "tube_slot+band",
+            "source+band",
+            "source+tube_slot+band",
+        ],
+    )
+    cfg["metasplits"] = cfg.get("metasplits", {})
+    cfg["epochs"] = cfg.get("epochs", [(0, 2e10)])
 
     # Rename for our scope
     for old_name, new_name in replace.items():
