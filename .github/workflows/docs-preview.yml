@@ -3,6 +3,7 @@ name: Docs Preview
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
+
 concurrency:
   group: docs-preview-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -50,18 +51,22 @@ jobs:
           echo "url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
 
       - name: Create pending check
+        id: create-check
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
-          gh api \
+          CHECK_ID=$(gh api \
             --method POST \
             "repos/${{ github.repository }}/check-runs" \
             -f name="Docs Preview" \
             -f head_sha="${{ github.event.pull_request.head.sha }}" \
             -f status="in_progress" \
             -f "output[title]=Building documentation preview" \
-            -f "output[summary]=Building the documentation preview for PR #${{ github.event.pull_request.number }}.%0A%0APreview will be available at ${PREVIEW_URL}"
+            -f "output[summary]=Building the documentation preview for PR #${{ github.event.pull_request.number }}." \
+            --jq '.id')
+
+          echo "check_id=$CHECK_ID" >> "$GITHUB_OUTPUT"
 
       - name: Build docs
         run: |
@@ -91,43 +96,50 @@ jobs:
 
           git push origin HEAD:gh-pages
 
-      - name: Update check - success
-        if: success()
+      - name: Update check
+        if: always()
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          CHECK_ID: ${{ steps.create-check.outputs.check_id }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
-          CHECK_ID=$(gh api \
-            "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs" \
-            --jq '.check_runs[] | select(.name == "Docs Preview") | .id' \
-            | tail -1)
+          if [ -z "$CHECK_ID" ]; then
+            echo "No check ID was created; nothing to update."
+            exit 0
+          fi
+
+          if [ "${{ job.status }}" = "success" ]; then
+            CONCLUSION="success"
+            TITLE="Documentation preview is ready"
+            SUMMARY="### 📚 Documentation Preview
+
+          [Open the documentation preview](${PREVIEW_URL})
+
+          Preview for PR #${{ github.event.pull_request.number }}."
+          else
+            CONCLUSION="failure"
+            TITLE="Documentation build failed"
+            SUMMARY="The documentation build failed. Check the workflow logs for details.
+
+          The preview was not published.
+
+          Preview URL: ${PREVIEW_URL}"
+          fi
 
           gh api \
             --method PATCH \
             "repos/${{ github.repository }}/check-runs/${CHECK_ID}" \
             -f status="completed" \
-            -f conclusion="success" \
-            -f "output[title]=Documentation preview is ready" \
-            -f "output[summary]=### 📚 Documentation Preview%0A%0A[Open the documentation preview](${PREVIEW_URL})%0A%0APreview for PR #${{ github.event.pull_request.number }}."
+            -f conclusion="$CONCLUSION" \
+            -f "output[title]=$TITLE" \
+            -f "output[summary]=$SUMMARY"
 
-      - name: Update check - failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+      - name: Add workflow summary
+        if: always()
         run: |
-          CHECK_ID=$(gh api \
-            "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs" \
-            --jq '.check_runs[] | select(.name == "Docs Preview") | .id' \
-            | tail -1)
-
-          gh api \
-            --method PATCH \
-            "repos/${{ github.repository }}/check-runs/${CHECK_ID}" \
-            -f status="completed" \
-            -f conclusion="failure" \
-            -f "output[title]=Documentation build failed" \
-            -f "output[summary]=The documentation build failed. Check the workflow logs for details.%0A%0AThe preview was not published.%0A%0APreview URL: ${PREVIEW_URL}"
+          echo "## 📚 Documentation Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Open documentation preview](${{ steps.preview.outputs.url }})" >> "$GITHUB_STEP_SUMMARY"
 
 
   cleanup-preview:
@@ -153,16 +165,19 @@ jobs:
         run: |
           PREVIEW_PATH="pr-preview/pr-${{ github.event.pull_request.number }}"
 
-          if [ -d "$PREVIEW_PATH" ]; then
-            rm -rf "$PREVIEW_PATH"
-
-            git config user.name "Docs Deploy"
-            git config user.email "docs.deploy@saianeesh.com"
-
-            git add -A "$PREVIEW_PATH"
-
-            git commit \
-              -m "docs: remove PR #${{ github.event.pull_request.number }} preview"
-
-            git push origin gh-pages
+          if [ ! -d "$PREVIEW_PATH" ]; then
+            echo "No preview found at $PREVIEW_PATH"
+            exit 0
           fi
+
+          rm -rf "$PREVIEW_PATH"
+
+          git config user.name "Docs Deploy"
+          git config user.email "docs.deploy@saianeesh.com"
+
+          git add -A "$PREVIEW_PATH"
+
+          git commit \
+            -m "docs: remove PR #${{ github.event.pull_request.number }} preview"
+
+          git push origin gh-pages
