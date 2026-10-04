@@ -1,3 +1,9 @@
+## 6.2.0 (2026-10-04)
+
+### Feat
+
+- add recursive config feature and fix some spacing
+
 ## 6.1.0 (2026-09-30)
 
 ### Feat
