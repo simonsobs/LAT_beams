@@ -1,12 +1,24 @@
 import argparse
 import os
 import time
+from typing import Any, Optional
 
 import numpy as np
 import yaml
 
 
-def get_args_cfg():
+def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
+    """
+    Parse command-line arguments and load the configuration file.
+    Run the script with `--help` for details.
+
+    Returns
+    -------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+    cfg : dict[str, Any]
+        Configuration loaded from the YAML file.
+    """
     # Only the config is necessary; the rest are just for ease of use.
     parser = argparse.ArgumentParser()
     parser.add_argument("cfg", help="Path to the config file")
@@ -78,8 +90,42 @@ def get_args_cfg():
     return args, cfg
 
 
-def setup_cfg(args, cfg, replace={}, apply_ds=False):
+def setup_cfg(
+    args: argparse.Namespace,
+    cfg: dict[str, Any],
+    replace: Optional[dict[str, str]] = None,
+    apply_ds: bool = False,
+) -> tuple[argparse.Namespace, str]:
+    """
+    Apply defaults and command-line overrides to a loaded configuration.
+    This also lets you rename things. When loading from `cfg_str` you
+    don't need to apply any processing, you can just convert directly
+    to a dict to get the final config.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+    cfg : dict[str, Any]
+        Configuration dictionary to modify.
+    replace : Optional[dict[str, str]], default: None
+        Mapping of configuration keys to rename. Keys present in ``cfg`` are
+        copied to their new names and removed from their old names.
+    apply_ds : bool, default: False
+        Whether downsampling should be applied when calculating
+        sample-dependent configuration values.
+
+    Returns
+    -------
+    cfg : argparse.Namespace
+        Configuration converted to an attribute-accessible namespace.
+    cfg_str : str
+        YAML representation of the final configuration.
+    """
     # TODO: Make a default config yaml file and only do modifications here
+
+    if replace is None:
+        replace = {}
 
     # What data to use
     cfg["tel"] = cfg.get("tel", "lat")
@@ -204,7 +250,8 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
     cfg["epochs"] = cfg.get("epochs", [(0, 2e10)])
     cfg["split_by"] = cfg.get(
-        "split_by", ["band", "tube_slot+band", "source+band", "source+tube_slot+band"]
+        "split_by",
+        ["band", "tube_slot+band", "source+band", "source+tube_slot+band"],
     )
     cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["lmax"] = cfg.get("lmax", 20000)
@@ -220,18 +267,44 @@ def setup_cfg(args, cfg, replace={}, apply_ds=False):
     cfg["empir_cov"] = cfg.get("empir_cov", False)
 
     # Rename for our scope
-    for o, n in replace.items():
-        if o not in cfg:
+    for old_name, new_name in replace.items():
+        if old_name not in cfg:
             continue
-        cfg[n] = cfg[o]
-        del cfg[o]
+        cfg[new_name] = cfg[old_name]
+        del cfg[old_name]
 
     cfg_str = yaml.dump(cfg)
 
     return argparse.Namespace(**cfg), cfg_str
 
 
-def setup_paths(root_dir, project, tel, append=""):
+def setup_paths(
+    root_dir: str,
+    project: str,
+    tel: str,
+    append: str = "",
+) -> tuple[str, str]:
+    """
+    Create and return the plot and data directories.
+
+    Parameters
+    ----------
+    root_dir : str
+        Root directory under which the project directories are created.
+    project : str
+        Project name used to construct the directory paths.
+    tel : str
+        Telescope name used to construct the directory paths.
+    append : str, optional
+        Additional path component appended to the project/telescope paths.
+
+    Returns
+    -------
+    plot_dir : str
+        Path to the plot directory.
+    data_dir : str
+        Path to the data directory.
+    """
     plot_dir = os.path.join(root_dir, "plots", project, tel, append)
     data_dir = os.path.join(root_dir, "data", project, tel, append)
     os.makedirs(plot_dir, exist_ok=True)
