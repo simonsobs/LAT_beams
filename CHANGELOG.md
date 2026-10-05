@@ -1,3 +1,13 @@
+## 6.3.0 (2026-10-05)
+
+### Feat
+
+- add support for a test mode jobdb
+
+### Fix
+
+- lots of small fixes to new config and to alt db
+
 ## 6.2.0 (2026-10-04)
 
 ### Feat
