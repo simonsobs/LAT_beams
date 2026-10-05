@@ -5,6 +5,8 @@ TODO: Add some quick tools for inspecting the jobdb here.
 """
 
 import os
+import shutil
+import sqlite3
 import sys
 import time
 from enum import Enum
@@ -83,11 +85,124 @@ def fail(job: jobdb.Job, errcode: ErrCode, msg: str, logger: Optional[LoggerLike
     job.jstate = cast(sqy.Column[str], jobdb.JState.failed)
 
 
+def _sync_jobs(db_a_path, db_b_path):
+    conn_a = sqlite3.connect(db_a_path)
+    conn_b = sqlite3.connect(db_b_path)
+
+    try:
+        jobs = conn_a.execute("""
+            SELECT
+                id,
+                jclass,
+                jstate,
+                lock,
+                lock_owner,
+                creation_time,
+                visit_time,
+                visit_count
+            FROM jobs
+            WHERE jclass IN ('beam_map', 'fit_map')
+        """).fetchall()
+
+        for job in jobs:
+            (
+                job_id,
+                jclass,
+                jstate,
+                lock,
+                lock_owner,
+                creation_time,
+                visit_time,
+                visit_count,
+            ) = job
+
+            # Look for the same job in B.
+            existing = conn_b.execute(
+                """
+                SELECT visit_time
+                FROM jobs
+                WHERE id = ?
+            """,
+                (job_id,),
+            ).fetchone()
+
+            # Copy if the job doesn't exist in B.
+            if existing is None:
+                should_copy = True
+            else:
+                b_visit_time = existing[0]
+
+                # Copy only when visit_time is exactly the same.
+                should_copy = visit_time == b_visit_time
+
+            if not should_copy:
+                continue
+
+            # Insert/replace the job.
+            conn_b.execute(
+                """
+                INSERT OR REPLACE INTO jobs (
+                    id,
+                    jclass,
+                    jstate,
+                    lock,
+                    lock_owner,
+                    creation_time,
+                    visit_time,
+                    visit_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                job,
+            )
+
+            conn_b.execute(
+                """
+                DELETE FROM tags
+                WHERE job_id = ?
+            """,
+                (job_id,),
+            )
+
+            tags = conn_a.execute(
+                """
+                SELECT "key", value
+                FROM tags
+                WHERE job_id = ?
+            """,
+                (job_id,),
+            ).fetchall()
+
+            conn_b.executemany(
+                """
+                INSERT INTO tags (job_id, "key", value)
+                VALUES (?, ?, ?)
+            """,
+                [(job_id, key, value) for key, value in tags],
+            )
+        conn_b.commit()
+    except Exception:
+        conn_b.rollback()
+        raise
+    finally:
+        conn_a.close()
+        conn_b.close()
+
+
 def make_jobdb(
     comm: Optional["Comm"], data_dir: str, append: str = ""
 ) -> jobdb.JobManager:
     """
     Create or load a `JobDB` at `{data_dir}/jobdb{append}.db`.
+    If a jobdb without `append` exists its entries will be merged
+    into the `append` jobdb based on the last update.
+
+    Note that this can create some confusion because it may reference
+    jobs that were run in the main jobdb, to address this jobs with jclass
+    `stack_maps` and `fit_stacks` are not copied, but use with caution
+    if you are running jobs of jclass `source_map` or `fit_map`.
+    If you are running one of those some manual reconfiguring may be needed.
+    This should be used to test new methods or create custom one-off stacks.
 
     Parameters
     ----------
@@ -108,11 +223,18 @@ def make_jobdb(
         For better MPI support this has a timeout of 10 and uses NullPool.
     """
     path = os.path.join(data_dir, f"jobdb{append}.db")
+    path_noa = os.path.join(data_dir, f"jobdb.db")
     myrank = 0
     if comm is not None:
         myrank = comm.Get_rank()
     # Let rank 0 make jobdb first to avoid race conditions
+    jdb = None
     if myrank == 0:
+        if append != "" and os.path.isfile(path_noa):
+            if os.path.isfile(path):
+                _sync_jobs(path_noa, path)
+            else:
+                shutil.copyfile(path_noa, path)
         engine = sqy.create_engine(
             f"sqlite:///{path}",
             connect_args={"timeout": 10},
@@ -120,6 +242,7 @@ def make_jobdb(
         )
         jdb = jobdb.JobManager(engine=engine)
         jdb.clear_locks(jobs="all")
+
         if comm is None:
             return jdb
     if comm is not None:
@@ -131,6 +254,8 @@ def make_jobdb(
             poolclass=NullPool,
         )
         jdb = jobdb.JobManager(engine=engine)
+    if jdb is None:
+        raise ValueError("Jobdb is none somehow!")
     return jdb
 
 
@@ -215,6 +340,12 @@ def setup_jobs(
     jobs : list[jobdb.Job]
         Complete list of jobs selected for processing across all MPI ranks.
     """
+    if append != "" and jclass in ["beam_map", "fit_map"]:
+        logger.warning(
+            "Appending %s to jobdb but running %s jobs, this can me messy, make sure you know what you are doing",
+            append,
+            jclass,
+        )
     myrank, nproc = 0, 1
     if comm is not None:
         myrank = comm.Get_rank()
@@ -321,30 +452,6 @@ def setup_jobs(
     logger.info("%s jobs to run!", len(all_jobs))
 
     return jdb, all_jobs
-
-
-def update_jobs_retry(jdb, jobs, max_retries, logger):
-    t0 = time.time()
-    attempt = 0
-    success = False
-    for attempt in range(max_retries):
-        try:
-            jdb.update_jobs(jobs)
-            success = True
-            break
-        except OperationalError as e:
-            if "database is locked" in str(e):
-                time.sleep(1)
-                continue
-            raise
-    if not success:
-        logger.error("Failed to write with %d attempts", attempt + 1)
-    else:
-        logger.debug(
-            "Took %s seconds to write with %d attempts",
-            str(time.time() - t0),
-            attempt + 1,
-        )
 
 
 def update_jobs_retry(

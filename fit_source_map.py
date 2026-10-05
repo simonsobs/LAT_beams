@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from functools import partial
 from typing import cast
@@ -139,7 +140,11 @@ plot_dir, data_dir = setup_paths(
 )
 outfile = None
 if myrank == 0:
-    outfile = h5py.File(os.path.join(data_dir, f"beam_pars{cfg.fit_append}.h5"), "a")
+    of_path = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
+    of_path_noa = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
+    if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
+        shutil.copyfile(of_path_noa, of_path)
+    outfile = h5py.File(of_path, "a")
 
 # Get det splits
 det_split_names = ["full"] + cfg.det_splits
@@ -169,6 +174,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory_buffer,
     False,
     logger,
+    cfg.test_append,
 )
 
 # Even things out
@@ -480,7 +486,7 @@ for i, j in enumerate(joblist):
     obs = ctx.obsdb.get(obs_id)
     ufm_plot_dir = os.path.join(
         plot_dir,
-        job.tags["source"],
+        f'{job.tags["source"]}{cfg.test_append}',
         str(obs["timestamp"])[:5],
         obs_id,
         job.tags["array"],

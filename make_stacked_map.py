@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
@@ -6,13 +7,11 @@ from functools import partial
 from typing import cast
 
 import astropy.units as u
-import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 import sqlalchemy as sqy
 import yaml
 from expiringdict import ExpiringDict
-from matplotlib.colors import SymLogNorm
 from mpi4py import MPI
 from pixell import enmap, reproject
 from sotodlib.coords.planets import get_source_pos
@@ -481,7 +480,7 @@ def stack_job(
 ):
     data_dir_spl = os.path.join(
         data_dir,
-        "stacks",
+        "stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -489,7 +488,7 @@ def stack_job(
     )
     plot_dir_spl = os.path.join(
         plot_dir,
-        "stacks",
+        "stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -740,8 +739,12 @@ plot_dir, data_dir = setup_paths(
     f"{cfg.pointing_type}{(cfg.append != '') * '_'}{cfg.append}{(cfg.single_det) * '_single_det'}",
 )
 os.makedirs(plot_dir, exist_ok=True)
-fpath = os.path.join(data_dir, "beam_pars.h5")
-jdb = make_jobdb(comm, data_dir)
+fpath = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
+if myrank == 0:
+    of_path_noa = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
+    if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
+        shutil.copyfile(of_path_noa, fpath)
+jdb = make_jobdb(comm, data_dir, cfg.test_append)
 
 # Load fits
 logger.info("Loading map metadata and fits")
@@ -811,6 +814,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory_buffer,
     args.plot_only,
     logger,
+    cfg.test_append,
 )
 all_jobs = np.array(all_jobs)
 
