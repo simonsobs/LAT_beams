@@ -18,8 +18,12 @@ Module for handling all configuration of scripts.
 ??? info "cfg.append"
     Optional suffix appended to the output directory name.
 
-??? info "cfg.fit_append"
-    Optional suffix used when naming the HDF5 file containing fitted beam parameters.
+??? info "cfg.test_append"
+    Optional suffix used when naming directories and jobdb. Mostly used for testing and one-offs.
+
+??? info "cfg.copy_fits_test"
+    If True when when `test_append` is not "" then make a copy of the beam fits.
+    This will overwrite an existing file.
 
 ??? info "cfg.single_det"
     Whether the analysis is operating on single-detector data.
@@ -552,7 +556,7 @@ def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
         help="Per-obs parallelization factor (only for fit_pointing)",
     )
     args = parser.parse_args()
-    cfg, _ = load_cfg({}, args.cfg)
+    cfg = load_config({}, args.cfg)
 
     return args, cfg
 
@@ -599,7 +603,8 @@ def setup_cfg(
     cfg["tel"] = cfg.get("tel", "lat")
     cfg["pointing_type"] = cfg.get("pointing_type", "pointing_model")
     cfg["append"] = cfg.get("append", "")
-    cfg["fit_append"] = cfg.get("fit_append", "")
+    cfg["test_append"] = cfg.get("test_append", "")
+    cfg["copy_fits_test"] = cfg.get("copy_fits_test", True)
     cfg["single_det"] = cfg.get("single_det", False)
     cfg["ctx_path"] = cfg.get(
         "ctx_path",

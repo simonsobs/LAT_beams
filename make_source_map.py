@@ -319,6 +319,7 @@ jdb, all_jobs = setup_jobs(
     args.job_memory_buffer,
     args.plot_only,
     logger,
+    cfg.test_append,
 )
 
 # Even things out
@@ -389,7 +390,10 @@ for i, j in enumerate(joblist):
             continue
 
         obs_plot_dir = os.path.join(
-            plot_dir, job.tags["source"], str(obs["timestamp"])[:5], obs_id
+            plot_dir,
+            f'{job.tags["source"]}{cfg.test_append}',
+            str(obs["timestamp"])[:5],
+            obs_id,
         )
         cent = estimate_cent(solved[0], wmap[0][0], cfg.smooth_kern / pixsize, cfg.buf)
         posmap = solved.posmap()
@@ -451,10 +455,16 @@ for i, j in enumerate(joblist):
             continue
 
     obs_plot_dir = os.path.join(
-        plot_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
+        plot_dir,
+        f"{src_name}{cfg.test_append}",
+        str(obs["timestamp"])[:5],
+        obs["obs_id"],
     )
     obs_data_dir = os.path.join(
-        data_dir, src_name, str(obs["timestamp"])[:5], obs["obs_id"]
+        data_dir,
+        f"{src_name}{cfg.test_append}",
+        str(obs["timestamp"])[:5],
+        obs["obs_id"],
     )
 
     os.makedirs(obs_data_dir, exist_ok=True)
