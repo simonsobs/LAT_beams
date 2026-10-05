@@ -141,7 +141,7 @@ plot_dir, data_dir = setup_paths(
 outfile = None
 if myrank == 0:
     of_path = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
-    of_path_noa = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
+    of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
     if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
         shutil.copyfile(of_path_noa, of_path)
     outfile = h5py.File(of_path, "a")

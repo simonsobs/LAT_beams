@@ -715,10 +715,13 @@ def get_fit_vec(
 def _get_vec(spl, fits, ctx, round_to):
     if spl in fits.dtype.names:
         return fits[spl].astype(str)
-    split_vec = []
-    for fit in fits:
-        obs = ctx.obsdb.get(fit["obs_id"])
-        split_vec += [obs[spl]]
+    try:
+        split_vec = get_fit_vec(fits, spl).value
+    except:
+        split_vec = []
+        for fit in fits:
+            obs = ctx.obsdb.get(fit["obs_id"])
+            split_vec += [obs[spl]]
     split_vec = np.array(split_vec)
     if np.issubdtype(split_vec.dtype, np.number):
         split_vec = np.round(split_vec, round_to)

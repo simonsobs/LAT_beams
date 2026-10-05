@@ -152,7 +152,7 @@ def plot_model_maps(
 ):
     plot_dir_spl = os.path.join(
         plot_dir,
-        "stacks{cfg.test_append}",
+        f"stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -422,7 +422,7 @@ def fit_job(
             "aman"
         ].tolist()
     # High-resolution profile
-    prof_dir = os.path.join(data_dir, "stack_profiles{cfg.test_append}", split, spl)
+    prof_dir = os.path.join(data_dir, f"stack_profiles{cfg.test_append}", split, spl)
     os.makedirs(prof_dir, exist_ok=True)
     prof_cov, _, jk_prof_cov = fb.bessel_profile_covariance(
         aman.bessel,
@@ -537,7 +537,7 @@ def fit_job(
     resid = imap - model
     data_dir_spl = os.path.join(
         data_dir,
-        "stacks{cfg.test_append}",
+        f"stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -610,7 +610,7 @@ def replot_job(
     imap = enmap.unapply_window(imap, order=0)
     model_path = os.path.join(
         data_dir,
-        "stacks{cfg.test_append}",
+        f"stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -679,7 +679,9 @@ def make_summary_plots(
         to_plot_l["dataset"] = []
         to_plot_l["det_split"] = []
 
-        prof_plot_dir = os.path.join(plot_dir, "stack_profiles{cfg.test_append}", split)
+        prof_plot_dir = os.path.join(
+            plot_dir, f"stack_profiles{cfg.test_append}", split
+        )
         os.makedirs(prof_plot_dir, exist_ok=True)
 
         for spl in jobdict[split].keys():
@@ -691,7 +693,7 @@ def make_summary_plots(
                 for det_split in jobdict[split][spl][epoch].keys():
                     job = jobdict[split][spl][epoch][det_split]
                     prof_dir = os.path.join(
-                        data_dir, "stack_profiles{cfg.test_append}", split, spl
+                        data_dir, f"stack_profiles{cfg.test_append}", split, spl
                     )
                     h5_file = os.path.join(
                         prof_dir,
@@ -997,7 +999,7 @@ def main():
         cfg.tel,
         f"{cfg.pointing_type}{(cfg.append != '') * '_'}{cfg.append}{(cfg.single_det) * '_single_det'}",
     )
-    out_file = os.path.join(data_dir, "stacks{cfg.test_append}", "beam_pars.h5")
+    out_file = os.path.join(data_dir, f"stacks{cfg.test_append}", "beam_pars.h5")
 
     # Coords
     pixsize = 3600 * np.rad2deg(cfg.res)

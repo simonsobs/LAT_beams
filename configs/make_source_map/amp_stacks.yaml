@@ -1,0 +1,13 @@
+base: nersc_atm.yaml
+test_append: "_amp_stacks"
+epochs:
+    - [1756699200, 1767243600]
+metasplits:
+  high_amp:
+    - "gauss.amp"
+    - [.01, 1]
+  low_amp:
+    - "gauss.amp"
+    - [0, .01]
+split_by:
+  - "band+high_amp"

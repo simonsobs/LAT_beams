@@ -480,7 +480,7 @@ def stack_job(
 ):
     data_dir_spl = os.path.join(
         data_dir,
-        "stacks{cfg.test_append}",
+        f"stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -488,7 +488,7 @@ def stack_job(
     )
     plot_dir_spl = os.path.join(
         plot_dir,
-        "stacks{cfg.test_append}",
+        f"stacks{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -741,7 +741,7 @@ plot_dir, data_dir = setup_paths(
 os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
 if myrank == 0:
-    of_path_noa = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
+    of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
     if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
         shutil.copyfile(of_path_noa, fpath)
 jdb = make_jobdb(comm, data_dir, cfg.test_append)

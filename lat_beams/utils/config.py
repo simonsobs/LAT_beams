@@ -556,7 +556,7 @@ def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
         help="Per-obs parallelization factor (only for fit_pointing)",
     )
     args = parser.parse_args()
-    cfg, _ = load_cfg({}, args.cfg)
+    cfg = load_config({}, args.cfg)
 
     return args, cfg
 
