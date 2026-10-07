@@ -387,6 +387,24 @@ Module for handling all configuration of scripts.
     Sequence of `(start, end)` time ranges over which stack jobs are
     constructed or selected. The fitting stage only processes jobs whose
     epoch range matches one of these configured ranges.
+
+
+### Abscal
+
+??? info "cfg.abscal_r_frac"
+    Value to scale the mapmaking radius by when selecting a portion of the profile to
+    use when estimating amplitude for abscal. A value of 1 will use the full mapmaking region.
+    You probably never want this to be > 1.
+
+??? info "cfg.abscal_lmin"
+    Minimum ell to use when estimating amplitude for abscal.
+    If <0 the estimating is all done in real space. If this is >= 0
+    then a second estimation is done from the window function at ells
+    greater than or equal to this.
+
+??? info "cfg.abscal_from_model"
+    If True use the model profile when estimating abscal.
+    If False use the data profile instead.
 """
 
 import argparse
@@ -742,6 +760,11 @@ def setup_cfg(
     )
     cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["epochs"] = cfg.get("epochs", [(0, 2e10)])
+
+    # Abscal
+    cfg["abscal_r_frac"] = cfg.get("abscal_r_frac", 0.3)
+    cfg["abscal_lmin"] = cfg.get("abscal_lmin", -1)
+    cfg["abscal_from_model"] = cfg.get("abscal_from_model", False)
 
     # Rename for our scope
     for old_name, new_name in replace.items():
