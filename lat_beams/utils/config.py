@@ -42,6 +42,7 @@ Module for handling all configuration of scripts.
 
     * `map_source_list`: used in `make_source_map`.
     * `fit_source_list`: used in `fit_source_map`.
+    * `abscal_source_list`: used in `make_abscal`.
 
     This distiction is because there are sources we want to map
     that we do not want to fit in the standard pipeline (ie. TauA).

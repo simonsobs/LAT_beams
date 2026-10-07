@@ -337,7 +337,7 @@ args, cfg_dict = get_args_cfg()
 cfg, cfg_str = setup_cfg(
     args,
     cfg_dict,
-    {"map_mask_size": "mask_size"},
+    {"map_mask_size": "mask_size", "abscal_source_list": "source_list"},
 )
 
 with open(cfg.ctx_path) as f:
@@ -391,6 +391,7 @@ if myrank == 0:
     msk *= data_fwhm < 1.5 * fwhm_exp
     msk *= data_fwhm > 0.5 * fwhm_exp
     msk *= solid_angle > 0
+    msk *= np.isin(bu.get_split_vec(all_fits, "source", ctx), cfg.source_list)
     pwv = bu.get_split_vec(all_fits, "pwv_mean", ctx)
     pwv[pwv == "None"] = "1"
     pwv = np.array(pwv, float)
