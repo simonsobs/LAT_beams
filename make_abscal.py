@@ -215,8 +215,10 @@ def abscal_job(
     else:
         prof = prof_full.data_prof_cov
     prof_interp = PchipInterpolator(np.deg2rad(np.asarray(prof.r) / 3600), prof.profile)
-    bl_stack = prof.bl
-    ell_msk = prof.ells >= cfg.abscal_lmin
+    bl_stack = np.asarray(prof.bl)
+    ell_msk = (prof.ells >= cfg.abscal_lmin) * (bl_stack > 0.01 * bl_stack[0])
+    if np.sum(ell_msk) <= 1:
+        raise ValueError("ell mask is fewer than 10 points")
 
     num_fits = len(sfits)
     obslist = []
