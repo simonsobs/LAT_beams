@@ -49,27 +49,23 @@ def get_jobdict(jdb):
     }
 
 
-def get_jobit(jdb, cfg, all_fits, ctx, det_splits):
+def get_jobit(jdb, cfg, stack_jobs, det_splits):
     _ = jdb
     jobit = []
+    epochs = np.array(cfg.epochs)
     if myrank == 0:
-        for epoch in cfg.epochs:
-            times = all_fits["time"]
-            tmsk = (times >= epoch[0]) * (times < epoch[1])
-            if np.sum(tmsk) == 0:
+        for sjob in stack_jobs:
+            split = sjob.tags["split"]
+            if split not in cfg.split_by:
                 continue
-            fits = all_fits[tmsk]
-            for split in cfg.split_by:
-                split_vec = bu.get_split_vec(
-                    fits, split, ctx, metasplits=cfg.metasplits
-                )
-                for spl in np.unique(split_vec):
-                    if "NOMATCH" in spl:
-                        continue
-                    for det_split in np.unique(fits["split"]):
-                        if det_split not in det_splits:
-                            continue
-                        jobit += [(split, spl, det_split, epoch[0], epoch[1])]
+            spl = sjob.tags["split_str"]
+            det_split = sjob.tags["det_split"]
+            if det_split not in det_splits:
+                continue
+            epoch = np.array([sjob.tags["epoch_start"], sjob.tags["epoch_end"]])
+            if not np.any(epochs == epoch):
+                continue
+            jobit += [(split, spl, det_split, epoch[0], epoch[1])]
     return jobit
 
 
@@ -421,8 +417,7 @@ jdb, all_jobs = setup_jobs(
     partial(
         get_jobit,
         cfg=cfg,
-        all_fits=all_fits,
-        ctx=ctx,
+        stack_jobs=jdb.get_jobs(jclass="stack_maps", jstate="done"),
         det_splits=det_split_names,
     ),
     get_jobstr,
