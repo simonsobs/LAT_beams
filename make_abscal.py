@@ -7,6 +7,7 @@ from typing import cast
 
 import astropy.units as u
 import h5py
+import latcom.utils.abscal_utils as au
 import matplotlib.pyplot as plt
 import numpy as np
 import sqlalchemy as sqy
@@ -146,13 +147,22 @@ def get_abscal(
         bl = beam2bl(r, (prof - off) / amp, cfg.lmax)
         amp *= np.dot(bl[ell_msk], bl_stack[ell_msk]) / np.dot(bl[ell_msk], bl[ell_msk])
 
-    # TODO: Convert to an abscal!
     # All the metadata you need should be in `fjob` and `fit` but I load the ones I think you need below
     source = fjob.tags["source"]
     array = (fjob.tags["array"],)
     band = fit["band"]
     timestamp = fit["time"]
-    abscal = 0  ### CHANGE ME
+    # get abscal and optical efficiencies.
+    abscal, opt_eff, raw_abscal, raw_opt_eff = au.get_single_abscal(
+        amp=amp,
+        planet=source,
+        timestamp=timestamp,
+        band=band,
+        ufm=UFM,
+        el_obs=EL_OBS,
+        solid_angle=SOLID_ANGLE,
+        pwv_obs=PWV_OBS,
+    )
 
     return (
         fjobstr,
