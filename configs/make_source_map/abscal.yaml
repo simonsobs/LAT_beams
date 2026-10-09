@@ -1,0 +1,11 @@
+base: nersc_atm.yaml
+abscal_source_list:
+  - "mars"
+  - "uranus"
+split_by:
+  - "mainsrc+tube_slot+band"
+  - "nojup+tube_slot+band"
+det_splits: []
+abscal_r_frac: .1
+abscal_lmin: -1 #8000
+abscal_from_model: false

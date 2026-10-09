@@ -42,6 +42,7 @@ Module for handling all configuration of scripts.
 
     * `map_source_list`: used in `make_source_map`.
     * `fit_source_list`: used in `fit_source_map`.
+    * `abscal_source_list`: used in `make_abscal`.
 
     This distiction is because there are sources we want to map
     that we do not want to fit in the standard pipeline (ie. TauA).
@@ -387,6 +388,39 @@ Module for handling all configuration of scripts.
     Sequence of `(start, end)` time ranges over which stack jobs are
     constructed or selected. The fitting stage only processes jobs whose
     epoch range matches one of these configured ranges.
+
+
+### Abscal
+
+??? info "cfg.abscal_r_frac"
+    Value to scale the mapmaking radius by when selecting a portion of the profile to
+    use when estimating amplitude for abscal. A value of 1 will use the full mapmaking region.
+    You probably never want this to be > 1.
+
+??? info "cfg.abscal_lmin"
+    Minimum ell to use when estimating amplitude for abscal.
+    If <0 the estimating is all done in real space. If this is >= 0
+    then a second estimation is done from the window function at ells
+    greater than or equal to this.
+
+??? info "cfg.abscal_from_model"
+    If True use the model profile when estimating abscal.
+    If False use the data profile instead.
+
+??? info "cfg.abscal_max_avg_prat"
+    If the mean ratio between the normalized profile and the
+    stack in the abscal radius is above this then we discard
+    that map from the abscal dataset.
+
+??? info "cfg.abscal_max_pdiff"
+    If the difference between the normalized profile and the
+    stack in the core is above this then we discard
+    that map from the abscal dataset.
+
+??? info "cfg.abscal_max_perr"
+    If the rsm error between the normalized profile and the
+    stack core is above this then we discard
+    that map from the abscal dataset.
 """
 
 import argparse
@@ -742,6 +776,14 @@ def setup_cfg(
     )
     cfg["metasplits"] = cfg.get("metasplits", {})
     cfg["epochs"] = cfg.get("epochs", [(0, 2e10)])
+
+    # Abscal
+    cfg["abscal_r_frac"] = cfg.get("abscal_r_frac", 0.3)
+    cfg["abscal_lmin"] = cfg.get("abscal_lmin", -1)
+    cfg["abscal_from_model"] = cfg.get("abscal_from_model", False)
+    cfg["abscal_max_avg_prat"] = cfg.get("abscal_max_avg_prat", 1.5)
+    cfg["abscal_max_pdiff"] = cfg.get("abscal_max_pdiff", 0.05)
+    cfg["abscal_max_perr"] = cfg.get("abscal_max_perr", 0.02)
 
     # Rename for our scope
     for old_name, new_name in replace.items():
