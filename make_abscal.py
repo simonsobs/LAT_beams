@@ -7,6 +7,7 @@ from typing import cast
 
 import astropy.units as u
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import sqlalchemy as sqy
 import yaml
@@ -52,7 +53,7 @@ def get_jobdict(jdb):
 def get_jobit(jdb, cfg, stack_jobs, det_splits):
     _ = jdb
     jobit = []
-    epochs = np.array(cfg.epochs)
+    epochs = np.array(cfg.epochs, dtype=float)
     if myrank == 0:
         for sjob in stack_jobs:
             split = sjob.tags["split"]
@@ -62,10 +63,20 @@ def get_jobit(jdb, cfg, stack_jobs, det_splits):
             det_split = sjob.tags["det_split"]
             if det_split not in det_splits:
                 continue
-            epoch = np.array([sjob.tags["epoch_start"], sjob.tags["epoch_end"]])
+            epoch = np.array(
+                [sjob.tags["epoch_start"], sjob.tags["epoch_end"]], dtype=float
+            )
             if not np.any(epochs == epoch):
                 continue
-            jobit += [(split, spl, det_split, epoch[0], epoch[1])]
+            jobit += [
+                (
+                    split,
+                    spl,
+                    det_split,
+                    sjob.tags["epoch_start"],
+                    sjob.tags["epoch_end"],
+                )
+            ]
     return jobit
 
 
@@ -106,8 +117,9 @@ def get_abscal(
     stack_prof = prof_interp(r_lim)
 
     # Estimate scaling and offset in real space
-    A = np.vstack([stack_prof, np.ones(len(r_lim))]).T
-    amp, off = np.linalg.lstsq(A, prof[r_msk])[0]
+    lin = np.polyfit(stack_prof, prof[r_msk], 1)
+    amp = lin[0]
+    off = lin[1]
 
     # Optional window func refinement
     if cfg.abscal_lmin > 0:
@@ -117,18 +129,26 @@ def get_abscal(
     # TODO: Convert to an abscal!
     # All the metadata you need should be in `fjob` and `fit` but I load the ones I think you need below
     source = fjob.tags["source"]
+    array = (fjob.tags["array"],)
     band = fit["band"]
     timestamp = fit["time"]
     abscal = 0  ### CHANGE ME
 
-    return fjobstr, (
-        fjob.tags["obs_id"],
-        fjob.tags["wafer_slot"],
-        fjob.tags["stream_id"],
-        fjob.tags["band"],
-        fjob.tags["source"],
-        amp,
-        abscal,
+    return (
+        fjobstr,
+        (
+            fjob.tags["obs_id"],
+            fjob.tags["wafer_slot"],
+            fjob.tags["stream_id"],
+            fjob.tags["array"],
+            fjob.tags["band"],
+            fjob.tags["source"],
+            amp,
+            abscal,
+        ),
+        r_lim,
+        ((prof[r_msk] - off) / amp),
+        stack_prof,
     )
 
 
@@ -156,7 +176,7 @@ def abscal_job(
     )
     plot_dir_spl = os.path.join(
         plot_dir,
-        f"stacks{cfg.test_append}",
+        f"abscal{cfg.test_append}",
         job.tags["split"],
         job.tags["split_str"],
         job.tags["det_split"],
@@ -210,13 +230,10 @@ def abscal_job(
         fail(job, ErrCode.FIT_MISSING, msg, logger)
         return job
     prof_full = AxisManager.load(prof_h5_file)
-    if cfg.abscal_from_model:
-        prof = prof_full.jprof_cov
-    else:
-        prof = prof_full.data_prof_cov
+    prof = prof_full.prof_cov
     prof_interp = PchipInterpolator(np.deg2rad(np.asarray(prof.r) / 3600), prof.profile)
     bl_stack = np.asarray(prof.bl)
-    ell_msk = (prof.ells >= cfg.abscal_lmin) * (bl_stack > 0.01 * bl_stack[0])
+    ell_msk = (prof.ell >= cfg.abscal_lmin) * (bl_stack > 0.01 * bl_stack[0])
     if np.sum(ell_msk) <= 1:
         raise ValueError("ell mask is fewer than 10 points")
 
@@ -224,6 +241,9 @@ def abscal_job(
     obslist = []
     abscals = []
     futures = []
+    rs = []
+    prof_ratios = []
+    prof_diffs = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         for i, (fit, fjob, pwv) in enumerate(zip(sfits, sfjobs, pwvs)):
             fjobstr = (
@@ -252,9 +272,15 @@ def abscal_job(
 
             if len(futures) >= max_workers or (i + 1 == num_fits and len(futures) > 0):
                 for future in as_completed(futures):
-                    fjobstr, abscal = future.result()
+                    fjobstr, abscal, r_lim, prof_norm, prof_stack = future.result()
+                    prof_ratio = prof_norm / prof_stack
+                    if np.abs(np.mean(prof_ratio)) > cfg.abscal_max_avg_prat:
+                        continue
                     obslist.append(fjobstr)
                     abscals.append(abscal)
+                    rs.append(r_lim)
+                    prof_ratios.append(prof_ratio)
+                    prof_diffs.append(prof_norm - prof_stack)
                 logger.log(
                     25,
                     "%d/%d maps processed (%d in obslist)",
@@ -303,11 +329,34 @@ def abscal_job(
     fname = f"abscals_{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}.h5"
     outpath = os.path.join(data_dir_spl, fname)
     with h5py.File(outpath, "w") as f:
-        write_dataset(abscal_perobs, f, address="/", overwrite=True)
+        write_dataset(abscal_perobs, f, address="abscal_perobs", overwrite=True)
         f["/"].attrs["abscal_rj"] = abscal_rj
         f["/"].attrs["abscal_cmb"] = abscal_cmb
 
     # TODO: If you have any summary plots to make here put them in plot_dir_spl
+    plt.plot(
+        3600 * np.rad2deg(np.asarray(rs).T),
+        np.asarray(prof_ratios).T,
+        color="b",
+        alpha=0.25,
+    )
+    plt.xlabel('radius (")')
+    plt.ylabel("Normalized Profile/Stack Profile")
+    plt.title(f"Abscal Profile Ratio for {job.tags['split_str']}")
+    plt.savefig(os.path.join(plot_dir_spl, "prof_ratio.png"))
+    plt.close()
+
+    plt.plot(
+        3600 * np.rad2deg(np.asarray(rs).T),
+        np.asarray(prof_diffs).T,
+        color="b",
+        alpha=0.25,
+    )
+    plt.xlabel('radius (")')
+    plt.ylabel("Normalized Profile - Stack Profile")
+    plt.title(f"Abscal Profile Difference for {job.tags['split_str']}")
+    plt.savefig(os.path.join(plot_dir_spl, "prof_diff.png"))
+    plt.close()
 
     set_tag(job, "config", cfg_str)
     set_tag(job, "context", ctx_str)
@@ -315,9 +364,9 @@ def abscal_job(
     set_tag(job, "abscal", outpath)
     set_tag(job, "obslist", ",".join(obslist))
     job.jstate = cast(sqy.Column[str], jobdb.JState.done)
-    # TODO: add whatever else you want to return
 
     logger.log(25, "Abscal is %0.5f (CMB) / %0.2f (RJ)", abscal_cmb, abscal_rj)
+    # TODO: add whatever else you want to return
     return job, abscal_cmb, abscal_rj, abscal_perobs
 
 
@@ -359,7 +408,7 @@ os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
 if myrank == 0:
     of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
-    if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
+    if os.path.isfile(of_path_noa) and cfg.copy_fits_test and cfg.test_append != "":
         shutil.copyfile(of_path_noa, fpath)
 jdb = make_jobdb(comm, data_dir, cfg.test_append)
 
@@ -502,6 +551,7 @@ for i, j in enumerate(joblist):
             ext_rad,
             logger,
         )
+        sys.exit()
         # TODO: You may want to collate the returns into something that rank 0 writes out as metadata + a db
         #       Or do that in a seperate script, up to you
     logger.log(25, "Done with abscal")

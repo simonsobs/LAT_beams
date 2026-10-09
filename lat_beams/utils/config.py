@@ -406,6 +406,11 @@ Module for handling all configuration of scripts.
 ??? info "cfg.abscal_from_model"
     If True use the model profile when estimating abscal.
     If False use the data profile instead.
+
+??? info "cfg.abscal_max_avg_prat"
+    If the mean ratio between the normalized profile and the
+    stack in the abscal radius is above this then we discard
+    that map from the abscal dataset.
 """
 
 import argparse
@@ -766,6 +771,7 @@ def setup_cfg(
     cfg["abscal_r_frac"] = cfg.get("abscal_r_frac", 0.3)
     cfg["abscal_lmin"] = cfg.get("abscal_lmin", -1)
     cfg["abscal_from_model"] = cfg.get("abscal_from_model", False)
+    cfg["abscal_max_avg_prat"] = cfg.get("abscal_max_avg_prat", 1.5)
 
     # Rename for our scope
     for old_name, new_name in replace.items():
