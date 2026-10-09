@@ -7,6 +7,7 @@ from typing import cast
 
 import astropy.units as u
 import h5py
+import latcom.utils.abscal_utils as au
 import matplotlib.pyplot as plt
 import numpy as np
 import sqlalchemy as sqy
@@ -33,8 +34,6 @@ from lat_beams.utils import (
     setup_paths,
     update_jobs_retry,
 )
-
-import latcom.utils.abscal_utils as au
 
 comm = MPI.COMM_WORLD
 myrank = comm.Get_rank()
@@ -133,7 +132,7 @@ def get_abscal(
     array = (fjob.tags["array"],)
     band = fit["band"]
     timestamp = fit["time"]
-    # get abscal and optical efficiencies. 
+    # get abscal and optical efficiencies.
     abscal, opt_eff, raw_abscal, raw_opt_eff = au.get_single_abscal(
         amp=amp,
         planet=source,
@@ -143,7 +142,7 @@ def get_abscal(
         el_obs=EL_OBS,
         solid_angle=SOLID_ANGLE,
         pwv_obs=PWV_OBS,
-    ) 
+    )
 
     return (
         fjobstr,
