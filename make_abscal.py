@@ -124,7 +124,7 @@ def get_abscal(
     # Optional window func refinement
     if cfg.abscal_lmin > 0:
         bl = beam2bl(r, (prof - off) / amp, cfg.lmax)
-        amp *= np.median(bl[ell_msk] / bl_stack[ell_msk])
+        amp *= np.dot(bl[ell_msk], bl_stack[ell_msk]) / np.dot(bl[ell_msk], bl[ell_msk])
 
     # TODO: Convert to an abscal!
     # All the metadata you need should be in `fjob` and `fit` but I load the ones I think you need below
@@ -244,6 +244,7 @@ def abscal_job(
     rs = []
     prof_ratios = []
     prof_diffs = []
+    prof_errs = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         for i, (fit, fjob, pwv) in enumerate(zip(sfits, sfjobs, pwvs)):
             fjobstr = (
@@ -274,13 +275,20 @@ def abscal_job(
                 for future in as_completed(futures):
                     fjobstr, abscal, r_lim, prof_norm, prof_stack = future.result()
                     prof_ratio = prof_norm / prof_stack
+                    prof_diff = prof_norm - prof_stack
+                    prof_err = np.std(prof_diff)
                     if np.abs(np.mean(prof_ratio)) > cfg.abscal_max_avg_prat:
+                        continue
+                    if abs(prof_diff[0]) > cfg.abscal_max_pdiff:
+                        continue
+                    if prof_err > cfg.abscal_max_perr:
                         continue
                     obslist.append(fjobstr)
                     abscals.append(abscal)
                     rs.append(r_lim)
                     prof_ratios.append(prof_ratio)
-                    prof_diffs.append(prof_norm - prof_stack)
+                    prof_diffs.append(prof_diff)
+                    prof_errs.append(prof_err)
                 logger.log(
                     25,
                     "%d/%d maps processed (%d in obslist)",
@@ -295,7 +303,7 @@ def abscal_job(
     if len(obslist) == 0:
         msg = "No maps made it into abscal!"
         fail(job, ErrCode.NO_MAPS, msg, logger)
-        return job
+        return job, None, None, None
 
     logger.log(
         25,
@@ -356,6 +364,13 @@ def abscal_job(
     plt.ylabel("Normalized Profile - Stack Profile")
     plt.title(f"Abscal Profile Difference for {job.tags['split_str']}")
     plt.savefig(os.path.join(plot_dir_spl, "prof_diff.png"))
+    plt.close()
+
+    plt.hist(np.asarray(prof_errs))
+    plt.xlabel("Profile Error (rms)")
+    plt.ylabel("Counts")
+    plt.title(f"Abscal Profile Error for {job.tags['split_str']}")
+    plt.savefig(os.path.join(plot_dir_spl, "prof_err.png"))
     plt.close()
 
     set_tag(job, "config", cfg_str)
@@ -552,6 +567,8 @@ for i, j in enumerate(joblist):
             logger,
         )
         sys.exit()
+        if abscal_cmb is None or abcscal_rj is None or abscal_perobs is None:
+            continue
         # TODO: You may want to collate the returns into something that rank 0 writes out as metadata + a db
         #       Or do that in a seperate script, up to you
     logger.log(25, "Done with abscal")

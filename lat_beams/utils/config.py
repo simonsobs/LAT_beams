@@ -411,6 +411,16 @@ Module for handling all configuration of scripts.
     If the mean ratio between the normalized profile and the
     stack in the abscal radius is above this then we discard
     that map from the abscal dataset.
+
+??? info "cfg.abscal_max_pdiff"
+    If the difference between the normalized profile and the
+    stack in the core is above this then we discard
+    that map from the abscal dataset.
+
+??? info "cfg.abscal_max_perr"
+    If the rsm error between the normalized profile and the
+    stack core is above this then we discard
+    that map from the abscal dataset.
 """
 
 import argparse
@@ -772,6 +782,8 @@ def setup_cfg(
     cfg["abscal_lmin"] = cfg.get("abscal_lmin", -1)
     cfg["abscal_from_model"] = cfg.get("abscal_from_model", False)
     cfg["abscal_max_avg_prat"] = cfg.get("abscal_max_avg_prat", 1.5)
+    cfg["abscal_max_pdiff"] = cfg.get("abscal_max_pdiff", 0.05)
+    cfg["abscal_max_perr"] = cfg.get("abscal_max_perr", 0.02)
 
     # Rename for our scope
     for old_name, new_name in replace.items():
