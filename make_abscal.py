@@ -239,10 +239,8 @@ def abscal_job(
     sfits = fits[smsk]
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
-    els = np.deg2rad(
-        np.asarray(
-            bu.get_split_vec(sfits, "el_center", ctx, round_to=1000), dtype=float
-        )
+    els = np.asarray(
+        bu.get_split_vec(sfits, "el_center", ctx, round_to=1000), dtype=float
     )
     logger.log(
         25,
