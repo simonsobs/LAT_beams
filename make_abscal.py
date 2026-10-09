@@ -14,6 +14,7 @@ import yaml
 from healpy.sphtfunc import beam2bl
 from mpi4py import MPI
 from scipy.interpolate import PchipInterpolator
+from scipy.optimize import minimize
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import write_dataset
 from sotodlib.site_pipeline import jobdb
@@ -103,6 +104,14 @@ def get_tags(info):
     }
 
 
+def _amp_obj(x, prof_interp, prof, r):
+    amp, off, r_off, r_scale = x
+    stack_prof = prof_interp(r_scale * r + r_off)
+    prof_norm = (prof - off) / amp
+    return np.sum((prof_norm - stack_prof) ** 2)
+    # return np.sum((prof - amp*stack_prof - off)**2)
+
+
 def get_abscal(
     fjobstr, fjob, fit, cfg, prof_interp, bl_stack, ell_msk, ext_rad, solid_angle, pwv
 ):
@@ -120,6 +129,17 @@ def get_abscal(
     lin = np.polyfit(stack_prof, prof[r_msk], 1)
     amp = lin[0]
     off = lin[1]
+    bounds = [
+        (0.5 * amp, 1.5 * amp),
+        (off - 10 * abs(off), off + 10 * abs(off)),
+        (-1 * cfg.res, cfg.res),
+        (0.9, 1.1),
+    ]
+    res = minimize(
+        _amp_obj, (amp, off, 0, 1), (prof_interp, prof[r_msk], r_lim), bounds=bounds
+    )  # , method="Powell")
+    amp, off, r_off, r_scale = res.x
+    stack_prof = prof_interp(r_scale * r_lim + r_off)
 
     # Optional window func refinement
     if cfg.abscal_lmin > 0:
@@ -279,6 +299,8 @@ def abscal_job(
                     prof_err = np.std(prof_diff)
                     if np.abs(np.mean(prof_ratio)) > cfg.abscal_max_avg_prat:
                         continue
+                    if np.max(np.abs(prof_ratio - 1)) > cfg.abscal_max_pdiff:
+                        continue
                     if abs(prof_diff[0]) > cfg.abscal_max_pdiff:
                         continue
                     if prof_err > cfg.abscal_max_perr:
@@ -427,50 +449,6 @@ if myrank == 0:
         shutil.copyfile(of_path_noa, fpath)
 jdb = make_jobdb(comm, data_dir, cfg.test_append)
 
-# Load fits
-logger.info("Loading map metadata and fits")
-
-all_fits = None
-fjobs = None
-mjobdict = None
-if myrank == 0:
-    mjobdict = {
-        f"{job.tags['obs_id']}-{job.tags['wafer_slot']}-{job.tags['stream_id']}-{job.tags['array']}-{job.tags['band']}": job
-        for job in jdb.get_jobs(jclass="beam_map", jstate="done")
-    }
-    logger.info("Map jobs loaded")
-    fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
-    logger.info("Fit jobs loaded")
-    all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs.tolist())
-    logger.info("Fits loaded")
-    snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
-    solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
-    fwhm_exp = (
-        np.array([cfg.nominal_fwhm[band] for band in all_fits["band"]]) * u.arcmin
-    )
-    data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
-    msk = snr > cfg.min_stack_snr
-    msk *= data_fwhm < 1.5 * fwhm_exp
-    msk *= data_fwhm > 0.5 * fwhm_exp
-    msk *= solid_angle > 0
-    msk *= np.isin(bu.get_split_vec(all_fits, "source", ctx), cfg.source_list)
-    pwv = bu.get_split_vec(all_fits, "pwv_mean", ctx)
-    pwv[pwv == "None"] = "1"
-    pwv = np.array(pwv, float)
-    el = np.deg2rad(np.array(bu.get_split_vec(all_fits, "el_center", ctx), float))
-    msk *= pwv / np.sin(el) <= cfg.max_pwv
-    all_fits = all_fits[msk]
-    fjobs = fjobs[msk]
-    logger.info("Fits filtered")
-logger.info("Broadcasting")
-all_fits = comm.bcast(all_fits)
-fjobs = comm.bcast(fjobs)
-mjobdict = comm.bcast(mjobdict)
-
-logger.info("%d maps to add", len(fjobs))
-if len(fjobs) == 0:
-    sys.exit(0)
-
 # Det splits
 det_split_names = ["full"] + cfg.det_splits
 
@@ -498,6 +476,46 @@ jdb, all_jobs = setup_jobs(
     cfg.test_append,
 )
 all_jobs = np.array(all_jobs)
+
+# Load fits
+logger.info("Loading map metadata and fits")
+
+all_fits = None
+fjobs = None
+mjobdict = None
+if myrank == 0:
+    fjobs = np.array(jdb.get_jobs(jclass="fit_map", jstate="done"))
+    fjobs = [job for job in fjobs if (job.tags["source"] in cfg.source_list)]
+    fjobs = [job for job in fjobs if (job.tags["split"] in det_split_names)]
+    logger.info("Fit jobs loaded")
+    all_fits = bu.load_beam_fits_from_jobs(fpath, fjobs)
+    logger.info("Fits loaded")
+    snr = bu.get_fit_vec(all_fits, "amp") / bu.get_fit_vec(all_fits, "noise")
+    solid_angle = bu.get_fit_vec(all_fits, "gauss.data_solid_angle_corr")
+    fwhm_exp = (
+        np.array([cfg.nominal_fwhm[band] for band in all_fits["band"]]) * u.arcmin
+    )
+    data_fwhm = bu.get_fit_vec(all_fits, "data_fwhm")
+    msk = snr > cfg.min_stack_snr
+    msk *= data_fwhm < 1.5 * fwhm_exp
+    msk *= data_fwhm > 0.5 * fwhm_exp
+    msk *= solid_angle > 0
+    pwv = bu.get_split_vec(all_fits, "pwv_mean", ctx)
+    pwv[pwv == "None"] = "1"
+    pwv = np.array(pwv, float)
+    el = np.deg2rad(np.array(bu.get_split_vec(all_fits, "el_center", ctx), float))
+    msk *= pwv / np.sin(el) <= cfg.max_pwv
+    all_fits = all_fits[msk]
+    fjobs = np.array(fjobs)[msk]
+    logger.info("Fits filtered")
+logger.info("Broadcasting")
+all_fits = comm.bcast(all_fits)
+fjobs = comm.bcast(fjobs)
+mjobdict = comm.bcast(mjobdict)
+
+logger.info("%d maps to add", len(fjobs))
+if len(fjobs) == 0:
+    sys.exit(0)
 
 if args.plot_only:
     logger.info("Running in plot only mode!")
@@ -566,7 +584,6 @@ for i, j in enumerate(joblist):
             ext_rad,
             logger,
         )
-        sys.exit()
         if abscal_cmb is None or abcscal_rj is None or abscal_perobs is None:
             continue
         # TODO: You may want to collate the returns into something that rank 0 writes out as metadata + a db
