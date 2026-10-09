@@ -114,7 +114,17 @@ def _amp_obj(x, prof_interp, prof, r):
 
 
 def get_abscal(
-    fjobstr, fjob, fit, cfg, prof_interp, bl_stack, ell_msk, ext_rad, solid_angle, pwv
+    fjobstr,
+    fjob,
+    fit,
+    cfg,
+    prof_interp,
+    bl_stack,
+    ell_msk,
+    ext_rad,
+    solid_angle,
+    pwv,
+    el,
 ):
     aman = fit["aman"]
     r = aman.r.to(u.rad).value
@@ -158,10 +168,10 @@ def get_abscal(
         planet=source,
         timestamp=timestamp,
         band=band,
-        ufm=UFM,
-        el_obs=EL_OBS,
-        solid_angle=SOLID_ANGLE,
-        pwv_obs=PWV_OBS,
+        ufm=array,
+        el_obs=el,
+        solid_angle=solid_angle,
+        pwv_obs=pwv,
     )
 
     return (
@@ -228,6 +238,12 @@ def abscal_job(
     sfjobs = fjobs[smsk]
     sfits = fits[smsk]
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
+    pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
+    els = np.deg2rad(
+        np.asarray(
+            bu.get_split_vec(sfits, "el_center", ctx, round_to=1000), dtype=float
+        )
+    )
     logger.log(
         25,
         "%d maps available",
@@ -276,7 +292,7 @@ def abscal_job(
     prof_diffs = []
     prof_errs = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for i, (fit, fjob, pwv) in enumerate(zip(sfits, sfjobs, pwvs)):
+        for i, (fit, fjob, pwv, el) in enumerate(zip(sfits, sfjobs, pwvs, els)):
             fjobstr = (
                 f"{fjob.tags['obs_id']}-"
                 f"{fjob.tags['wafer_slot']}-"
@@ -298,6 +314,7 @@ def abscal_job(
                     ext_rad,
                     solid_angle,
                     pwv,
+                    el,
                 )
             )
 
