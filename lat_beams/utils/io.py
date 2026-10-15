@@ -6,6 +6,7 @@ import logging
 from typing import Optional
 
 import numpy as np
+from pixell.utils import downgrade
 from sotodlib.core import AxisManager
 from sotodlib.preprocess.preprocess_util import preproc_or_load_group
 from sotodlib.site_pipeline import jobdb
@@ -23,6 +24,7 @@ def load_aman(
     logger: LoggerLike,
     fp_flag: bool = False,
     save: bool = False,
+    cut_noscan=True,
 ) -> Optional[AxisManager]:
     """
     Load and preprocess an observation.
@@ -51,6 +53,8 @@ def load_aman(
         If `True` then keep only detectors with valid pointing.
     save : bool, default: False
         If `True` then try to save the preprocess result.
+    cut_noscan : bool, default: True
+        If True then cut any non-scanning regions at the start or end of the TOD.
 
     Returns
     -------
@@ -90,4 +94,18 @@ def load_aman(
         msg = f"Only {aman.dets.count} dets!"
         fail(job, ErrCode.MIN_DETS, msg, logger)
         return None
+
+    if cut_noscan:
+        az = aman.boresight.azimuth
+        baz = downgrade(az, 10)
+        v = np.abs(np.gradient(baz))
+        vtyp = np.mean(v)
+        moving = np.where(v > vtyp * 0.01)[0]
+        if len(moving) == 0:
+            msg = f"No scanning periods!"
+            fail(job, ErrCode.MIN_DETS, msg, logger)
+            return None
+        i1 = max((moving[0] - 2) * 10, 0)
+        i2 = min((moving[-1] + 2) * 10 + 1, az.size)
+        aman.restrict("samps", slice(i1 + aman.samps.off, i2 + aman.samps.off))
     return aman
