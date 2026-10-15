@@ -352,8 +352,6 @@ def estimate_cent(
     ivar: Float[np.ndarray, "nx ny"],
     sigma: float = 5,
     buf: int = 30,
-    peak_radius: int = 10,
-    min_snr: float = 5,
     ret_smooth: Literal[False] = False,
 ) -> tuple[int, int]: ...
 
@@ -364,8 +362,6 @@ def estimate_cent(
     ivar: Float[np.ndarray, "nx ny"],
     sigma: float = 5,
     buf: int = 30,
-    peak_radius: int = 10,
-    min_snr: float = 5,
     ret_smooth: Literal[True] = True,
 ) -> tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
 
@@ -376,8 +372,6 @@ def estimate_cent(
     ivar: Float[np.ndarray, "nx ny"],
     sigma: float = 5,
     buf: int = 30,
-    peak_radius: int = 10,
-    min_snr: float = 5,
     ret_smooth: bool = False,
 ) -> tuple[int, int] | tuple[tuple[int, int], Float[np.ndarray, "nx ny"]]: ...
 

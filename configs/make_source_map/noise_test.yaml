@@ -1,0 +1,6 @@
+base: nersc_atm.yaml
+append: "noise_test"
+det_splits: []
+extent: 1200
+n_modes: 100
+# force_zero_cent: false

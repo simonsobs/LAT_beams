@@ -96,10 +96,18 @@ def get_jobit(
             logger.info("Using ManifestDb at %s", dbs[0])
             db = metadata.ManifestDb(dbs[0])
             obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
+            ws_list = [
+                ws for ws, obs in zip(ws_list, obslist) if obs["obs_id"] in obs_ids
+            ]
+            ba_list = [
+                ba for ba, obs in zip(ba_list, obslist) if obs["obs_id"] in obs_ids
+            ]
             obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
             logger.info("Only %s observations with pointing metadata", len(obslist))
 
         obslist = np.array_split(obslist, nproc)[myrank]
+        ws_list = np.array_split(np.asarray(ws_list), nproc)[myrank]
+        ba_list = np.array_split(np.asarray(ba_list), nproc)[myrank]
         obsit = []
         for obs, wsl, bal in zip(obslist, ws_list, ba_list):
             try:
@@ -200,10 +208,11 @@ def load_det_splits(split_dir):
 def make_det_splits(aman, split_dir, min_dets, det_split_cfg, single_det=False):
     det_splits = {"full": RangesMatrix.zeros(aman.signal.shape)}
     if single_det:
+        det_splits = {}
         for i, det_id in enumerate(aman.det_info.det_id):
             rmat = RangesMatrix.ones(aman.signal.shape)
             rmat.ranges[i] = rmat.ranges[i].complement()
-            det_splits = {det_id: rmat}
+            det_splits[det_id] = rmat
         return det_splits
     if "det_id" not in aman.det_info:
         return det_splits
@@ -510,7 +519,7 @@ for i, j in enumerate(joblist):
             res=cfg.res,
             max_pix=4e8,
             wrap=None,
-            unroll=False,
+            unroll=True,
         )
 
     # Do an aggressive filter and flag dets without the source
@@ -569,7 +578,7 @@ for i, j in enumerate(joblist):
             res=cfg.res,
             max_pix=4e8,
             wrap=None,
-            unroll=False,
+            unroll=True,
         )
 
     # Make splits
@@ -599,6 +608,7 @@ for i, j in enumerate(joblist):
     set_tag(job, "X", X)
     if out is None or cent is None:
         continue
+    logger.log(25, f"{aman.obs_info.roll_center}")
 
     # Add paths to job
     for name, fname, ext in [
