@@ -185,6 +185,7 @@ def get_abscal(
             fjob.tags["source"],
             amp,
             abscal,
+            raw_abscal,
         ),
         r_lim,
         ((prof[r_msk] - off) / amp),
@@ -284,6 +285,7 @@ def abscal_job(
     num_fits = len(sfits)
     obslist = []
     abscals = []
+    raw_abscals = []
     futures = []
     rs = []
     prof_ratios = []
@@ -318,7 +320,7 @@ def abscal_job(
 
             if len(futures) >= max_workers or (i + 1 == num_fits and len(futures) > 0):
                 for future in as_completed(futures):
-                    fjobstr, abscal, r_lim, prof_norm, prof_stack = future.result()
+                    fjobstr, abscal, raw_abscal, r_lim, prof_norm, prof_stack = future.result()
                     prof_ratio = prof_norm / prof_stack
                     prof_diff = prof_norm - prof_stack
                     prof_err = np.std(prof_diff)
@@ -332,6 +334,7 @@ def abscal_job(
                         continue
                     obslist.append(fjobstr)
                     abscals.append(abscal)
+                    raw_abscals.append(raw_abscal)
                     rs.append(r_lim)
                     prof_ratios.append(prof_ratio)
                     prof_diffs.append(prof_diff)
@@ -370,25 +373,25 @@ def abscal_job(
         ("source", all_src.dtype),
         ("amp", float),
         ("abscal", float),
+        ("abscal_cmb", float),
+        ("raw_abscal", float),
+        ("raw_abscal_cmb", float),
     ]
     abscal_perobs = metadata.ResultSet.from_friend(
         np.fromiter(abscals, dtype, count=len(abscals))
     )
-
-    # TODO: Reduce this into abscal_cmb and abscal_rj
-    abscal_cmb = 0  ### CHANGE ME
-    abscal_rj = 0  ### CHANGE ME
+    abscal_rj, raw_abscal_rj, abscal_cmb, raw_abscal_cmb = au.get_abscals_from_perobs(abscal_perobs)
 
     # Save
-    # TODO: add whatever else you want here
     fname = f"abscals_{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}.h5"
     outpath = os.path.join(data_dir_spl, fname)
     with h5py.File(outpath, "w") as f:
         write_dataset(abscal_perobs, f, address="abscal_perobs", overwrite=True)
         f["/"].attrs["abscal_rj"] = abscal_rj
         f["/"].attrs["abscal_cmb"] = abscal_cmb
+        f["/"].attrs["raw_abscal_rj"] = raw_abscal_rj
+        f["/"].attrs["raw_abscal_cmb"] = raw_abscal_cmb
 
-    # TODO: If you have any summary plots to make here put them in plot_dir_spl
     plt.plot(
         3600 * np.rad2deg(np.asarray(rs).T),
         np.asarray(prof_ratios).T,
