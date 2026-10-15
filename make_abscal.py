@@ -320,7 +320,9 @@ def abscal_job(
 
             if len(futures) >= max_workers or (i + 1 == num_fits and len(futures) > 0):
                 for future in as_completed(futures):
-                    fjobstr, abscal, raw_abscal, r_lim, prof_norm, prof_stack = future.result()
+                    fjobstr, abscal, raw_abscal, r_lim, prof_norm, prof_stack = (
+                        future.result()
+                    )
                     prof_ratio = prof_norm / prof_stack
                     prof_diff = prof_norm - prof_stack
                     prof_err = np.std(prof_diff)
@@ -380,7 +382,9 @@ def abscal_job(
     abscal_perobs = metadata.ResultSet.from_friend(
         np.fromiter(abscals, dtype, count=len(abscals))
     )
-    abscal_rj, raw_abscal_rj, abscal_cmb, raw_abscal_cmb = au.get_abscals_from_perobs(abscal_perobs)
+    abscal_rj, raw_abscal_rj, abscal_cmb, raw_abscal_cmb = au.get_abscals_from_perobs(
+        abscal_perobs
+    )
 
     # Save
     fname = f"abscals_{job.tags['split_str']}_{job.tags['det_split']}_{job.tags['epoch_start']}_{job.tags['epoch_end']}.h5"
