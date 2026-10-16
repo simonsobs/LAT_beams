@@ -74,6 +74,10 @@ Module for handling all configuration of scripts.
 ??? info "cfg.min_dets"
     Minimum number of detectors required after cuts.
 
+??? info "cfg.tube_slots"
+    List of tube slots to run on. Pass an empty list to run on all.
+    This currently has no effect on stacking.
+
 ### Mapmaking
 
 ??? info "cfg.extent"
@@ -633,6 +637,7 @@ def setup_cfg(
     )
     cfg["min_samps"] = cfg.get("min_samps", 1000)
     cfg["min_dets"] = cfg.get("min_dets", 30)
+    cfg["tube_slots"] = cfg.get("tube_slots", [])
 
     # Mapmaking
     cfg["extent"] = cfg.get("extent", 600)

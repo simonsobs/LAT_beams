@@ -114,6 +114,8 @@ def get_jobit(
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
                 continue
+            if cfg.tube_slots and obs["tube_slot"] not in cfg.tube_slot:
+                continue
             obs = ctx.obsdb.get(obs["obs_id"], tags=True)
             wafers = np.unique(
                 [t[3:] for t in obs["tags"] if t[:2] == obs["tube_slot"]] + forced_ws

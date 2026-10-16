@@ -76,6 +76,10 @@ def get_jobit(jdb, det_splits, obs_ids, start_time, stop_time):
 
     to_ret = []
     for info, wsl, bal in zip(maplist, ws_list, ba_list):
+        if cfg.tube_slots and not any(
+            ot in info.tags["obs_id"] for ot in cfg.tube_slots
+        ):
+            continue
         if wsl is not None and info.tags["wafer_slot"] not in wsl:
             continue
         if bal is not None and info.tags["band"] not in bal:
