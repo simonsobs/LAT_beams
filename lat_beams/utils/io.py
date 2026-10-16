@@ -96,7 +96,7 @@ def load_aman(
         return None
 
     if cut_noscan:
-        az = aman.boresight.azimuth
+        az = aman.boresight.az
         baz = downgrade(az, 10)
         v = np.abs(np.gradient(baz))
         vtyp = np.mean(v)
@@ -107,5 +107,5 @@ def load_aman(
             return None
         i1 = max((moving[0] - 2) * 10, 0)
         i2 = min((moving[-1] + 2) * 10 + 1, az.size)
-        aman.restrict("samps", slice(i1 + aman.samps.off, i2 + aman.samps.off))
+        aman.restrict("samps", slice(i1 + aman.samps.offset, i2 + aman.samps.offset))
     return aman
