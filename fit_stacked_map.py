@@ -31,7 +31,7 @@ from lat_beams.beam_utils import (
     radial_profile_lin,
 )
 from lat_beams.fitting.map.base import make_guess
-from lat_beams.plotting import auto_relplot, plot_map_complete
+from lat_beams.plotting import auto_relplot, plot_map
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -171,7 +171,7 @@ def plot_model_maps(
     y0 = float(ypix[0])
     x0 = float(xpix[0])
 
-    maps = [(model - off, "model"), (imap - model, "model_resid"), (imap - off, "")]
+    maps = [(imap - off, "data"), (model - off, "model"), (imap - model, "resid")]
     for omap, name in maps:
         if "resid" not in name:
             modes = sb.beam_modes(omap, mmax=n_multipoles + 2, center=(y0, x0))  # type: ignore
@@ -221,22 +221,21 @@ def plot_model_maps(
                 bbox_inches="tight",
             )
             plt.close()
-        if name == "":
-            continue
-        plot_map_complete(
-            omap,
-            posmap,
-            pixsize,
-            extent,
-            (0, 0),
-            plot_dir_spl,
-            f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}",
-            comps="T",
-            log_thresh=log_thresh,
-            append="stack_" + name,
-            units='"',
-            lognorm=1,
-        )
+
+    plot_map(
+        [m[0] for m in maps],
+        posmap,
+        pixsize,
+        extent,
+        (0, 0),
+        plot_dir_spl,
+        f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} {name} T fit",
+        [m[1] for m in maps],
+        log_thresh=log_thresh,
+        append="",
+        units='"',
+        lognorm=1,
+    )
 
 
 def jackknife_cov(X, jk_mean=None):

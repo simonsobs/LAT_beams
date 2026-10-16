@@ -20,7 +20,7 @@ from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
 from lat_beams import beam_utils as bu
-from lat_beams.plotting import plot_debug_map, plot_map_complete
+from lat_beams.plotting import plot_debug_map, plot_map_tqu
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -683,7 +683,7 @@ def stack_job(
                 ("", omap, 1),
                 ("_mask_zoom", omap, zoom),
             ]:
-                plot_map_complete(
+                plot_map_tqu(
                     smap,
                     posmap,
                     pixsize,
@@ -692,7 +692,7 @@ def stack_job(
                     plot_dir_spl,
                     f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}{' ' * bool(map_type)}{map_type} {name}",
                     log_thresh=cfg.log_thresh,
-                    append=name + append,
+                    append=append,
                     qrur=True,
                 )
 

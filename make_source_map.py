@@ -19,7 +19,7 @@ from sotodlib.site_pipeline.jobdb import Job
 
 import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
-from lat_beams.plotting import plot_map_complete
+from lat_beams.plotting import plot_map_tqu
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -409,7 +409,7 @@ for i, j in enumerate(joblist):
         posmap = np.rad2deg(posmap) * 3600
         if solved.wcs is None:
             raise ValueError("WCS is None")
-        plot_map_complete(
+        plot_map_tqu(
             solved,
             posmap,
             solved.wcs.wcs.cdelt[1] * (60 * 60),
@@ -634,7 +634,7 @@ for i, j in enumerate(joblist):
             os.makedirs(os.path.join(obs_plot_dir, ufm, spl), exist_ok=True)
             posmap = omap.posmap()
             posmap = np.rad2deg(posmap) * 3600
-            plot_map_complete(
+            plot_map_tqu(
                 omap,
                 posmap,
                 omap.wcs.wcs.cdelt[1] * (60 * 60),
@@ -693,14 +693,15 @@ for i, j in enumerate(joblist):
             raise ValueError("WCS is None")
         posmap = outmap.posmap()
         posmap = np.rad2deg(posmap) * 3600
-        plot_map_complete(
+        plot_map_tqu(
             outmap,
-            posmap,
+            posmap,  # type: ignore
             outmap.wcs.wcs.cdelt[1] * (60 * 60),
             cfg.extent,
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band} MLmap",
+            comps=job.tags["comps"],
             log_thresh=cfg.log_thresh,
             lognorm=float(1.0 / outmap[0][cent]),
         )

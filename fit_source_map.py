@@ -25,7 +25,7 @@ from lat_beams.beam_utils import (
     radial_profile,
 )
 from lat_beams.fitting.map.base import make_guess
-from lat_beams.plotting import plot_map_complete
+from lat_beams.plotting import plot_map
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -499,21 +499,21 @@ for i, j in enumerate(joblist):
     plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
     norm = float(1.0 / aman.amp.value)
     posmap = np.rad2deg(posmap) * 3600
-    for dat, label in [(model - off, "model"), (resid, "resid")]:
-        plot_map_complete(
-            dat,
-            posmap,
-            pixsize,
-            cfg.extent,
-            plt_cent,
-            ufm_plot_dir,
-            f"{obs_id} {ufm} {band} {split}",
-            comps="T",
-            log_thresh=cfg.log_thresh,
-            append=label,
-            units='"',
-            lognorm=norm,
-        )
+    maps = [(solved, "data"), (model - off, "model"), (resid, "resid")]
+    plot_map(
+        [m[0] for m in maps],
+        posmap,
+        pixsize,
+        cfg.extent,
+        plt_cent,
+        ufm_plot_dir,
+        f"{obs_id} {ufm} {band} {split} T fit",
+        [m[1] for m in maps],
+        log_thresh=cfg.log_thresh,
+        append="",
+        units='"',
+        lognorm=norm,
+    )
 
     # Save
     aman.wrap("data_solid_angle_corr", aman[aman.final_model].data_solid_angle_corr)
