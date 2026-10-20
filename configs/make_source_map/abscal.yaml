@@ -1,4 +1,5 @@
 base: nersc_atm.yaml
+root_dir: '/global/cfs/cdirs/sobs/users/skh'
 abscal_source_list:
   - "mars"
   - "uranus"
