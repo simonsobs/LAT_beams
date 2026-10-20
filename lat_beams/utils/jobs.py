@@ -50,6 +50,7 @@ class ErrCode(Enum):
     FILT_FAILED = 16
     MAP_FAILED = 17
     OMEGA_FAILED = 18
+    FIT_MISSING = 19
 
 
 def set_tag(job, key, new_val):

@@ -1065,7 +1065,7 @@ def get_map_noise(
             bounds=(-np.pi / 2, np.pi / 2),
             method="bounded",
         )
-        theta = result.x
+        theta = result.x  # type: ignore
         c, s = np.cos(theta), np.sin(theta)
         lx_rot = c * lx + s * ly
         ly_rot = -s * lx + c * ly
@@ -1075,4 +1075,64 @@ def get_map_noise(
     white_noise = get_white_noise(ps2d, lmap, lmin, lmax)
     corr_noise = get_corr_noise(ps2d, lmap, lmin, lmax)
 
-    return white_noise, corr_noise, ps2d, lmap, hot, theta
+    return white_noise, corr_noise, ps2d, lmap, hot, float(theta)
+
+
+def get_job_maps(job, fits, split_dict):
+    split_vec = split_dict[job.tags["split"]]
+    smsk = (
+        (split_vec == job.tags["split_str"])
+        * (fits["split"] == job.tags["det_split"])
+        * (fits["time"] >= float(job.tags["epoch_start"]))
+        * (fits["time"] < float(job.tags["epoch_end"]))
+    )
+    return set(np.where(smsk)[0])
+
+
+def distribute_jobs(all_jobs, job_maps, nranks, logger):
+    njobs = len(all_jobs)
+    map_jobs = {}
+    for ji, maps in enumerate(job_maps):
+        for m in maps:
+            map_jobs.setdefault(m, set()).add(ji)
+    total_unique = len(set().union(*job_maps))
+    target = total_unique / nranks
+    assignments = [[] for _ in range(nranks)]
+    rank_maps = [set() for _ in range(nranks)]
+    order = sorted(range(njobs), key=lambda ji: len(job_maps[ji]), reverse=True)
+
+    for r in range(nranks):
+        ji = order.pop(0)
+        maps = set(job_maps[ji])
+        assignments[r].append(ji)
+        rank_maps[r].update(maps)
+    for ji in order:
+        maps = job_maps[ji]
+        best_rank = 0
+        best_score = np.inf
+        for r in range(nranks):
+            new_unique = len(rank_maps[r] | maps)
+            imbalance = abs(new_unique - target)
+            reuse = len(rank_maps[r] & maps)
+            job_penalty = len(assignments[r]) * 0.25
+            score = imbalance - 0.5 * reuse + job_penalty
+            if score < best_score:
+                best_score = score
+                best_rank = r
+        assignments[best_rank].append(ji)
+        rank_maps[best_rank].update(maps)
+
+    for r in range(nranks):
+        maps = rank_maps[r]
+        map_loads = sum(len(job_maps[ji]) for ji in assignments[r])
+        reuse = map_loads - len(maps)
+
+        logger.info(
+            f"Rank {r}: "
+            f"{len(assignments[r])} jobs, "
+            f"{len(maps)} unique maps, "
+            f"{map_loads} map loads, "
+            f"{reuse} cache reuse"
+        )
+
+    return assignments

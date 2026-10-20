@@ -16,8 +16,8 @@ dependencies = ["numpy", "scipy", "sotodlib", "jaxtyping", "astropy", "h5py", "j
 
 [project.optional-dependencies]
 docs = [
-    "mkdocs",
-    "mkdocs-material",
+    "properdocs",
+    "mkdocs-materialx",
     "mkdocstrings[python]",
     "mkdocs-gen-files",
     "mkdocs-literate-nav",
