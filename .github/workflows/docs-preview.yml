@@ -1,3 +1,4 @@
+
 name: Docs Preview
 
 on:
@@ -11,10 +12,8 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   checks: write
-
-env:
-  DISABLE_MKDOCS_2_WARNING: "true"
 
 jobs:
   build-preview:
@@ -24,78 +23,98 @@ jobs:
 
     steps:
       - name: Get token
-        uses: actions/create-github-app-token@v1
         id: app-token
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
-          pip install mkdocs-material
-          pip install pillow cairosvg mike mkdocstrings[python] \
-            mkdocs-gen-files mkdocs-literate-nav mkdocs-homepage-copier
+          python -m pip install --upgrade pip
+          python -m pip install \
+            properdocs \
+            "mkdocs-materialx==10.2.1" \
+            pillow \
+            cairosvg \
+            "mkdocstrings[python]" \
+            mkdocs-gen-files \
+            mkdocs-literate-nav \
+            mkdocs-homepage-copier
 
       - name: Calculate preview URL
         id: preview
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
         run: |
-          echo "path=pr-preview/pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-          echo "url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
+          echo "path=pr-preview/pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "url=https://${REPOSITORY_OWNER}.github.io/${REPOSITORY_NAME}/pr-preview/pr-${PR_NUMBER}/" >> "$GITHUB_OUTPUT"
 
       - name: Create pending check
         id: create-check
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           CHECK_ID=$(gh api \
             --method POST \
-            "repos/${{ github.repository }}/check-runs" \
+            "repos/${REPOSITORY}/check-runs" \
             -f name="Docs Preview" \
-            -f head_sha="${{ github.event.pull_request.head.sha }}" \
+            -f head_sha="${HEAD_SHA}" \
             -f status="in_progress" \
             -f "output[title]=Building documentation preview" \
-            -f "output[summary]=Building the documentation preview for PR #${{ github.event.pull_request.number }}." \
+            -f "output[summary]=Building documentation preview for PR #${PR_NUMBER}." \
             --jq '.id')
 
           echo "check_id=$CHECK_ID" >> "$GITHUB_OUTPUT"
 
       - name: Build docs
-        run: |
-          mkdocs build --strict
+        run: properdocs build --strict
 
       - name: Publish preview
+        env:
+          PREVIEW_PATH: ${{ steps.preview.outputs.path }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           git fetch origin gh-pages
-
           git worktree add /tmp/gh-pages origin/gh-pages
 
-          rm -rf "/tmp/gh-pages/${{ steps.preview.outputs.path }}"
-          mkdir -p "/tmp/gh-pages/${{ steps.preview.outputs.path }}"
+          mkdir -p "/tmp/gh-pages/${PREVIEW_PATH}"
+          rm -rf "/tmp/gh-pages/${PREVIEW_PATH}"
+          mkdir -p "/tmp/gh-pages/${PREVIEW_PATH}"
 
-          cp -r site/. "/tmp/gh-pages/${{ steps.preview.outputs.path }}/"
+          cp -R site/. "/tmp/gh-pages/${PREVIEW_PATH}/"
 
           cd /tmp/gh-pages
 
           git config user.name "Docs Deploy"
           git config user.email "docs.deploy@saianeesh.com"
 
-          git add "${{ steps.preview.outputs.path }}"
+          git add -A -- "${PREVIEW_PATH}"
+
+          if git diff --cached --quiet; then
+            echo "Preview is already up to date."
+            exit 0
+          fi
 
           git commit \
-            -m "docs: update PR #${{ github.event.pull_request.number }} preview" \
-            || true
+            -m "docs: update PR #${PR_NUMBER} preview"
 
           git push origin HEAD:gh-pages
 
@@ -105,45 +124,97 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           CHECK_ID: ${{ steps.create-check.outputs.check_id }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           if [ -z "$CHECK_ID" ]; then
             echo "No check ID was created; nothing to update."
             exit 0
           fi
 
-          if [ "${{ job.status }}" = "success" ]; then
+          if [ "$JOB_STATUS" = "success" ]; then
             CONCLUSION="success"
             TITLE="Documentation preview is ready"
-            SUMMARY="### 📚 Documentation Preview
+            SUMMARY="### Documentation Preview
 
           [Open the documentation preview](${PREVIEW_URL})
 
-          Preview for PR #${{ github.event.pull_request.number }}."
+          Preview for PR #${PR_NUMBER}."
           else
             CONCLUSION="failure"
-            TITLE="Documentation build failed"
-            SUMMARY="The documentation build failed. Check the workflow logs for details.
+            TITLE="Documentation build or publish failed"
+            SUMMARY="The documentation preview failed. Check the workflow logs.
 
-          The preview was not published.
+          The preview may not reflect the latest PR commit.
 
           Preview URL: ${PREVIEW_URL}"
           fi
 
           gh api \
             --method PATCH \
-            "repos/${{ github.repository }}/check-runs/${CHECK_ID}" \
+            "repos/${REPOSITORY}/check-runs/${CHECK_ID}" \
             -f status="completed" \
             -f conclusion="$CONCLUSION" \
             -f "output[title]=$TITLE" \
             -f "output[summary]=$SUMMARY"
 
+      - name: Post preview link on PR
+        if: always() && steps.app-token.outcome == 'success' && steps.preview.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            BODY="<!-- docs-preview-comment -->
+          ## 📚 Documentation Preview
+
+          ✅ Preview is ready!
+
+          **[Open documentation preview](${PREVIEW_URL})**
+
+          This comment is updated automatically when new commits are pushed."
+          else
+            BODY="<!-- docs-preview-comment -->
+          ## 📚 Documentation Preview
+
+          ❌ The preview build or publish failed.
+
+          Check the **Docs Preview** workflow logs for details.
+
+          [Preview URL](${PREVIEW_URL}) may show an older build or may not be available."
+          fi
+
+          COMMENT_ID=$(gh api --paginate \
+            "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | contains("<!-- docs-preview-comment -->")) | .id' \
+            | tail -n 1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api \
+              --method PATCH \
+              "repos/${REPOSITORY}/issues/comments/${COMMENT_ID}" \
+              -f body="$BODY"
+            echo "Updated existing PR preview comment."
+          else
+            gh api \
+              --method POST \
+              "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$BODY"
+            echo "Created PR preview comment."
+          fi
+
       - name: Add workflow summary
         if: always()
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
           echo "## 📚 Documentation Preview" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "[Open documentation preview](${{ steps.preview.outputs.url }})" >> "$GITHUB_STEP_SUMMARY"
-
+          echo "[Open documentation preview](${PREVIEW_URL})" >> "$GITHUB_STEP_SUMMARY"
 
   cleanup-preview:
     name: Delete Docs Preview
@@ -152,35 +223,43 @@ jobs:
 
     steps:
       - name: Get token
-        uses: actions/create-github-app-token@v1
         id: app-token
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Check out gh-pages
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: gh-pages
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Delete preview
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          PREVIEW_PATH="pr-preview/pr-${{ github.event.pull_request.number }}"
+          PREVIEW_PATH="pr-preview/pr-${PR_NUMBER}"
 
           if [ ! -d "$PREVIEW_PATH" ]; then
             echo "No preview found at $PREVIEW_PATH"
             exit 0
           fi
 
-          rm -rf "$PREVIEW_PATH"
+          rm -rf -- "$PREVIEW_PATH"
 
           git config user.name "Docs Deploy"
           git config user.email "docs.deploy@saianeesh.com"
 
-          git add -A "$PREVIEW_PATH"
+          git add -A -- "$PREVIEW_PATH"
+
+          if git diff --cached --quiet; then
+            echo "No preview changes to commit."
+            exit 0
+          fi
 
           git commit \
-            -m "docs: remove PR #${{ github.event.pull_request.number }} preview"
+            -m "docs: remove PR #${PR_NUMBER} preview"
 
-          git push origin gh-pages
+          git push origin HEAD:gh-pages
+
