@@ -4,6 +4,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from typing import cast
+from collections import Counter
 
 import astropy.units as u
 import h5py
@@ -42,7 +43,6 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 max_workers = int(os.environ.get("NUM_FUTURES", os.environ.get("OMP_NUM_THREADS", 8)))
-
 
 def get_jobdict(jdb):
     return {
@@ -222,6 +222,7 @@ def abscal_job(
     ext_rad,
     logger,
 ):
+    skips = Counter()
     data_dir_spl = os.path.join(
         data_dir,
         f"abscal{cfg.test_append}",
@@ -256,8 +257,10 @@ def abscal_job(
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
     pwvs = [None if p == "None" else float(p) for p in pwvs]
     els = np.asarray(
-        bu.get_split_vec(sfits, "el_center", ctx, round_to=1000), dtype=float
+        bu.get_split_vec(sfits, "el_center", ctx, round_to=6), dtype=float
     )
+    if len(els):
+        logger.log(25, "el range %1.f-%1.f deg", np.min(els), np.max(els))
     logger.log(
         25,
         "%d maps available",
@@ -336,17 +339,22 @@ def abscal_job(
                 for future in as_completed(futures):
                     fjobstr, abscal, r_lim, prof_norm, prof_stack = future.result()
                     if abscal is None:
+                        skips["no pwv /planet temp / el"] += 1
                         continue
                     prof_ratio = prof_norm / prof_stack
                     prof_diff = prof_norm - prof_stack
                     prof_err = np.std(prof_diff)
                     if np.abs(np.mean(prof_ratio)) > cfg.abscal_max_avg_prat:
+                        skips["avg prof ratio too far from 1"] += 1
                         continue
                     if np.max(np.abs(prof_ratio - 1)) > cfg.abscal_max_pdiff:
+                        skips["max prof ratio too far from 1"] += 1
                         continue
                     if abs(prof_diff[0]) > cfg.abscal_max_pdiff:
+                        skips["first prof diff too far from 0"] += 1
                         continue
                     if prof_err > cfg.abscal_max_perr:
+                        skips["prof diff rms too high"] += 1
                         continue
                     obs_id, _, stream_id, array, band = abscal[:5]
                     relcal = au.get_obs_relcal(ctx, obs_id, stream_id, array, band)
@@ -366,6 +374,7 @@ def abscal_job(
                 del futures
                 futures = []
 
+    logger.log(25, "Skipped by reason: %s, (no pwv: %d)", dict(skips), sum(p is None for p in pwvs))
     obslist = np.unique(obslist)
     if len(obslist) == 0:
         msg = "No maps made it into abscal!"
@@ -644,8 +653,8 @@ if myrank == 0:
     result_dict = au.make_results_dict(
         [read_dataset(job.tags["abscal"], "abscal_perobs") for job in jobs]
     )
-    save_pickle(result_dict, os.path.join(out_dir, f"results_{date_str()}.pk"))
     out_dir = os.path.join(data_dir, f"abscal{cfg.test_append}")
+    save_pickle(result_dict, os.path.join(out_dir, f"results_{date_str()}.pk"))
     epochs = {f"{start:.0f}_{stop:.0f}": (start, stop) for start, stop in cfg.epochs}
     db = au.make_db(result_dict, os.path.join(out_dir, "abscal.h5"), epochs=epochs)
     db.to_file(os.path.join(out_dir, "abscals.sqlite"))
