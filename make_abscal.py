@@ -8,6 +8,7 @@ from typing import cast
 import astropy.units as u
 import h5py
 import latcom.utils.abscal_utils as au
+from latcom.utils.common import date_str, save_pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import sqlalchemy as sqy
@@ -643,6 +644,7 @@ if myrank == 0:
     result_dict = au.make_results_dict(
         [read_dataset(job.tags["abscal"], "abscal_perobs") for job in jobs]
     )
+    save_pickle(result_dict, os.path.join(out_dir, f"results_{date_str()}.pk"))
     out_dir = os.path.join(data_dir, f"abscal{cfg.test_append}")
     epochs = {f"{start:.0f}_{stop:.0f}": (start, stop) for start, stop in cfg.epochs}
     db = au.make_db(result_dict, os.path.join(out_dir, "abscal.h5"), epochs=epochs)
