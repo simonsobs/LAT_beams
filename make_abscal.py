@@ -1,10 +1,10 @@
 import os
 import shutil
 import sys
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from typing import cast
-from collections import Counter
 
 import astropy.units as u
 import h5py
@@ -43,6 +43,7 @@ myrank = comm.Get_rank()
 nproc = comm.Get_size()
 
 max_workers = int(os.environ.get("NUM_FUTURES", os.environ.get("OMP_NUM_THREADS", 8)))
+
 
 def get_jobdict(jdb):
     return {
@@ -256,9 +257,7 @@ def abscal_job(
     sfits = fits[smsk]
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
     pwvs = [None if p == "None" else float(p) for p in pwvs]
-    els = np.asarray(
-        bu.get_split_vec(sfits, "el_center", ctx, round_to=6), dtype=float
-    )
+    els = np.asarray(bu.get_split_vec(sfits, "el_center", ctx, round_to=6), dtype=float)
     if len(els):
         logger.log(25, "el range %1.f-%1.f deg", np.min(els), np.max(els))
     logger.log(
@@ -374,7 +373,12 @@ def abscal_job(
                 del futures
                 futures = []
 
-    logger.log(25, "Skipped by reason: %s, (no pwv: %d)", dict(skips), sum(p is None for p in pwvs))
+    logger.log(
+        25,
+        "Skipped by reason: %s, (no pwv: %d)",
+        dict(skips),
+        sum(p is None for p in pwvs),
+    )
     obslist = np.unique(obslist)
     if len(obslist) == 0:
         msg = "No maps made it into abscal!"
