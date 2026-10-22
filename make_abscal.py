@@ -17,7 +17,7 @@ from mpi4py import MPI
 from scipy.interpolate import PchipInterpolator
 from scipy.optimize import minimize
 from sotodlib.core import AxisManager, Context, metadata
-from sotodlib.io.metadata import write_dataset
+from sotodlib.io.metadata import read_dataset, write_dataset
 from sotodlib.site_pipeline import jobdb
 from sotodlib.site_pipeline.jobdb import Job
 
@@ -126,6 +126,9 @@ def get_abscal(
     pwv,
     el,
 ):
+    if pwv is None:
+        return None, None, None, None, None
+
     aman = fit["aman"]
     r = aman.r.to(u.rad).value
     if cfg.abscal_from_model:
@@ -162,18 +165,22 @@ def get_abscal(
     array = (fjob.tags["array"],)
     band = fit["band"]
     timestamp = fit["time"]
+    # Solid angle should always be unitful sr
     # get abscal and optical efficiencies.
-    abscal, opt_eff, raw_abscal, raw_opt_eff = au.get_single_abscal(
-        amp=amp,
-        planet=source,
-        timestamp=timestamp,
-        band=band,
-        ufm=array,
-        el_obs=el,
-        solid_angle=solid_angle,
-        pwv_obs=pwv,
+    abscal, abscal_cmb, opt_eff, raw_abscal, raw_abscal_cmb, raw_opt_eff = (
+        au.get_single_abscal(
+            amp=amp,
+            planet=source,
+            timestamp=timestamp,
+            band=band,
+            ufm=array[0],
+            el_obs=el,
+            solid_angle=solid_angle,
+            pwv_obs=pwv,
+        )
     )
-
+    if abscal is None:
+        return None, None, None, None, None
     return (
         fjobstr,
         (
@@ -184,8 +191,15 @@ def get_abscal(
             fjob.tags["band"],
             fjob.tags["source"],
             amp,
+            solid_angle,
+            pwv,
+            el,
             abscal,
+            abscal_cmb,
+            opt_eff,
             raw_abscal,
+            raw_abscal_cmb,
+            raw_opt_eff,
         ),
         r_lim,
         ((prof[r_msk] - off) / amp),
@@ -239,7 +253,7 @@ def abscal_job(
     sfjobs = fjobs[smsk]
     sfits = fits[smsk]
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
-    pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
+    pwvs = [None if p == "None" else float(p) for p in pwvs]
     els = np.asarray(
         bu.get_split_vec(sfits, "el_center", ctx, round_to=1000), dtype=float
     )
@@ -259,10 +273,10 @@ def abscal_job(
     try:
         stack_fit = AxisManager.load(stack_file, fit_path)
     except Exception as e:
-        msg = f"Failed to load fit with error {str(e)}"
+        msg = f"Failed to load fit with error {e!s}"
         fail(job, ErrCode.FIT_MISSING, msg, logger)
-        return job
-    solid_angle = stack_fit.bessel.model_solid_angle_true
+        return job, None
+    solid_angle = u.Quantity(stack_fit.bessel.model_solid_angle_true, u.sr).value
     prof_h5_file = os.path.join(
         data_dir,
         f"stack_profiles{cfg.test_append}",
@@ -273,7 +287,7 @@ def abscal_job(
     if not os.path.isfile(prof_h5_file):
         msg = "Profile h5 file missing!"
         fail(job, ErrCode.FIT_MISSING, msg, logger)
-        return job
+        return job, None
     prof_full = AxisManager.load(prof_h5_file)
     prof = prof_full.prof_cov
     prof_interp = PchipInterpolator(np.deg2rad(np.asarray(prof.r) / 3600), prof.profile)
@@ -285,7 +299,6 @@ def abscal_job(
     num_fits = len(sfits)
     obslist = []
     abscals = []
-    raw_abscals = []
     futures = []
     rs = []
     prof_ratios = []
@@ -320,9 +333,9 @@ def abscal_job(
 
             if len(futures) >= max_workers or (i + 1 == num_fits and len(futures) > 0):
                 for future in as_completed(futures):
-                    fjobstr, abscal, raw_abscal, r_lim, prof_norm, prof_stack = (
-                        future.result()
-                    )
+                    fjobstr, abscal, r_lim, prof_norm, prof_stack = future.result()
+                    if abscal is None:
+                        continue
                     prof_ratio = prof_norm / prof_stack
                     prof_diff = prof_norm - prof_stack
                     prof_err = np.std(prof_diff)
@@ -334,9 +347,10 @@ def abscal_job(
                         continue
                     if prof_err > cfg.abscal_max_perr:
                         continue
+                    obs_id, _, stream_id, array, band = abscal[:5]
+                    relcal = au.get_obs_relcal(ctx, obs_id, stream_id, array, band)
                     obslist.append(fjobstr)
-                    abscals.append(abscal)
-                    raw_abscals.append(raw_abscal)
+                    abscals.append((*abscal, relcal))
                     rs.append(r_lim)
                     prof_ratios.append(prof_ratio)
                     prof_diffs.append(prof_diff)
@@ -355,7 +369,7 @@ def abscal_job(
     if len(obslist) == 0:
         msg = "No maps made it into abscal!"
         fail(job, ErrCode.NO_MAPS, msg, logger)
-        return job, None, None, None
+        return job, None
 
     logger.log(
         25,
@@ -374,16 +388,19 @@ def abscal_job(
         ("band", fits.dtype["band"]),
         ("source", all_src.dtype),
         ("amp", float),
+        ("solid_angle", float),
+        ("pwv", float),
+        ("el", float),
         ("abscal", float),
         ("abscal_cmb", float),
+        ("opt_eff", float),
         ("raw_abscal", float),
         ("raw_abscal_cmb", float),
+        ("raw_opt_eff", float),
+        ("relcal", float),
     ]
     abscal_perobs = metadata.ResultSet.from_friend(
         np.fromiter(abscals, dtype, count=len(abscals))
-    )
-    abscal_rj, raw_abscal_rj, abscal_cmb, raw_abscal_cmb = au.get_abscals_from_perobs(
-        abscal_perobs
     )
 
     # Save
@@ -391,10 +408,6 @@ def abscal_job(
     outpath = os.path.join(data_dir_spl, fname)
     with h5py.File(outpath, "w") as f:
         write_dataset(abscal_perobs, f, address="abscal_perobs", overwrite=True)
-        f["/"].attrs["abscal_rj"] = abscal_rj
-        f["/"].attrs["abscal_cmb"] = abscal_cmb
-        f["/"].attrs["raw_abscal_rj"] = raw_abscal_rj
-        f["/"].attrs["raw_abscal_cmb"] = raw_abscal_cmb
 
     plt.plot(
         3600 * np.rad2deg(np.asarray(rs).T),
@@ -434,9 +447,7 @@ def abscal_job(
     set_tag(job, "obslist", ",".join(obslist))
     job.jstate = cast(sqy.Column[str], jobdb.JState.done)
 
-    logger.log(25, "Abscal is %0.5f (CMB) / %0.2f (RJ)", abscal_cmb, abscal_rj)
-    # TODO: add whatever else you want to return
-    return job, abscal_cmb, abscal_rj, abscal_perobs
+    return job, abscal_perobs
 
 
 # Setup logger
@@ -476,7 +487,7 @@ plot_dir, data_dir = setup_paths(
 os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
 if myrank == 0:
-    of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
+    of_path_noa = os.path.join(data_dir, "beam_pars.h5")
     if os.path.isfile(of_path_noa) and cfg.copy_fits_test and cfg.test_append != "":
         shutil.copyfile(of_path_noa, fpath)
 jdb = make_jobdb(comm, data_dir, cfg.test_append)
@@ -602,10 +613,10 @@ for i, j in enumerate(joblist):
     logger.log(25, "Making stack")
 
     with log_lvl(logger, 15):
-        pending_job, abscal_cmb, abscal_rj, abscal_perobs = abscal_job(
+        pending_job, abscal_perobs = abscal_job(
             job,
             fits,
-            fjobs,
+            fjobs_local,
             split_dict,
             cfg,
             ctx,
@@ -616,13 +627,26 @@ for i, j in enumerate(joblist):
             ext_rad,
             logger,
         )
-        if abscal_cmb is None or abcscal_rj is None or abscal_perobs is None:
-            continue
-        # TODO: You may want to collate the returns into something that rank 0 writes out as metadata + a db
-        #       Or do that in a seperate script, up to you
     logger.log(25, "Done with abscal")
 
 comm.barrier()
+if myrank == 0:
+    jobs = [
+        job
+        for job in jdb.get_jobs(jclass="make_abscal", jstate="done")
+        if job.tags["split"] == "mainsrc+tube_slot+band"
+        and job.tags["det_split"] == "full"  # TODO: make split used here configurable
+    ]
+    if not jobs:
+        logger.info("No abscal jobs found, skipping db creation")
+        sys.exit(0)
+    result_dict = au.make_results_dict(
+        [read_dataset(job.tags["abscal"], "abscal_perobs") for job in jobs]
+    )
+    out_dir = os.path.join(data_dir, f"abscal{cfg.test_append}")
+    epochs = {f"{start:.0f}_{stop:.0f}": (start, stop) for start, stop in cfg.epochs}
+    db = au.make_db(result_dict, os.path.join(out_dir, "abscal.h5"), epochs=epochs)
+    db.to_file(os.path.join(out_dir, "abscals.sqlite"))
 sys.stdout.flush()
 logger.extra["extra"] = ""
 logger.info("Done with all abscals")
