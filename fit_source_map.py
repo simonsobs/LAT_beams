@@ -146,7 +146,7 @@ outfile = None
 if myrank == 0:
     of_path = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
     of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
-    if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
+    if os.path.isfile(of_path_noa) and cfg.copy_fits_test and of_path != of_path_noa:
         shutil.copyfile(of_path_noa, of_path)
     outfile = h5py.File(of_path, "a")
 
@@ -218,11 +218,10 @@ for i, j in enumerate(joblist):
         outfile.flush()
     comm.barrier()
 
-    logger.debug("Writing to db")
-    if job is None:
+    if job is not None:
         to_save = (None, None)
-        continue
-    update_jobs_retry(jdb, [job], nproc * 10, logger)
+        logger.debug("Writing to db")
+        update_jobs_retry(jdb, [job], nproc * 10, logger)
     job = None
     if j is not None:
         with jdb.session_scope() as session:
@@ -502,22 +501,24 @@ for i, j in enumerate(joblist):
     )
     plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
     norm = float(1.0 / aman.amp.value)
-    posmap = np.rad2deg(posmap) * 3600
+    posmap = cast(enmap.ndmap, np.rad2deg(posmap) * 3600)
     maps = [(solved, "data"), (model - off, "model"), (resid, "resid")]
-    plot_map(
-        [m[0] for m in maps],
-        posmap,
-        pixsize,
-        cfg.extent,
-        plt_cent,
-        ufm_plot_dir,
-        f"{obs_id} {ufm} {band} {split} T fit",
-        [m[1] for m in maps],
-        log_thresh=cfg.log_thresh,
-        append="",
-        units='"',
-        lognorm=norm,
-    )
+    for log in (False, True):
+        _norm = norm if log else 1
+        plot_map(
+            [m[0] * _norm for m in maps],
+            posmap,
+            pixsize,
+            cfg.extent,
+            plt_cent,
+            ufm_plot_dir,
+            f"{obs_id} {ufm} {band} {split} T fit",
+            [m[1] for m in maps],
+            log_thresh=cfg.log_thresh,
+            append="",
+            units='"',
+            log=log,
+        )
 
     # Save
     aman.wrap("data_solid_angle_corr", aman[aman.final_model].data_solid_angle_corr)

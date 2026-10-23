@@ -94,7 +94,7 @@ def get_jobit(jdb, obs_ids, ctx, start_time, stop_time, source_list, max_dur, lo
         obslist = np.array_split(obslist, nproc)[myrank]
         obsit = []
         for obs, wsl in zip(obslist, ws_list):
-            if cfg.tube_slots and obs["tube_slot"] not in cfg.tube_slot:
+            if cfg.tube_slots and obs["tube_slot"] not in cfg.tube_slots:
                 continue
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])

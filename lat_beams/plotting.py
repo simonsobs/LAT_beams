@@ -203,7 +203,7 @@ def plot_map(
     maps = [data[ext_sl] for data in data_list]
     profiles = []
     for data in maps:
-        rprof = radial_profile(data, (int(rcent[0]), int(rcent[1])))[
+        rprof = radial_profile(data, (int(rcent[1]), int(rcent[0])))[
             : int(0.5 * min(*data.shape))
         ]
         if log:
@@ -365,9 +365,19 @@ def plot_map_tqu(
         maps = [data]
     else:
         maps = [data[i] for i in range(len(data))]
+    Q_r, U_r = None, None
+    if qrur:
+        if "Q" not in comps or "U" not in comps:
+            raise ValueError("Cannot plot Qr and Ur without Q and U")
+        Q = data[comps.find("Q")]
+        U = data[comps.find("U")]
+        eta, xi = posmap
+        theta = np.arctan2(eta, xi)
+        Q_r = Q * np.cos(2 * theta) + U * np.sin(2 * theta)
+        U_r = U * np.cos(2 * theta) - Q * np.sin(2 * theta)
     for log in (False, True):
         plot_map(
-            maps,
+            maps if not log else [m * lognorm for m in maps],  # type: ignore
             posmap,
             pixsize,
             extent,
@@ -380,18 +390,10 @@ def plot_map_tqu(
             append=append,
             units=units,
         )
-        if not qrur:
+        if not qrur or Q_r is None or U_r is None:
             continue
-        if "Q" not in comps or "U" not in comps:
-            raise ValueError("Cannot plot Qr and Ur without Q and U")
-        Q = data[comps.find("Q")]
-        U = data[comps.find("U")]
-        eta, xi = posmap
-        theta = np.arctan2(eta, xi)
-        Q_r = Q * np.cos(2 * theta) + U * np.sin(2 * theta)
-        U_r = U * np.cos(2 * theta) - Q * np.sin(2 * theta)
         plot_map(
-            [Q_r, U_r],
+            [Q_r, U_r] if not log else [Q_r * lognorm, U_r * lognorm],
             posmap,
             pixsize,
             extent,
