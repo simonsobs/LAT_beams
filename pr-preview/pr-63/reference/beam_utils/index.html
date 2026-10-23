@@ -774,6 +774,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../fitting/map/bessel_scratch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bessel_scratch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../fitting/map/gauss/" class="md-nav__link">
         
   
@@ -4797,7 +4825,7 @@ If <code>False</code>, constrain the offset to zero.</p>
 <span class="sd">        `r_scale * r_lim + r_off`.</span>
 <span class="sd">    """</span>
     <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">r</span><span class="p">))</span>
-    <span class="n">r_msk</span> <span class="o">=</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="n">ext_rad</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r</span> <span class="o">&gt;</span> <span class="n">res</span><span class="p">)</span>
+    <span class="n">r_msk</span> <span class="o">=</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="n">ext_rad</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r</span> <span class="o">&gt;=</span> <span class="n">res</span><span class="p">)</span>
     <span class="n">r_lim</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="n">r_msk</span><span class="p">]</span>
     <span class="n">stack_prof</span> <span class="o">=</span> <span class="n">prof_interp</span><span class="p">(</span><span class="n">r_lim</span><span class="p">)</span>
 
