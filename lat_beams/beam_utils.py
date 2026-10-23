@@ -1224,7 +1224,7 @@ def norm_prof_to_ref(
         `r_scale * r_lim + r_off`.
     """
     res = np.mean(np.diff(r))
-    r_msk = (r < ext_rad) * (r > res)
+    r_msk = (r < ext_rad) * (r >= res)
     r_lim = r[r_msk]
     stack_prof = prof_interp(r_lim)
 

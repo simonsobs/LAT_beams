@@ -129,7 +129,8 @@ def get_abscal(
         prof = aman[aman.final_model].mprof.to(u.pW).value
     else:
         prof = aman.rprof.to(u.pW).value
-    r_msk = (r < ext_rad) * (r > 0)
+    res = np.mean(np.diff(r))
+    r_msk = (r < ext_rad) * (r >= res)
     r_lim = r[r_msk]
 
     # Estimate scaling and offset in real space
