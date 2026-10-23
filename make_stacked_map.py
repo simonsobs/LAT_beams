@@ -183,6 +183,64 @@ def view_TQU(imap) -> enmap.ndmap:
     return padded
 
 
+def plot_stack(omap, zoom, pixsize, plot_dir_spl, job, name, map_type, cfg):
+    posmap = cast(enmap.ndmap, np.rad2deg(omap.posmap()) * 3600)
+
+    for append, smap, z in (
+        ("", omap, 1),
+        ("mask_zoom", omap, zoom),
+    ):
+        plot_map_tqu(
+            smap,
+            posmap,
+            pixsize,
+            min(cfg.extent * z, cfg.extent),
+            (0, 0),
+            plot_dir_spl,
+            (
+                f"{job.tags['split_str']} "
+                f"{job.tags['det_split']} "
+                f"{job.tags['epoch_start']} "
+                f"{job.tags['epoch_end']}"
+                f"{' ' * bool(map_type)}{map_type} {name}"
+            ),
+            log_thresh=cfg.log_thresh,
+            append=append,
+            qrur=True,
+        )
+
+
+def plot_existing_stack(job, cfg, plot_dir, pixsize, logger):
+    name = "map_stack"
+    plot_dir_spl = os.path.join(
+        plot_dir,
+        f"stacks{cfg.test_append}",
+        job.tags["split"],
+        job.tags["split_str"],
+        job.tags["det_split"],
+        f"{job.tags['epoch_start']}_{job.tags['epoch_end']}",
+    )
+    os.makedirs(plot_dir_spl, exist_ok=True)
+
+    zoom = 1
+    if "band" in job.tags["split"]:
+        b_idx = np.where("band" == np.array(job.tags["split"].split("+")))[0][0]
+        band = job.tags["split_str"].split("+")[b_idx]
+        zoom = 90 / float(band[1:])
+
+    for map_type in ("",):
+        tag = f"{map_type}{'_' * bool(map_type)}{name}"
+        path = job.tags.get(tag, "")
+
+        if not path or not os.path.isfile(path):
+            continue
+        omap = cast(enmap.ndmap, enmap.read_map(path))
+        plot_stack(omap, zoom, pixsize, plot_dir_spl, job, name, map_type, cfg)
+
+    logger.log(25, "Plotted existing stacks")
+    return job
+
+
 def check_source_overlap(mjob, cfg, imap):
     # Fudging coordinates a bit here
     msrc = mjob.tags["source"]
@@ -678,23 +736,7 @@ def stack_job(
             set_tag(job, f"{map_type}{'_' * bool(map_type)}{name}", path)
             if "ivar" in name:
                 continue
-            posmap = np.rad2deg(omap.posmap()) * 3600
-            for append, smap, z in [
-                ("", omap, 1),
-                ("_mask_zoom", omap, zoom),
-            ]:
-                plot_map_tqu(
-                    smap,
-                    posmap,
-                    pixsize,
-                    min(cfg.extent * z, cfg.extent),
-                    (0, 0),
-                    plot_dir_spl,
-                    f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}{' ' * bool(map_type)}{map_type} {name}",
-                    log_thresh=cfg.log_thresh,
-                    append=append,
-                    qrur=True,
-                )
+            plot_stack(omap, zoom, pixsize, plot_dir_spl, job, name, map_type, cfg)
 
     set_tag(job, "config", cfg_str)
     set_tag(job, "context", ctx_str)
@@ -742,9 +784,40 @@ os.makedirs(plot_dir, exist_ok=True)
 fpath = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
 if myrank == 0:
     of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
-    if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
+    if os.path.isfile(of_path_noa) and cfg.copy_fits_test and cfg.test_append != "":
         shutil.copyfile(of_path_noa, fpath)
 jdb = make_jobdb(comm, data_dir, cfg.test_append)
+
+if args.plot_only:
+    logger.info("Running in plot only mode!")
+    all_jobs = jdb.get_jobs(jclass="stack_maps", jstate="done")
+    det_splits = ["full"] + cfg.det_splits
+    epoch_strings = [f"{start}-{end}" for start, end in cfg.epochs]
+    splits = cfg.split_by
+    maplist = jdb.get_jobs(
+        jclass="stack_maps",
+        jstate="done",
+        locked=False,
+    )
+    joblist = np.array_split(all_jobs, nproc)[myrank]
+    joblist = [
+        job
+        for job in joblist
+        if (
+            job.tags["det_split"] in det_splits
+            and job.tags["split"] in splits
+            and f"{job.tags['epoch_start']}-{job.tags['epoch_end']}" in epoch_strings
+        )
+    ]
+    for i, job in enumerate(joblist):
+        logger.extra["extra"] = f" [{get_jobstr(job)} ({i + 1}/{len(joblist)})]"
+        plot_existing_stack(job, cfg, plot_dir, pixsize, logger)
+    comm.barrier()
+    sys.stdout.flush()
+    logger.extra["extra"] = ""
+    logger.info("Done plotting existing stacks")
+    sys.exit(0)
+
 
 # Load fits
 logger.info("Loading map metadata and fits")
@@ -818,6 +891,10 @@ jdb, all_jobs = setup_jobs(
 )
 all_jobs = np.array(all_jobs)
 
+if len(all_jobs) == 0:
+    logger.info("No jobs to run")
+    sys.exit(0)
+
 # Make template map
 ext_rad = np.deg2rad(cfg.extent / 3600)
 pix_extent = int(2 * ext_rad // cfg.res)
@@ -829,12 +906,7 @@ twcs = enmap.wcsutils.build(
     rowmajor=True,
 )
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
-map_types = ("",)  # , "resid")
-
-if args.plot_only:
-    logger.info("Running in plot only mode!")
-    logger.error("Plot only mode broken right now!")
-    sys.exit(1)
+map_types = ""  # , "resid")
 
 # Get splits
 all_splits = np.unique([job.tags["split"] for job in all_jobs])
