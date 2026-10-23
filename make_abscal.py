@@ -107,14 +107,6 @@ def get_tags(info):
     }
 
 
-def _amp_obj(x, prof_interp, prof, r):
-    amp, off, r_off, r_scale = x
-    stack_prof = prof_interp(r_scale * r + r_off)
-    prof_norm = (prof - off) / amp
-    return np.sum((prof_norm - stack_prof) ** 2)
-    # return np.sum((prof - amp*stack_prof - off)**2)
-
-
 def get_abscal(
     fjobstr,
     fjob,
@@ -139,23 +131,11 @@ def get_abscal(
         prof = aman.rprof.to(u.pW).value
     r_msk = (r < ext_rad) * (r > 0)
     r_lim = r[r_msk]
-    stack_prof = prof_interp(r_lim)
 
     # Estimate scaling and offset in real space
-    lin = np.polyfit(stack_prof, prof[r_msk], 1)
-    amp = lin[0]
-    off = lin[1]
-    bounds = [
-        (0.5 * amp, 1.5 * amp),
-        (off - 10 * abs(off), off + 10 * abs(off)),
-        (-1 * cfg.res, cfg.res),
-        (0.9, 1.1),
-    ]
-    res = minimize(
-        _amp_obj, (amp, off, 0, 1), (prof_interp, prof[r_msk], r_lim), bounds=bounds
-    )  # , method="Powell")
-    amp, off, r_off, r_scale = res.x
-    stack_prof = prof_interp(r_scale * r_lim + r_off)
+    amp, off, _, _, r_lim, _, stack_prof = bu.norm_prof_to_ref(
+        r, prof, prof_interp, ext_rad, False
+    )
 
     # Optional window func refinement
     if cfg.abscal_lmin > 0:
@@ -169,20 +149,19 @@ def get_abscal(
     timestamp = fit["time"]
     # Solid angle should always be unitful sr
     # get abscal and optical efficiencies.
-    abscal, abscal_cmb, opt_eff, raw_abscal, raw_abscal_cmb, raw_opt_eff = (
-        au.get_single_abscal(
-            amp=amp,
-            planet=source,
-            timestamp=timestamp,
-            band=band,
-            ufm=array[0],
-            el_obs=el,
-            solid_angle=solid_angle,
-            pwv_obs=pwv,
-        )
+    abscal_res = au.get_single_abscal(
+        amp=amp,
+        planet=source,
+        timestamp=timestamp,
+        band=band,
+        ufm=array[0],
+        el_obs=el,
+        solid_angle=solid_angle,
+        pwv_obs=pwv,
     )
-    if abscal is None:
+    if abscal_res is None:
         return None, None, None, None, None
+    abscal, abscal_cmb, opt_eff, raw_abscal, raw_abscal_cmb, raw_opt_eff = abscal_res
     return (
         fjobstr,
         (
