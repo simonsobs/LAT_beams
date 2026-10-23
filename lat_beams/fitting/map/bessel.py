@@ -99,11 +99,14 @@ from astropy import units as u
 from healpy.sphtfunc import beam2bl
 from jaxtyping import Float
 from numpy.typing import NDArray
+from pixell import enmap
 from pixell.enmap import ndmap
+from scipy.interpolate import PchipInterpolator
 from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 
-from ...beam_utils import radial_profile_lin
+from ...beam_utils import norm_prof_to_ref, radial_profile_lin
 from ..core import bessel_term_cached
+from .cov import apply_harm_noise, empirical_profile_covariance, estimate_noise_ps2d
 
 
 @numba.jit(nopython=True, fastmath=True, cache=True)
@@ -677,7 +680,6 @@ def fit_bessel_map(
     n_opt_pixels : int, optional
         Number of representative pixels used during nonlinear
         optimization. Set to `None` to use all valid pixels.
-
     Returns
     -------
     aman : AxisManager
@@ -1222,8 +1224,17 @@ def fit_bessel_map(
     )
 
     if calc_cov:
-        resid = beam_model[fit_msk] - map_fit
-        sigma2 = np.sum((resid * w) ** 2) / dof
+        resid = imap - beam_model
+        sigma2 = np.sum((resid[fit_msk] * w) ** 2) / dof
+
+        ps2d = estimate_noise_ps2d(
+            resid,
+            ivar,
+            guess,
+            window=None,
+            smooth_scale=1.0,
+            floor_fraction=1e-3,
+        )
 
         full_cov = compute_full_covariance(
             params=result.x,
@@ -1237,6 +1248,10 @@ def fit_bessel_map(
             n_ang=n_ang,
             n_pixels=n_pixels,
             sigma2=sigma2,
+            ps2d=ps2d,
+            ivar=ivar,
+            fit_msk=fit_msk,
+            include_corr=True,
         )
 
         n_linear = n_core + 1
@@ -1251,6 +1266,7 @@ def fit_bessel_map(
         aman.wrap("core_wing_cov", core_wing_cov, [(0, linear_ax), (1, wing_ax)])
         aman.wrap("wing_errors", wing_errors, [(0, wing_ax)])
         aman.wrap("sigma2", sigma2)
+        aman.wrap("ps2d", ps2d)
 
     return aman, beam_model
 
@@ -1267,64 +1283,107 @@ def compute_full_covariance(
     n_ang: int,
     n_pixels: int,
     sigma2: float,
+    ps2d: Float[ndmap, "nx ny"],
+    ivar: Float[ndmap, "nx ny"],
+    fit_msk: NDArray[np.bool_],
+    include_corr: bool = True,
 ) -> Float[NDArray, "n_params n_params"]:
     r"""
     Calculate the joint covariance of the linear and nonlinear fit
-    parameters, including their cross-covariance.
-
+    parameters, including their cross-covariance, using a correlated-noise
+    model estimated from the full map.
+    
     The fitted model can be written as
-
+    
     $$
     M = (1 - w_{\rm wing}) C + w_{\rm wing} W + {\rm off}
     $$
-
+    
     where `C` is the Bessel core, `W` is the pure $r^{-3}$ wing, and
     `w_wing` is the smooth transition supplied by
     `fast_wing_transition`.
-
+    
     The linear parameters are the Bessel coefficients and global offset,
     while the nonlinear parameters are the Fourier coefficients describing
     the wing amplitude and transition radius, together with `log(p)`.
-
-    At the final solution the linear parameters are conditionally
-    optimized for the nonlinear parameters. For covariance estimation we
-    construct the joint Gauss--Newton Hessian using the partial derivatives
-    of the model with respect to all parameters,
-
+    
+    At the final solution, the linear parameters are conditionally
+    optimized for the nonlinear parameters. For covariance estimation,
+    we construct the joint Gauss--Newton Hessian using the partial
+    derivatives of the model with respect to all parameters.
+    
+    Unlike a diagonal inverse-variance approximation, the noise covariance
+    is modeled as
+    
     $$
-    H = J^T J
+    N = D N_{\rm harm} D,
+    \qquad
+    D = \operatorname{diag}\left(\sqrt{1/\mathrm{ivar}}\right),
     $$
-
-    together with the same Fourier regularization and linear ridge used
-    during the fit.
-
-    The covariance is then
-
+    
+    where $N_{\rm harm}$ is a stationary correlated-noise covariance
+    represented by its two-dimensional Fourier power spectrum `ps2d`.
+    The inverse-noise-weighted Hessian is
+    
     $$
-    C_{\rm full} = \sigma^2 H^{-1}
+    H = J^T N^{-1} J.
     $$
-
-    In block form,
-
+    
+    The inverse-noise operator is applied using `pixell.enmap` harmonic
+    transforms. In particular, the Jacobian columns are embedded in
+    full-map arrays, set to zero outside `fit_msk`, and transformed to
+    harmonic space. The inverse harmonic noise spectrum is applied to
+    these transforms before returning to map space. The resulting
+    operation accounts for correlations between fitting pixels and
+    pixels outside the fitting region, under the assumed stationary
+    harmonic-noise model modulated by the inverse-variance envelope.
+    
+    The power spectrum `ps2d` must be estimated consistently with the
+    `pixell.enmap` harmonic transforms used here, including their Fourier
+    mode ordering, normalization, and pixel-area conventions. It should
+    represent the correlated-noise spectrum in map units squared, rather
+    than the spectrum of the fitted source itself.
+    
+    The joint Hessian also includes the existing Fourier regularization,
+    linear ridge, and negative-model penalty. These terms regularize the
+    fit and discourage negative model values, respectively.
+    
+    In block form, the Hessian is
+    
     $$
     H =
     \begin{pmatrix}
         H_{cc} & H_{cq} \\
         H_{cq}^T & H_{qq}
-    \end{pmatrix}
+    \end{pmatrix},
     $$
-
-    so the resulting covariance contains the linear/nonlinear
-    cross-covariance
-
+    
+    where $c$ denotes the linear parameters and $q$ denotes the nonlinear
+    parameters. The resulting full covariance includes the linear/nonlinear
+    cross-covariance,
+    
     $$
-    C_{cq} =
-    \operatorname{Cov}(c, q)
+    C_{cq} = \operatorname{Cov}(c,q).
     $$
-
+    
     This is different from simply combining `core_cov` and `wing_cov`,
-    which implicitly assumes `C_cq = 0`.
-
+    which implicitly assumes $C_{cq}=0$.
+    
+    The covariance is computed as
+    
+    $$
+    C_{\rm full} = \sigma^2 H^+,
+    $$
+    
+    where $H^+$ denotes the pseudoinverse of the regularized Hessian and
+    `sigma2` is the supplied overall residual-variance scale.
+    
+    Note that this correlated-noise correction applies to the covariance
+    calculation; it does not by itself change the diagonal-weighted
+    objective used during fitting. The resulting covariance is therefore
+    an approximation when the fit itself has not been performed using
+    the same correlated-noise weighting.
+    
     Parameters
     ----------
     params : Float[NDArray, "n_nonlinear"]
@@ -1333,42 +1392,51 @@ def compute_full_covariance(
         Final full-pixel linear solution containing the Bessel coefficients
         followed by the global offset. Shape `(n_linear,)`.
     B_core : Float[NDArray, "n_pixels n_core"]
-        Unweighted Bessel design matrix. Shape `(n_pixels, n_core)`.
+        Unweighted Bessel design matrix on fitting pixels.
     w : Float[NDArray, "n_pixels"]
-        Pixel weights, equal to the square root of the inverse variance.
-        Shape `(n_pixels,)`.
+        Square root of the inverse-variance map on fitting pixels.
+        Used for the negative-model penalty.
     F_mat_T : Float[NDArray, "n_pixels n_ang"]
-        Fourier design matrix transposed. Shape `(n_pixels, n_ang)`.
+        Transposed Fourier design matrix on fitting pixels.
     r_fit : Float[NDArray, "n_pixels"]
-        Radius of each fitted pixel. Shape `(n_pixels,)`.
+        Radius of each fitting pixel.
     scale : Float[NDArray, "n_linear"]
-        Column scaling used for the linear solve. Shape `(n_linear,)`.
+        Column scaling used for the linear solve.
     n_core : int
         Number of Bessel-core linear coefficients.
     n_ang : int
-        Number of Fourier angular coefficients.
+        Number of angular Fourier coefficients.
     n_pixels : int
-        Number of fitted pixels.
+        Number of fitting pixels.
     sigma2 : float
-        Residual variance used to scale the parameter covariance.
-
+        Overall residual-variance scale used in the covariance estimate.
+    ps2d : enmap
+        Full-map two-dimensional correlated-noise power spectrum,
+        estimated using `estimate_noise_ps2d`. Its shape, Fourier ordering,
+        and normalization must be consistent with the `pixell.enmap`
+        harmonic transforms used by the inverse-noise operator.
+    ivar : enmap
+        Full-map inverse-variance map.
+    fit_msk : NDArray[np.bool_]
+        Boolean mask selecting fitting pixels in the full map. Must have
+        the same shape as `ivar`.
+    include_corr : bool, default: True
+        If True then include the correlated noise.
+        If False then just use ivar.
+    
     Returns
     -------
     full_cov : Float[NDArray, "n_params n_params"]
-        Joint covariance of the linear and nonlinear parameters. Shape
+        Joint covariance of the linear and nonlinear parameters,
+        including their cross-covariance. Shape
         `(n_linear + 2 * n_ang + 1, n_linear + 2 * n_ang + 1)`.
     """
-    # TODO: The regularization and penalization terms have constants that are hardcoded in a few spots, need to fix that
     loga_coeff = params[:n_ang]
     logr_coeff = params[n_ang : 2 * n_ang]
     p_val = params[-1]
 
     pure_wing, wing_weight = fast_wing_transition(
-        r_fit,
-        loga_coeff,
-        logr_coeff,
-        p_val,
-        F_mat_T,
+        r_fit, loga_coeff, logr_coeff, p_val, F_mat_T
     )
 
     q = 1.0 - wing_weight
@@ -1378,235 +1446,87 @@ def compute_full_covariance(
     n_nonlinear = 2 * n_ang + 1
     n_params = n_linear + n_nonlinear
 
-    X = np.column_stack(
-        [
-            B_core * q[:, None],
-            np.ones(n_pixels),
-        ]
-    )
-    X_weighted = X * w[:, None]
+    # Linear model Jacobian
+    X = np.column_stack([B_core * q[:, None], np.ones(n_pixels)])
 
+    # Wing derivatives.
     logr = F_mat_T @ logr_coeff
     r0 = np.exp(logr)
 
-    p = np.clip(
-        np.exp(p_val),
-        0.5,
-        20.0,
-    )
-    rr = np.maximum(
-        r_fit,
-        1e-5,
-    )
-    r0_safe = np.maximum(
-        r0,
-        1e-4,
-    )
+    p = np.clip(np.exp(p_val), 0.5, 20.0)
+    rr = np.maximum(r_fit, 1e-5)
+    r0_safe = np.maximum(r0, 1e-4)
+
     ratio = rr / r0_safe
     u = 0.5 + (p / 0.3) * (ratio - 1.0)
 
-    inside = (u > 0.0) * (u < 1.0)
+    inside = (u > 0.0) & (u < 1.0)
     dsdu = np.zeros_like(u)
     ui = u[inside]
     dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
+
     du_dlogr0 = -(p / 0.3) * ratio
     du_dlogp = (p / 0.3) * (ratio - 1.0)
+
     dw_dlogr0 = dsdu * du_dlogr0
     dw_dlogp = dsdu * du_dlogp
     dw_dlogr0[~inside] = 0.0
     dw_dlogp[~inside] = 0.0
+
     dwing_dloga = pure_wing[:, None] * F_mat_T
     wing_minus_core = pure_wing - core
+
     dmodel_a = wing_weight[:, None] * dwing_dloga
     dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
     dmodel_p = wing_minus_core * dw_dlogp
-    J_nonlinear = np.column_stack(
-        [
-            dmodel_a,
-            dmodel_r0,
-            dmodel_p,
-        ]
-    )
-    J_nonlinear *= w[:, None]
 
-    J = np.zeros(
-        (
-            n_pixels,
-            n_params,
-        ),
-        dtype=float,
-    )
-    J[:, :n_linear] = X_weighted
-    J[:, n_linear:] = J_nonlinear
-    H = J.T @ J
+    J_nonlinear = np.column_stack([dmodel_a, dmodel_r0, dmodel_p])
+    J_fit = np.column_stack([X, J_nonlinear])
+    J_full = enmap.zeros(ivar.shape + (n_params,), ivar.wcs, dtype=np.float64)
+    J_full[fit_msk] = J_fit
 
+    # Apply the noise cov
+    Ninv_J = apply_harm_noise(J_full, ivar, ps2d, include_corr)
+
+    # Form the joint Hessian
+    H = np.einsum("xyi,xyj->ij", np.asarray(J_full), np.asarray(Ninv_J), optimize=True)
+
+    # Linear ridge
     ridge = 1e-6 * scale[:n_core] ** 2
-    H[
-        :n_core,
-        :n_core,
-    ] += np.diag(ridge)
+    H[:n_core, :n_core] += np.diag(ridge)
+
+    # Fourier regularization
     reg = 0.01**2
 
-    H[
-        n_linear + 1 : n_linear + n_ang,
-        n_linear + 1 : n_linear + n_ang,
-    ] += reg * np.eye(n_ang - 1)
+    H[n_linear + 1 : n_linear + n_ang, n_linear + 1 : n_linear + n_ang] += reg * np.eye(
+        n_ang - 1
+    )
     H[
         n_linear + n_ang + 1 : n_linear + 2 * n_ang,
         n_linear + n_ang + 1 : n_linear + 2 * n_ang,
     ] += reg * np.eye(n_ang - 1)
 
+    # Negative-model penalty
     model_no_offset = (1.0 - wing_weight) * core + wing_weight * pure_wing
-    negative = np.maximum(
-        0.0,
-        -model_no_offset,
-    )
+    negative = np.maximum(0.0, -model_no_offset)
     neg_norm = np.sqrt(np.sum((negative * w) ** 2))
     if neg_norm > 0.0:
-        dmodel = np.zeros(
-            (
-                n_pixels,
-                n_params,
-            ),
-            dtype=float,
-        )
-        dmodel[:, :n_linear] = X_weighted
-        dmodel[
-            :,
-            n_linear : n_linear + n_nonlinear,
-        ] = J_nonlinear
+        dmodel = np.zeros((n_pixels, n_params), dtype=float)
+        dmodel[:, :n_linear] = X
+        dmodel[:, n_linear:] = J_nonlinear
+
         active = model_no_offset < 0.0
         weights = np.zeros_like(model_no_offset)
         weights[active] = negative[active] * w[active] ** 2
+
         dpenalty = -10.0 / neg_norm * (weights[:, None] * dmodel).sum(axis=0)
-        H += np.outer(
-            dpenalty,
-            dpenalty,
-        )
+        H += np.outer(dpenalty, dpenalty)
 
-    covariance = scipy.linalg.pinvh(
-        H,
-        check_finite=False,
-    )
-    sigma2 = 1
-    return cast(NDArray[np.floating], covariance / sigma2)
+    H = 0.5 * (H + H.T)  # Stupid floats
+    H_inv = cast(NDArray[np.floating], scipy.linalg.pinvh(H, check_finite=False))
+    # sigma2 = 1
 
-
-def empirical_profile_covariance(
-    all_prof: Float[NDArray, "n_samp n_radial"],
-    radial_centers: Float[NDArray, "n_radial"],
-    lmax: int,
-    n_modes: int = -1,
-) -> Optional[AxisManager]:
-    r"""
-    Estimate profile and beam-window covariance directly from an ensemble
-    of normalized radial profiles.
-
-    This is the sample-space analogue of `bessel_profile_covariance`.
-    Rather than estimating a covariance in the potentially degenerate
-    parameter space, the covariance is estimated directly from the
-    ensemble of model profiles.
-
-    Parameters
-    ----------
-    all_prof : Float[NDArray, "n_samp n_radial"]
-        Ensemble of normalized radial profile realizations. Each row is
-        one realization and each column corresponds to `radial_centers`.
-    radial_centers : Float[NDArray, "n_radial"]
-        Radial coordinates corresponding to the profile bins, in radians.
-    lmax : int
-        Maximum multipole for the beam window function.
-    n_modes : int, optional
-        Number of covariance modes to retain in `profile_modes` and
-        `bl_modes`. If <= 0, all modes are retained.
-
-    Returns
-    -------
-    out : Optional[AxisManager]
-        AxisManager with a structure matching `bessel_profile_covariance`
-        as closely as possible.
-
-        Fields include:
-
-        - `r`: radial bin centers.
-        - `profile`: mean normalized profile.
-        - `profile_sigma`: empirical 1-sigma profile uncertainty.
-        - `profile_cov`: empirical profile covariance.
-        - `profile_modes`: covariance modes including their 1-sigma
-          amplitudes.
-        - `ell`: multipoles from 0 through `lmax`.
-        - `bl`: beam window function of the mean profile.
-        - `bl_sigma`: empirical 1-sigma window-function uncertainty.
-        - `bl_modes`: covariance modes of the window function including
-          their 1-sigma amplitudes.
-        - `cov_eigenvalues`: profile covariance eigenvalues.
-        - `n_modes`: number of retained covariance modes.
-        - `n_samp`: number of profile realizations.
-
-        The eigenvalues/eigenvectors correspond to the profile-space
-        covariance, rather than the original parameter-space covariance.
-        If `len(all_prof) == 1` then `None` is returned.
-    """
-    all_prof = np.asarray(all_prof, dtype=float)
-    radial_centers = np.asarray(radial_centers, dtype=float)
-    n_samp, n_radial = all_prof.shape
-
-    if n_samp < 2:
-        return None
-    if len(radial_centers) != n_radial:
-        raise ValueError(
-            "all_prof and radial_centers have incompatible shapes: "
-            f"{n_radial} != {len(radial_centers)}"
-        )
-    profile_mean = np.mean(all_prof, axis=0)
-    centered = all_prof - profile_mean[None, :]
-    _, s, Vt = np.linalg.svd(centered, full_matrices=False)
-    evals_full = s**2 / (n_samp - 1)
-    evecs_full = Vt.T
-
-    if n_modes <= 0:
-        n_modes_actual = len(evals_full)
-    else:
-        n_modes_actual = min(n_modes, len(evals_full))
-
-    evals = evals_full[:n_modes_actual]
-    evecs = evecs_full[:, :n_modes_actual]
-    profile_modes = evecs * np.sqrt(evals)[None, :]
-    profile_sigma = np.sqrt(np.sum(profile_modes**2, axis=1))
-
-    ell = np.arange(lmax + 1)
-    bl = np.asarray(beam2bl(profile_mean, radial_centers, lmax=lmax))
-    bl_modes = np.empty((len(ell), n_modes_actual), dtype=float)
-
-    for i in range(n_modes_actual):
-        bl_modes[:, i] = np.asarray(
-            beam2bl(
-                profile_modes[:, i],
-                radial_centers,
-                lmax=lmax,
-            )
-        )
-    bl_sigma = np.sqrt(np.sum(bl_modes**2, axis=1))
-
-    r_ax = IndexAxis("r", n_radial)
-    ell_ax = IndexAxis("ell", len(ell))
-    mode_ax = IndexAxis("mode", n_modes_actual)
-    out = AxisManager(r_ax, ell_ax, mode_ax)
-    out.wrap("r", 3600 * np.rad2deg(radial_centers), [(0, "r")])
-    out.wrap("profile_mean", profile_mean, [(0, "r")])
-    out.wrap("profile_sigma", profile_sigma, [(0, "r")])
-    out.wrap("profile_modes", profile_modes, [(0, "r"), (1, "mode")])
-    out.wrap("ell", ell, [(0, "ell")])
-    out.wrap("bl_mean", bl, [(0, "ell")])
-    out.wrap("bl_sigma", bl_sigma, [(0, "ell")])
-    out.wrap("bl_modes", bl_modes, [(0, "ell"), (1, "mode")])
-    out.wrap("cov_eigenvalues", evals, [(0, "mode")])
-    out.wrap("cov_eigenvectors", evecs, [(0, "r"), (1, "mode")])
-    out.wrap("n_modes", n_modes_actual)
-    out.wrap("n_samp", n_samp)
-    out.wrap("lmax", lmax)
-
-    return out
+    return cast(NDArray[np.floating], sigma2 * H_inv)
 
 
 def bessel_profile_covariance(
@@ -1617,6 +1537,8 @@ def bessel_profile_covariance(
     n_radial: int = 200,
     cov: Optional[Float[np.ndarray, "npar npar"]] = None,
     fits: Optional[list[AxisManager]] = None,
+    ext_rad: float = np.inf,
+    empir_from_model=True,
 ) -> tuple[AxisManager, Float[ndmap, "nx ny"], Optional[AxisManager]]:
     r"""
     Propagate the full fit and covariance into a radial beam profile and b_l and their covariances.
@@ -1662,6 +1584,11 @@ def bessel_profile_covariance(
     fits : Optional[list[AxisManager]], default: None
         List of loaded fits (the root aman not aman.bessel).
         If provided will be used to compute an empirical covariance.
+    ext_rad : float, default: np.inf
+        Radius in radians of the mapmaker filter.
+    empir_from_model, default: bool
+        If True compute the empirical covariance from the per-obs models.
+        If False use the data profiles instead.
 
     Returns
     -------
@@ -1762,7 +1689,6 @@ def bessel_profile_covariance(
     )
     peak = np.argmax(model_flat)
     profile_norm = model_flat[peak] - off
-    # profile = normalize_profile(profile, off)
     profile = (profile - off) / profile_norm
 
     n_pix = len(model_flat)
@@ -1781,33 +1707,44 @@ def bessel_profile_covariance(
             amps_plus[tuple(ind)] = a
         for a, ind in zip(p_minus[:n_core], idx):
             amps_minus[tuple(ind)] = a
-        model_plus = bessel_beam(
-            posmap,
-            xi0,
-            eta0,
-            ell_max,
-            amps_plus,
-            0.0,
-            p_plus[n_core + 1 :],
-            p_plus[n_core],
-            base_beams=base_beams,
-            f_basis=f_basis,
-        ).ravel()  # - p_plus[n_core]
-        model_minus = bessel_beam(
-            posmap,
-            xi0,
-            eta0,
-            ell_max,
-            amps_minus,
-            0.0,
-            p_minus[n_core + 1 :],
-            p_minus[n_core],
-            base_beams=base_beams,
-            f_basis=f_basis,
-        ).ravel()  # - p_minus[n_core]
-        J_mode[:, i] = (np.asarray(model_plus) - np.asarray(model_minus)) / (
-            2 * sigma * profile_norm
+        model_plus = (
+            bessel_beam(
+                posmap,
+                xi0,
+                eta0,
+                ell_max,
+                amps_plus,
+                0.0,
+                p_plus[n_core + 1 :],
+                p_plus[n_core],
+                base_beams=base_beams,
+                f_basis=f_basis,
+            ).ravel()
+            - off
         )
+        model_minus = (
+            bessel_beam(
+                posmap,
+                xi0,
+                eta0,
+                ell_max,
+                amps_minus,
+                0.0,
+                p_minus[n_core + 1 :],
+                p_minus[n_core],
+                base_beams=base_beams,
+                f_basis=f_basis,
+            ).ravel()
+            - off
+        )
+        # norm_plus = model_plus[peak] - off # p_plus[n_core]
+        # norm_minus = model_minus[peak] - off #p_minus[n_core]
+        # # p_plus = (model_plus - p_plus[n_core]) / norm_plus
+        # # p_minus = (model_minus - p_minus[n_core]) / norm_minus
+        # p_plus = (model_plus - off) / norm_plus
+        # p_minus = (model_minus - off) / norm_minus
+        # J_mode[:, i] = (p_plus - p_minus) / (2 * sigma)
+        J_mode[:, i] = (model_plus - model_minus) / (2 * sigma * profile_norm)
 
     J_profile_mode = R @ J_mode
     profile_modes = J_profile_mode * np.sqrt(evals)[None, :]
@@ -1817,12 +1754,13 @@ def bessel_profile_covariance(
     bl = np.asarray(beam2bl(profile, radial_centers, lmax=lmax))
     bl_modes = np.empty((len(ell), n_modes_actual), dtype=float)
 
-    w = radial_centers * np.gradient(radial_centers)
-    area = np.sum(w)
-    mean_modes = np.sum(profile_modes * w[:, None], axis=0) / area
-    residual_modes = profile_modes - mean_modes[None, :]
+    # w = radial_centers * np.gradient(radial_centers)
+    # area = np.sum(w)
+    # mean_modes = np.sum(profile_modes * w[:, None], axis=0) / area
+    # residual_modes = profile_modes - mean_modes[None, :]
     for i in range(n_modes_actual):
-        bl_modes[:, i] = beam2bl(residual_modes[:, i], radial_centers, lmax=lmax)
+        bl_modes[:, i] = beam2bl(profile_modes[:, i], radial_centers, lmax=lmax)
+        # bl_modes[:, i] = beam2bl(residual_modes[:, i], radial_centers, lmax=lmax)
     bl_sigma = np.sqrt(np.sum(bl_modes**2, axis=1))
 
     axes = [
@@ -1849,27 +1787,38 @@ def bessel_profile_covariance(
     out.wrap("n_modes", n_modes_actual)
 
     out_empir = None
-    if fits is not None:
-        profiles = np.empty((len(fits), len(radial_centers)))
+    if fits is not None and len(fits) > 1:
+        prof_interp = PchipInterpolator(radial_centers, profile)
+        r_use = radial_centers
+        if not model:
+            r_use = radial_centers[radial_centers < ext_rad]
+        profiles = np.empty((len(fits), len(r_use)))
         for i, aman in enumerate(fits):
-            aman.gauss.xi0 = xi0 * u.rad
-            aman.gauss.eta0 = eta0 * u.rad
-            fmodel = bessel_beam_from_aman(
-                posmap, aman, base_beams=base_beams, f_basis=f_basis
-            )
-            fmodel -= aman.bessel.off.value
+            aman_i = aman.copy()
             norm = aman.gauss.amp.value + aman.gauss.off.value - aman.bessel.off.value  # type: ignore
-            fmodel /= norm
-            profile = R @ fmodel.ravel()
-            profiles[i] = profile * np.mean(out.profile[1:10] / profile[1:10])
-        profiles[:, 0] = 1
-        profile_mean = np.mean(profiles, axis=0)
-        out_empir = empirical_profile_covariance(
-            profiles, radial_centers, lmax, n_modes
-        )
-        if out_empir is not None:
-            out_empir.wrap("profile", profile_mean, [(0, "r")])
-            bl_mean = np.asarray(beam2bl(profile_mean, radial_centers, lmax=lmax))
-            out_empir.wrap("bl", bl_mean, [(0, "ell")])
+            if empir_from_model:
+                aman_i.gauss.xi0 = xi0 * u.rad
+                aman_i.gauss.eta0 = eta0 * u.rad
+                fmodel = bessel_beam_from_aman(
+                    posmap, aman_i, base_beams=base_beams, f_basis=f_basis
+                )
+                fmodel = np.asarray(fmodel).copy()
+                fmodel -= float(aman_i.bessel.off.value)  # type: ignore
+                fmodel /= norm
+                prof_raw = R @ fmodel.ravel()
+                prof_raw[0] = 1
+                r_raw = r_use
+            else:
+                prof_raw = (aman_i.rprof.value - aman_i.bessel.off.value) / norm  # type: ignore
+                r_raw = aman_i.r.to(u.rad).value  # type: ignore
+            prof_i = PchipInterpolator(r_raw, prof_raw)
+            prof = prof_i(r_use)
+            amp, off, r_off, r_scale, _, _, _ = norm_prof_to_ref(
+                r_use, prof, prof_interp, ext_rad * 0.25, False
+            )
+            prof = prof_i((r_use - r_off) / r_scale)
+            profiles[i] = (prof - off) / amp
+        out_empir = empirical_profile_covariance(profiles, r_use, lmax, n_modes)
+        out_empir.wrap("from_model", empir_from_model)
 
     return out, cast(ndmap, model - off), out_empir

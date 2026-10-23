@@ -149,6 +149,7 @@ def plot_model_maps(
     job,
     log_thresh,
     n_multipoles,
+    cfg,
 ):
     plot_dir_spl = os.path.join(
         plot_dir,
@@ -222,20 +223,21 @@ def plot_model_maps(
             )
             plt.close()
 
-    plot_map(
-        [m[0] for m in maps],
-        posmap,
-        pixsize,
-        extent,
-        (0, 0),
-        plot_dir_spl,
-        f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} {name} T fit",
-        [m[1] for m in maps],
-        log_thresh=log_thresh,
-        append="",
-        units='"',
-        lognorm=1,
-    )
+    for log in (False, True):
+        plot_map(
+            [m[0] for m in maps],
+            posmap,
+            pixsize,
+            extent,
+            (0, 0),
+            plot_dir_spl,
+            f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} T fit",
+            [m[1] for m in maps],
+            log=log,
+            log_thresh=log_thresh,
+            append="",
+            units='"',
+        )
 
 
 def jackknife_cov(X, jk_mean=None):
@@ -430,6 +432,8 @@ def fit_job(
         cfg.cov_modes,
         pix_extent // 2,
         fits=fits,
+        ext_rad=band_mask_size,
+        empir_from_model=cfg.empir_from_model,
     )
     prof_cov_full = AxisManager()
     prof_cov_full.wrap("prof_cov", prof_cov)
@@ -451,7 +455,13 @@ def fit_job(
     set_tag(job, "model_profile", path)
     if jk_prof_cov is not None:
         jk_profile_modes = np.asarray(jk_prof_cov.profile_modes)
-        jk_mprofile = np.column_stack((mr, mprof, jk_profile_modes))
+        jk_mprofile = np.column_stack(
+            (
+                mr[: len(jk_profile_modes)],
+                mprof[: len(jk_profile_modes)],
+                jk_profile_modes,
+            )
+        )
         path = os.path.join(
             prof_dir,
             f"model_profile_{spl}_{det_split}_{epoch_start}_{epoch_end}_jk.txt",
@@ -574,6 +584,7 @@ def fit_job(
         job,
         cfg.log_thresh,
         cfg.n_multipoles,
+        cfg,
     )
 
     logger.log(25, "Saved %s", jobstr)
@@ -634,6 +645,7 @@ def replot_job(
         job,
         cfg.log_thresh,
         cfg.n_multipoles,
+        cfg,
     )
 
 
@@ -1147,7 +1159,8 @@ def main():
             replot_job(job, stack_jobs, cfg, data_dir, plot_dir, out_file, pixsize)
             continue
 
-        try:
+        # try:
+        if "f090" in jobstr:
             aman, aman_path = fit_job(
                 job=job,
                 stack_jobs=stack_jobs,
@@ -1164,12 +1177,13 @@ def main():
 
             pending_save = (aman, aman_path)
             pending_job = job
+        continue
 
-        except Exception as e:
-            msg = f"Fit failed with error {str(e)}"
-            fail(job, ErrCode.FIT_FAILED, msg, logger)
-            pending_save = (None, None)
-            pending_job = job
+        # except Exception as e:
+        #     msg = f"Fit failed with error {str(e)}"
+        #     fail(job, ErrCode.FIT_FAILED, msg, logger)
+        #     pending_save = (None, None)
+        #     pending_job = job
 
     logger.extra["extra"] = ""
     if args.profile and profiler is not None:
