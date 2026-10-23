@@ -8,5 +8,6 @@ split_by:
   - "nojup+tube_slot+band"
 det_splits: []
 abscal_r_frac: .1
+abscal_r_fwhm: 1.4
 abscal_lmin: -1 #8000
 abscal_from_model: false

@@ -219,7 +219,6 @@ def abscal_job(
     ctx_str,
     data_dir,
     plot_dir,
-    ext_rad,
     logger,
 ):
     skips = Counter()
@@ -254,6 +253,9 @@ def abscal_job(
     )
     sfjobs = fjobs[smsk]
     sfits = fits[smsk]
+
+    band = job.tags["split_str"].split("+")[-1]
+    ext_rad = np.deg2rad(cfg.abscal_r_fwhm * cfg.nominal_fwhm[band] / 60)
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
     pwvs = [None if p == "None" else float(p) for p in pwvs]
     els = np.asarray(
@@ -484,9 +486,6 @@ ctx = Context(cfg.ctx_path)
 if ctx.obsdb is None:
     raise ValueError("No obsdb in context!")
 
-ext_rad = np.deg2rad(cfg.extent / 3600)
-ext_rad *= cfg.abscal_r_frac
-
 # Setup folders
 plot_dir, data_dir = setup_paths(
     cfg.root_dir,
@@ -634,7 +633,6 @@ for i, j in enumerate(joblist):
             ctx_str,
             data_dir,
             plot_dir,
-            ext_rad,
             logger,
         )
     logger.log(25, "Done with abscal")
