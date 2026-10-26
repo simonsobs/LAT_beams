@@ -1159,8 +1159,7 @@ def main():
             replot_job(job, stack_jobs, cfg, data_dir, plot_dir, out_file, pixsize)
             continue
 
-        # try:
-        if "f090" in jobstr:
+        try:
             aman, aman_path = fit_job(
                 job=job,
                 stack_jobs=stack_jobs,
@@ -1177,13 +1176,11 @@ def main():
 
             pending_save = (aman, aman_path)
             pending_job = job
-        continue
-
-        # except Exception as e:
-        #     msg = f"Fit failed with error {str(e)}"
-        #     fail(job, ErrCode.FIT_FAILED, msg, logger)
-        #     pending_save = (None, None)
-        #     pending_job = job
+        except Exception as e:
+            msg = f"Fit failed with error {str(e)}"
+            fail(job, ErrCode.FIT_FAILED, msg, logger)
+            pending_save = (None, None)
+            pending_job = job
 
     logger.extra["extra"] = ""
     if args.profile and profiler is not None:

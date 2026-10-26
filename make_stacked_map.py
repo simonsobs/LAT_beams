@@ -906,7 +906,7 @@ twcs = enmap.wcsutils.build(
     rowmajor=True,
 )
 tmap = enmap.zeros((3, pix_extent, pix_extent), twcs)
-map_types = ""  # , "resid")
+map_types = ("",)  # , "resid")
 
 # Get splits
 all_splits = np.unique([job.tags["split"] for job in all_jobs])
