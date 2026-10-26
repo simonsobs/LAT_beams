@@ -53,10 +53,14 @@ metasplits:
   nojup:
     - "source"
     - ["mars", "uranus", "neptune", "3c279", "saturn"]
+  lf_only:
+    - "band"
+    - ["f030", "f040"]
 split_by:
   - "source+band"
   - "mainsrc+band"
   - "nojup+band"
+  - "tube_slot+lf_only+band"
   - "tube_slot+band"
   - "source+tube_slot+band"
   - "mainsrc+tube_slot+band"

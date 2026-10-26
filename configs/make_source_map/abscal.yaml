@@ -6,6 +6,7 @@ abscal_source_list:
 split_by:
   - "mainsrc+tube_slot+band"
   - "nojup+tube_slot+band"
+  - "tube_slot+lf_only+band"
 det_splits: []
 abscal_r_frac: .1
 abscal_r_fwhm: 1.4
