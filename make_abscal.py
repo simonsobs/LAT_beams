@@ -128,7 +128,13 @@ def get_abscal(
     if cfg.abscal_from_model:
         prof = aman[aman.final_model].mprof.to(u.pW).value
     else:
-        prof = aman.rprof.to(u.pW).value
+        prof = aman.rprof.to(u.pW).value - aman[aman.final_model].off.to(u.pW).value
+    init_norm = (
+        aman.gauss.amp.to(u.pW).value
+        + aman.gauss.off.to(u.pW).value
+        - aman[aman.final_model].off.to(u.pW).value
+    )
+    prof /= init_norm
     res = np.mean(np.diff(r))
     r_msk = (r < ext_rad) * (r >= res)
     r_lim = r[r_msk]
