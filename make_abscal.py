@@ -141,7 +141,7 @@ def get_abscal(
 
     # Estimate scaling and offset in real space
     amp, off, _, _, r_lim, _, stack_prof = bu.norm_prof_to_ref(
-        r, prof, prof_interp, ext_rad, False
+        r, prof, prof_interp, ext_rad, True 
     )
 
     # Optional window func refinement
@@ -328,13 +328,15 @@ def abscal_job(
                     if abscal is None:
                         skips["no pwv /planet temp / el"] += 1
                         continue
-                    prof_ratio = prof_norm / prof_stack
+
+                    core = prof_stack > 0.2 * np.max(prof_stack) # only compare profile in core
+                    prof_ratio = prof_norm / prof_stack # Keep full ratio for plotting, but only use core for error calculation
                     prof_diff = prof_norm - prof_stack
                     prof_err = np.std(prof_diff)
-                    if np.abs(np.mean(prof_ratio)) > cfg.abscal_max_avg_prat:
+                    if np.abs(np.mean(prof_ratio[core])) > cfg.abscal_max_avg_prat:
                         skips["avg prof ratio too far from 1"] += 1
                         continue
-                    if np.max(np.abs(prof_ratio - 1)) > cfg.abscal_max_pdiff:
+                    if np.max(np.abs(prof_ratio[core] - 1)) > cfg.abscal_max_pdiff:
                         skips["max prof ratio too far from 1"] += 1
                         continue
                     if abs(prof_diff[0]) > cfg.abscal_max_pdiff:
@@ -411,24 +413,24 @@ def abscal_job(
     with h5py.File(outpath, "w") as f:
         write_dataset(abscal_perobs, f, address="abscal_perobs", overwrite=True)
 
-    plt.plot(
-        3600 * np.rad2deg(np.asarray(rs).T),
-        np.asarray(prof_ratios).T,
-        color="b",
-        alpha=0.25,
-    )
+    for r_map, ratio in zip(rs, prof_ratios):
+        plt.plot(3600 * np.rad2deg(r_map), ratio, color="b", alpha=0.25)
+
     plt.xlabel('radius (")')
     plt.ylabel("Normalized Profile/Stack Profile")
     plt.title(f"Abscal Profile Ratio for {job.tags['split_str']}")
     plt.savefig(os.path.join(plot_dir_spl, "prof_ratio.png"))
     plt.close()
 
-    plt.plot(
-        3600 * np.rad2deg(np.asarray(rs).T),
-        np.asarray(prof_diffs).T,
-        color="b",
-        alpha=0.25,
-    )
+    for r_map, diff in zip(rs, prof_diffs):
+        plt.plot(3600 * np.rad2deg(r_map), diff, color="b", alpha=0.25)
+
+    plt.xlabel('radius (")')
+    plt.ylabel("Normalized Profile - Stack Profile")
+    plt.title(f"Abscal Profile Difference for {job.tags['split_str']}")
+    plt.savefig(os.path.join(plot_dir_spl, "prof_diff.png"))
+    plt.close()
+
     plt.xlabel('radius (")')
     plt.ylabel("Normalized Profile - Stack Profile")
     plt.title(f"Abscal Profile Difference for {job.tags['split_str']}")
