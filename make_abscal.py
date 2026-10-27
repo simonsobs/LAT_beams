@@ -141,7 +141,7 @@ def get_abscal(
 
     # Estimate scaling and offset in real space
     amp, off, _, _, r_lim, _, stack_prof = bu.norm_prof_to_ref(
-        r, prof, prof_interp, ext_rad, True 
+        r, prof, prof_interp, ext_rad, True
     )
 
     # Optional window func refinement
@@ -329,8 +329,12 @@ def abscal_job(
                         skips["no pwv /planet temp / el"] += 1
                         continue
 
-                    core = prof_stack > 0.2 * np.max(prof_stack) # only compare profile in core
-                    prof_ratio = prof_norm / prof_stack # Keep full ratio for plotting, but only use core for error calculation
+                    core = prof_stack > 0.2 * np.max(
+                        prof_stack
+                    )  # only compare profile in core
+                    prof_ratio = (
+                        prof_norm / prof_stack
+                    )  # Keep full ratio for plotting, but only use core for error calculation
                     prof_diff = prof_norm - prof_stack
                     prof_err = np.std(prof_diff)
                     if np.abs(np.mean(prof_ratio[core])) > cfg.abscal_max_avg_prat:
