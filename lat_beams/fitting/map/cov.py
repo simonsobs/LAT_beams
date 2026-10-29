@@ -1,3 +1,7 @@
+"""
+Utilities for computing covariances.
+"""
+
 from typing import Optional, cast
 
 import numpy as np
@@ -421,3 +425,81 @@ def apply_harm_noise(x, ivar, ps2d, include_corr):
     Ninv_x = x_filtered * D_inv[..., None]
 
     return Ninv_x
+
+
+def invsafe(mat: Float[NDArray, "n n"], thresh: float = 1e-14) -> Float[NDArray, "n n"]:
+    r"""
+    Compute a truncated SVD pseudoinverse.
+    Singular values smaller than
+
+    $$
+    {\rm thresh} \times \max(s)
+    $$
+    are discarded.
+
+    Parameters
+    ----------
+    mat : Float[NDArray, "n n"]
+        Matrix to invert.
+    thresh : float, default: 1e-14
+        Relative singular-value threshold.
+
+    Returns
+    -------
+    Float[NDArray, "n n"]
+        Truncated pseudoinverse of `mat`.
+    """
+    u, s, vh = np.linalg.svd(mat, full_matrices=False)
+    s_inv = np.zeros_like(s)
+    good = np.abs(s) >= thresh * np.max(s)
+    s_inv[good] = 1.0 / s[good]
+    return cast(NDArray[np.floating], (vh.T * s_inv) @ u.T)
+
+
+def invscale(
+    mat: Float[NDArray, "n n"], do_invsafe: bool = False, thresh: float = 1e-14
+) -> Float[NDArray, "n n"]:
+    r"""
+    Invert a matrix after diagonal normalization.
+    The matrix is first rescaled as
+
+    $$
+    A' = D A D
+    $$
+
+    where
+
+    $$
+    D_{ii} = \frac{1} {\sqrt{|A_{ii}|}}
+    $$
+
+    The scaled matrix is then inverted and transformed back.
+
+    Parameters
+    ----------
+    mat : Float[NDArray, "n n"]
+        Matrix to invert.
+    do_invsafe : bool, default: False
+        Use `invsafe` rather than the standard inverse.
+    thresh : float, default: 1e-14
+        Relative singular-value threshold.
+        Passed to `invsafe` if `do_invsafe` is `True`.
+
+    Returns
+    -------
+    Float[NDArray, "n n"]
+        Approximate inverse of `mat`.
+    """
+    scale = 1.0 / np.sqrt(np.abs(np.diag(mat)))
+    scale[~np.isfinite(scale)] = 1e-10
+    norm = np.outer(scale, scale)
+    scaled = norm * mat
+    if do_invsafe:
+        inv = invsafe(scaled, thresh)
+    else:
+        try:
+            inv = np.linalg.inv(scaled)
+        except np.linalg.LinAlgError:
+            inv = np.linalg.pinv(scaled)
+
+    return cast(NDArray[np.floating], norm * inv)

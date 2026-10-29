@@ -106,7 +106,12 @@ from sotodlib.core import AxisManager, IndexAxis, LabelAxis
 
 from ...beam_utils import norm_prof_to_ref, radial_profile_lin
 from ..core import bessel_term_cached
-from .cov import apply_harm_noise, empirical_profile_covariance, estimate_noise_ps2d
+from .cov import (
+    apply_harm_noise,
+    empirical_profile_covariance,
+    estimate_noise_ps2d,
+    invscale,
+)
 
 
 def solve_linear_system(
@@ -319,7 +324,7 @@ def wing_model_derivatives(
     Float[NDArray, "n_pixels"],
     Float[NDArray, "n_pixels n_ang"],
     Float[NDArray, "n_pixels n_ang"],
-    Float[NDArray, "n_pixels 1"],
+    Float[NDArray, "n_pixels"],
 ]:
     r"""
     Evaluate the wing model and its derivatives.
@@ -398,7 +403,7 @@ def wing_model_derivatives(
     wing_minus_core = pure_wing - core
     dmodel_a = wing_weight[:, None] * dwing_dloga
     dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
-    dmodel_p = (wing_minus_core * dw_dlogp)[:, None]
+    dmodel_p = wing_minus_core * dw_dlogp
 
     return pure_wing, wing_weight, q, dmodel_a, dmodel_r0, dmodel_p
 
@@ -611,7 +616,6 @@ def fit_bessel_map(
     linear_ridge: float = 1e-6,
     fourier_penalty: float = 0.01,
     negative_penalty: float = 10.0,
-    hessian_ridge_fraction: float = 1e-8,
 ) -> tuple[AxisManager, Float[ndmap, "nx ny"]]:
     r"""
     Fit a Bessel+multipole core plus a smooth positive $r^{-3}$ wing.
@@ -915,8 +919,6 @@ def fit_bessel_map(
         Regularization weight applied to non-constant Fourier coefficients.
     negative_penalty : float, default: 10.0 
         Weight of the negative-model penalty.
-    hessian_ridge_fraction : float, default: 1e-8
-        Fraction of the median Hessian diagonal added before covariance inversion.
 
     Returns
     -------
@@ -1442,7 +1444,6 @@ def fit_bessel_map(
             linear_ridge=linear_ridge,
             fourier_penalty=fourier_penalty,
             negative_penalty=negative_penalty,
-            hessian_ridge_fraction=hessian_ridge_fraction,
         )
 
         n_linear = n_core + 1
@@ -1481,7 +1482,6 @@ def compute_full_covariance(
     linear_ridge: float = 1e-6,
     fourier_penalty: float = 0.01,
     negative_penalty: float = 10.0,
-    hessian_ridge_fraction: float = 1e-8,
 ) -> Float[NDArray, "n_params n_params"]:
     r"""
     Calculate the joint covariance of the linear and nonlinear fit
@@ -1624,8 +1624,6 @@ def compute_full_covariance(
         Regularization weight applied to non-constant Fourier coefficients.
     negative_penalty : float, default: 10.0 
         Weight of the negative-model penalty.
-    hessian_ridge_fraction : float, default: 1e-8
-        Fraction of the median Hessian diagonal added before covariance inversion.
     
     Returns
     -------
@@ -1701,9 +1699,8 @@ def compute_full_covariance(
         H += np.outer(dpenalty, dpenalty)
 
     H = 0.5 * (H + H.T)  # Stupid floats
-    # H_inv = cast(NDArray[np.floating], scipy.linalg.pinvh(H, check_finite=False))
-    lam = hessian_ridge_fraction * np.median(np.diag(H))
-    H_inv = np.linalg.inv(H + lam * np.eye(H.shape[0]))
+    H_inv = invscale(H, True)
+
     # We aready whittened
     if include_corr:
         sigma2 = 1
