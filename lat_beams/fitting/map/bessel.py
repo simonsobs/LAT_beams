@@ -109,6 +109,134 @@ from ..core import bessel_term_cached
 from .cov import apply_harm_noise, empirical_profile_covariance, estimate_noise_ps2d
 
 
+def solve_linear_system(
+    params: Float[NDArray, "n_params"],
+    r: Float[NDArray, "n_pixels"],
+    y: Float[NDArray, "n_pixels"],
+    w: Float[NDArray, "n_pixels"],
+    B_core: Float[NDArray, "n_pixels n_core"],
+    Bs: Float[NDArray, "n_pixels n_linear"],
+    F_mat_T: Float[NDArray, "n_pixels n_ang"],
+    scale: Float[NDArray, "n_linear"],
+    n_core: int,
+    linear_ridge: float,
+) -> tuple[
+    Float[NDArray, "n_linear"],
+    Float[NDArray, "n_pixels"],
+    Float[NDArray, "n_pixels"],
+    Float[NDArray, "n_pixels"],
+    Float[NDArray, "n_pixels"],
+    tuple[NDArray[np.floating], bool],
+]:
+    r"""
+    Solve the profiled linear system for fixed nonlinear parameters.
+
+    For fixed wing parameters the beam model is linear in the
+    Bessel-core coefficients and global offset. The solved
+    coefficients satisfy
+
+    $$
+    (X^T X + R)c = X^T y',
+    $$
+
+    where
+
+    $$
+    X = \left[ (1-w_{\rm wing})B_{\rm core}, 1 \right]
+    $$
+
+    and
+
+    $$
+    y' = y - w_{\rm wing}W
+    $$
+
+    Parameters
+    ----------
+    params : Float[NDArray, "n_params"]
+        Nonlinear wing parameter vector.
+    r : Float[NDArray, "n_pixels"]
+        Radii of fitting pixels.
+    y : Float[NDArray, "n_pixels"]
+        Weighted data vector.
+    w : Float[NDArray, "n_pixels"]
+        Pixel weights.
+    B_core : Float[NDArray, "n_pixels n_core"]
+        Unweighted Bessel design matrix.
+    Bs : Float[NDArray, "n_pixels n_linear"]
+        Scaled weighted design matrix.
+    F_mat_T : Float[NDArray, "n_pixels n_ang"]
+        Fourier design matrix.
+    scale : Float[NDArray, "n_linear"]
+        Column scaling factors.
+    n_core : int
+        Number of Bessel coefficients.
+    linear_ridge : float
+        Ridge regularization strength.
+
+    Returns
+    -------
+    linear : Float[NDArray, "n_linear"]
+        Solved linear parameters.
+    model_weighted : Float[NDArray, "n_pixels"]
+        Weighted beam model.
+    pure_core : Float[NDArray, "n_pixels"]
+        Core component.
+    pure_wing : Float[NDArray, "n_pixels"]
+        Wing component.
+    wing_weight : Float[NDArray, "n_pixels"]
+        Transition weight.
+    cho : tuple
+        Cholesky factorization of the normal matrix.
+    """
+    n_ang = (len(params) - 1) // 2
+
+    loga_coeff = params[:n_ang]
+    logr_coeff = params[n_ang : 2 * n_ang]
+    p_val = params[-1]
+
+    dummy_core = np.zeros(len(r))
+    (
+        pure_wing,
+        wing_weight,
+        q,
+        _,
+        _,
+        _,
+    ) = wing_model_derivatives(
+        r,
+        F_mat_T,
+        loga_coeff,
+        logr_coeff,
+        p_val,
+        dummy_core,
+    )
+
+    X = np.column_stack([Bs[:, :-1] * q[:, None], Bs[:, -1]])
+    wing_weighted = pure_wing * wing_weight * w
+    rhs = y - wing_weighted
+    A = X.T @ X
+
+    A[:n_core, :n_core] += linear_ridge * np.eye(n_core)
+    b = X.T @ rhs
+    cho = scipy.linalg.cho_factor(A, lower=True, check_finite=False)
+    linear_scaled = scipy.linalg.cho_solve(cho, b, check_finite=False)
+    linear = linear_scaled / scale
+    pure_core = B_core @ linear[:-1]
+    global_offset = linear[-1]
+
+    model = q * pure_core + wing_weight * pure_wing + global_offset
+
+    return (
+        linear,
+        model * w,
+        pure_core,
+        pure_wing,
+        wing_weight,
+        cho,
+    )
+
+
 @numba.jit(nopython=True, fastmath=True, cache=True)
 def fast_wing_transition(
     r_fit: Float[NDArray, "n_pixels"],
@@ -176,6 +304,103 @@ def fast_wing_transition(
         pure_wing[i] = wing if np.isfinite(wing) else 0.0
 
     return pure_wing, wing_weight
+
+
+def wing_model_derivatives(
+    r: Float[NDArray, "n_pixels"],
+    F_mat_T: Float[NDArray, "n_pixels n_ang"],
+    loga_coeff: Float[NDArray, "n_ang"],
+    logr_coeff: Float[NDArray, "n_ang"],
+    p_val: float,
+    core: Float[NDArray, "n_pixels"],
+) -> tuple[
+    Float[NDArray, "n_pixels"],
+    Float[NDArray, "n_pixels"],
+    Float[NDArray, "n_pixels"],
+    Float[NDArray, "n_pixels n_ang"],
+    Float[NDArray, "n_pixels n_ang"],
+    Float[NDArray, "n_pixels 1"],
+]:
+    r"""
+    Evaluate the wing model and its derivatives.
+
+    The blended beam model is
+
+    $$
+    M = (1 - w_{\rm wing}) C + w_{\rm wing} W
+    $$
+
+    where
+
+    $$
+    W(r,\theta) = \frac{a(\theta)}{r^3}.
+    $$
+
+    This helper returns the wing model, transition weight,
+    and derivatives of the blended model with respect to all
+    nonlinear wing parameters.
+
+    Parameters
+    ----------
+    r : Float[NDArray, "n_pixels"]
+        Pixel radii in radians.
+    F_mat_T : Float[NDArray, "n_pixels n_ang"]
+        Fourier design matrix.
+    loga_coeff : Float[NDArray, "n_ang"]
+        Fourier coefficients of $\log a(\theta)$.
+    logr_coeff : Float[NDArray, "n_ang"]
+        Fourier coefficients of $\log r_0(\theta)$.
+    p_val : float
+        Logarithm of the transition sharpness.
+    core : Float[NDArray, "n_pixels"]
+        Core model evaluated on the same pixels.
+
+    Returns
+    -------
+    pure_wing : Float[NDArray, "n_pixels"]
+        Unblended wing model.
+    wing_weight : Float[NDArray, "n_pixels"]
+        Transition weight.
+    q : Float[NDArray, "n_pixels"]
+        Core weight
+    dmodel_a : Float[NDArray, "n_pixels n_ang"]
+        Derivative of the blended model with respect
+        to the wing-amplitude coefficients.
+    dmodel_r0 : Float[NDArray, "n_pixels n_ang"]
+        Derivative of the blended model with respect
+        to the transition-radius coefficients.
+    dmodel_p : Float[NDArray, "n_pixels 1"]
+        Derivative of the blended model with respect
+        to log p.
+    """
+    pure_wing, wing_weight = fast_wing_transition(
+        r, loga_coeff, logr_coeff, p_val, F_mat_T
+    )
+    q = 1.0 - wing_weight
+    logr = F_mat_T @ logr_coeff
+    r0 = np.exp(logr)
+    p = np.clip(np.exp(p_val), 0.5, 20.0)
+    rr = np.maximum(r, 1e-5)
+    r0_safe = np.maximum(r0, 1e-4)
+    ratio = rr / r0_safe
+    u = 0.5 + (p / 0.3) * (ratio - 1.0)
+    inside = (u > 0.0) & (u < 1.0)
+    dsdu = np.zeros_like(u)
+    ui = u[inside]
+    dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
+    du_dlogr0 = -(p / 0.3) * ratio
+    du_dlogp = (p / 0.3) * (ratio - 1.0)
+    dw_dlogr0 = dsdu * du_dlogr0
+    dw_dlogp = dsdu * du_dlogp
+    dw_dlogr0[~inside] = 0.0
+    dw_dlogp[~inside] = 0.0
+    dwing_dloga = pure_wing[:, None] * F_mat_T
+    wing_minus_core = pure_wing - core
+    dmodel_a = wing_weight[:, None] * dwing_dloga
+    dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
+    dmodel_p = (wing_minus_core * dw_dlogp)[:, None]
+
+    return pure_wing, wing_weight, q, dmodel_a, dmodel_r0, dmodel_p
 
 
 def bessel_beam(
@@ -383,6 +608,10 @@ def fit_bessel_map(
     skip_multipoles: list[int] = [],
     calc_cov: bool = False,
     n_opt_pixels: int = 6000,
+    linear_ridge: float = 1e-6,
+    fourier_penalty: float = 0.01,
+    negative_penalty: float = 10.0,
+    hessian_ridge_fraction: float = 1e-8,
 ) -> tuple[AxisManager, Float[ndmap, "nx ny"]]:
     r"""
     Fit a Bessel+multipole core plus a smooth positive $r^{-3}$ wing.
@@ -480,7 +709,7 @@ def fit_bessel_map(
     \mathbf{r} =
     \begin{bmatrix}
         \mathbf{M}_w-\mathbf{y}_w \\
-        0.01\,\mathbf{q} \\
+        \mathrm{fourier_penalty}\,\mathbf{q} \\
         P_{\rm neg}
     \end{bmatrix}
     $$
@@ -602,7 +831,7 @@ def fit_bessel_map(
     The Jacobian returned to `least_squares` is the Jacobian of the
     residual, so the map-model derivatives are additionally multiplied
     by the pixel weights. The regularization rows have derivatives
-    `0.01` with respect to their corresponding Fourier coefficients.
+    `fourier_penalty` with respect to their corresponding Fourier coefficients.
 
     The linear coefficients are held fixed when constructing this
     Jacobian. In other words, the Jacobian differentiates the current
@@ -680,6 +909,15 @@ def fit_bessel_map(
     n_opt_pixels : int, optional
         Number of representative pixels used during nonlinear
         optimization. Set to `None` to use all valid pixels.
+    linear_ridge : float, default:1e-6 
+        Ridge regularization applied to the linear Bessel solve.
+    fourier_penalty : float, default: 0.01 
+        Regularization weight applied to non-constant Fourier coefficients.
+    negative_penalty : float, default: 10.0 
+        Weight of the negative-model penalty.
+    hessian_ridge_fraction : float, default: 1e-8
+        Fraction of the median Hessian diagonal added before covariance inversion.
+
     Returns
     -------
     aman : AxisManager
@@ -959,7 +1197,7 @@ def fit_bessel_map(
             peak_val = np.max(central)
         else:
             peak_val = np.nanmax(np.asarray(imap))
-        threshold = 10.0 ** (-n_sigma) * peak_val
+        threshold = negative_penalty ** (-n_sigma) * peak_val
         below_threshold = r_prof_clean[y_prof_clean <= threshold]
         if len(below_threshold):
             r0_init = np.percentile(below_threshold, 10)
@@ -1001,98 +1239,62 @@ def fit_bessel_map(
     lower[-1] = np.log(0.5)
     upper[-1] = np.log(20.0)
 
-    def solve_linear_opt(params):
-        """
-        Solve the profiled linear problem on the optimization pixels.
-        """
-        loga_coeff, logr_coeff, p_val = (
-            params[:n_ang],
-            params[n_ang : 2 * n_ang],
-            params[-1],
-        )
-
-        pure_wing, wing_weight = fast_wing_transition(
-            r_opt, loga_coeff, logr_coeff, p_val, F_mat_T_opt
-        )
-        q = 1.0 - wing_weight
-
-        X = np.column_stack([Bs_opt[:, :-1] * q[:, None], Bs_opt[:, -1]])
-        wing_weighted = pure_wing * wing_weight * w_opt
-        rhs = y_opt - wing_weighted
-
-        A = X.T @ X
-        A[:n_core, :n_core] += 1e-6 * np.eye(n_core)
-        b = X.T @ rhs
-
-        cho = scipy.linalg.cho_factor(A, lower=True, check_finite=False)
-        linear_scaled = scipy.linalg.cho_solve(cho, b, check_finite=False)
-
-        linear = linear_scaled / scale
-        pure_core = B_core_opt @ linear[:-1]
-        global_offset = linear[-1]
-        model = q * pure_core + wing_weight * pure_wing + global_offset
-
-        return linear, model * w_opt, pure_core, pure_wing, wing_weight
-
     def jacobian(params):
         """
         Calculate the analytic Jacobian.
         """
-        _, _, pure_core, pure_wing, wing_weight = solve_linear_opt(params)
+        _, _, pure_core, pure_wing, wing_weight, _ = solve_linear_system(
+            params,
+            r_opt,
+            y_opt,
+            w_opt,
+            B_core_opt,
+            Bs_opt,
+            F_mat_T_opt,
+            scale,
+            n_core,
+            linear_ridge,
+        )
 
         loga_coeff = params[:n_ang]
         logr_coeff = params[n_ang : 2 * n_ang]
         p_val = params[-1]
 
         n_data = len(r_opt)
-        loga = F_mat_T_opt @ loga_coeff
-        logr = F_mat_T_opt @ logr_coeff
-        a = np.exp(loga)
-        r0 = np.exp(logr)
-
-        p = np.clip(np.exp(p_val), 0.5, 20.0)
-        rr = np.maximum(r_opt, 1e-5)
-        r0_safe = np.maximum(r0, 1e-4)
-
-        ratio = rr / r0_safe
-        u = 0.5 + (p / 0.3) * (ratio - 1.0)
-        inside = (u > 0.0) * (u < 1.0)
-
-        dsdu = np.zeros_like(u)
-        ui = u[inside]
-        dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
-
-        du_dlogr0 = -(p / 0.3) * ratio
-        du_dlogp = (p / 0.3) * (ratio - 1.0)
-        dw_dlogr0 = dsdu * du_dlogr0
-        dw_dlogp = dsdu * du_dlogp
-        dw_dlogr0[~inside] = 0.0
-        dw_dlogp[~inside] = 0.0
-
-        dwing_dloga = pure_wing[:, None] * F_mat_T_opt
-        wing_minus_core = pure_wing - pure_core
+        (
+            _,
+            wing_weight,
+            _,
+            dmodel_a,
+            dmodel_r0,
+            dmodel_p,
+        ) = wing_model_derivatives(
+            r_opt,
+            F_mat_T_opt,
+            loga_coeff,
+            logr_coeff,
+            p_val,
+            pure_core,
+        )
 
         n_params = len(params)
         n_reg = 2 * (n_ang - 1)
         J = np.zeros((n_data + n_reg + 1, n_params), dtype=float)
 
-        dmodel_a = wing_weight[:, None] * dwing_dloga
         J[:n_data, :n_ang] = dmodel_a * w_opt[:, None]
-
-        dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T_opt
         J[:n_data, n_ang : 2 * n_ang] = dmodel_r0 * w_opt[:, None]
-
-        dmodel_p = wing_minus_core * dw_dlogp
         J[:n_data, -1] = dmodel_p * w_opt
 
         reg_start = n_data
-        J[reg_start : reg_start + n_ang - 1, 1:n_ang] = 0.01 * np.eye(n_ang - 1)
+        J[reg_start : reg_start + n_ang - 1, 1:n_ang] = fourier_penalty * np.eye(
+            n_ang - 1
+        )
 
         reg_start += n_ang - 1
         J[
             reg_start : reg_start + n_ang - 1,
             n_ang + 1 : 2 * n_ang,
-        ] = 0.01 * np.eye(n_ang - 1)
+        ] = fourier_penalty * np.eye(n_ang - 1)
 
         model_no_offset = (1.0 - wing_weight) * pure_core + wing_weight * pure_wing
         negative = np.maximum(0.0, -model_no_offset)
@@ -1109,7 +1311,9 @@ def fit_bessel_map(
             weights[active] = negative[active] * w_opt[active] ** 2
 
             J[-1, :] = (
-                -10.0 * (weights[:, None] * dmodel_no_offset).sum(axis=0) / neg_norm
+                -negative_penalty
+                * (weights[:, None] * dmodel_no_offset).sum(axis=0)
+                / neg_norm
             )
 
         return J
@@ -1118,18 +1322,30 @@ def fit_bessel_map(
         """
         Evaluate the nonlinear least-squares residual.
         """
-        _, model_weighted, pure_core, pure_wing, wing_weight = solve_linear_opt(params)
-
+        _, model_weighted, pure_core, pure_wing, wing_weight, _ = solve_linear_system(
+            params,
+            r_opt,
+            y_opt,
+            w_opt,
+            B_core_opt,
+            Bs_opt,
+            F_mat_T_opt,
+            scale,
+            n_core,
+            linear_ridge,
+        )
         res = model_weighted - y_opt
         loga_coeff = params[:n_ang]
         logr_coeff = params[n_ang : 2 * n_ang]
 
-        reg_array = 0.01 * np.concatenate([loga_coeff[1:], logr_coeff[1:]])
+        reg_array = fourier_penalty * np.concatenate([loga_coeff[1:], logr_coeff[1:]])
 
         model_no_offset = (1.0 - wing_weight) * pure_core + wing_weight * pure_wing
         negative = np.maximum(0.0, -model_no_offset)
 
-        neg_penalty = np.array([10.0 * np.sqrt(np.sum((negative * w_opt) ** 2))])
+        neg_penalty = np.array(
+            [negative_penalty * np.sqrt(np.sum((negative * w_opt) ** 2))]
+        )
 
         return np.nan_to_num(
             np.concatenate([res, reg_array, neg_penalty]),
@@ -1152,38 +1368,9 @@ def fit_bessel_map(
         loss="soft_l1",
     )
 
-    def solve_linear_full(params):
-        """
-        Solve the profiled linear problem using all fitting pixels.
-        """
-        loga_coeff = params[:n_ang]
-        logr_coeff = params[n_ang : 2 * n_ang]
-        p_val = params[-1]
-
-        pure_wing, wing_weight = fast_wing_transition(
-            r_fit, loga_coeff, logr_coeff, p_val, F_mat_T
-        )
-        q = 1.0 - wing_weight
-
-        X = np.column_stack([Bs[:, :-1] * q[:, None], Bs[:, -1]])
-        wing_weighted = pure_wing * wing_weight * w
-        rhs = y - wing_weighted
-
-        A = X.T @ X
-        A[:n_core, :n_core] += 1e-6 * np.eye(n_core)
-        b = X.T @ rhs
-
-        cho = scipy.linalg.cho_factor(A, lower=True, check_finite=False)
-        linear_scaled = scipy.linalg.cho_solve(cho, b, check_finite=False)
-
-        linear = linear_scaled / scale
-        pure_core = B_core @ linear[:-1]
-        global_offset = linear[-1]
-        model = q * pure_core + wing_weight * pure_wing + global_offset
-
-        return linear, model * w, pure_core, pure_wing, wing_weight, cho
-
-    linear, *_ = solve_linear_full(result.x)
+    linear, *_ = solve_linear_system(
+        result.x, r_fit, y, w, B_core, Bs, F_mat_T, scale, n_core, linear_ridge
+    )
     coeff, off = linear, linear[-1]
 
     amps = np.zeros((n_bessel, n_bessel, n_multipoles, 2))
@@ -1252,6 +1439,10 @@ def fit_bessel_map(
             ivar=ivar,
             fit_msk=fit_msk,
             include_corr=True,
+            linear_ridge=linear_ridge,
+            fourier_penalty=fourier_penalty,
+            negative_penalty=negative_penalty,
+            hessian_ridge_fraction=hessian_ridge_fraction,
         )
 
         n_linear = n_core + 1
@@ -1287,6 +1478,10 @@ def compute_full_covariance(
     ivar: Float[ndmap, "nx ny"],
     fit_msk: NDArray[np.bool_],
     include_corr: bool = True,
+    linear_ridge: float = 1e-6,
+    fourier_penalty: float = 0.01,
+    negative_penalty: float = 10.0,
+    hessian_ridge_fraction: float = 1e-8,
 ) -> Float[NDArray, "n_params n_params"]:
     r"""
     Calculate the joint covariance of the linear and nonlinear fit
@@ -1423,6 +1618,14 @@ def compute_full_covariance(
     include_corr : bool, default: True
         If True then include the correlated noise.
         If False then just use ivar.
+    linear_ridge : float, default:1e-6 
+        Ridge regularization applied to the linear Bessel solve.
+    fourier_penalty : float, default: 0.01 
+        Regularization weight applied to non-constant Fourier coefficients.
+    negative_penalty : float, default: 10.0 
+        Weight of the negative-model penalty.
+    hessian_ridge_fraction : float, default: 1e-8
+        Fraction of the median Hessian diagonal added before covariance inversion.
     
     Returns
     -------
@@ -1434,52 +1637,25 @@ def compute_full_covariance(
     loga_coeff = params[:n_ang]
     logr_coeff = params[n_ang : 2 * n_ang]
     p_val = params[-1]
-
-    pure_wing, wing_weight = fast_wing_transition(
-        r_fit, loga_coeff, logr_coeff, p_val, F_mat_T
-    )
-
-    q = 1.0 - wing_weight
     core = B_core @ linear[:-1]
-
     n_linear = n_core + 1
     n_nonlinear = 2 * n_ang + 1
     n_params = n_linear + n_nonlinear
 
+    # Wing derivatives
+    (
+        pure_wing,
+        wing_weight,
+        q,
+        dmodel_a,
+        dmodel_r0,
+        dmodel_p,
+    ) = wing_model_derivatives(r_fit, F_mat_T, loga_coeff, logr_coeff, p_val, core)
+
     # Linear model Jacobian
     X = np.column_stack([B_core * q[:, None], np.ones(n_pixels)])
 
-    # Wing derivatives.
-    logr = F_mat_T @ logr_coeff
-    r0 = np.exp(logr)
-
-    p = np.clip(np.exp(p_val), 0.5, 20.0)
-    rr = np.maximum(r_fit, 1e-5)
-    r0_safe = np.maximum(r0, 1e-4)
-
-    ratio = rr / r0_safe
-    u = 0.5 + (p / 0.3) * (ratio - 1.0)
-
-    inside = (u > 0.0) & (u < 1.0)
-    dsdu = np.zeros_like(u)
-    ui = u[inside]
-    dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
-
-    du_dlogr0 = -(p / 0.3) * ratio
-    du_dlogp = (p / 0.3) * (ratio - 1.0)
-
-    dw_dlogr0 = dsdu * du_dlogr0
-    dw_dlogp = dsdu * du_dlogp
-    dw_dlogr0[~inside] = 0.0
-    dw_dlogp[~inside] = 0.0
-
-    dwing_dloga = pure_wing[:, None] * F_mat_T
-    wing_minus_core = pure_wing - core
-
-    dmodel_a = wing_weight[:, None] * dwing_dloga
-    dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
-    dmodel_p = wing_minus_core * dw_dlogp
-
+    # Build the full jacobian
     J_nonlinear = np.column_stack([dmodel_a, dmodel_r0, dmodel_p])
     J_fit = np.column_stack([X, J_nonlinear])
     J_full = enmap.zeros(ivar.shape + (n_params,), ivar.wcs, dtype=np.float64)
@@ -1492,11 +1668,11 @@ def compute_full_covariance(
     H = np.einsum("xyi,xyj->ij", np.asarray(J_full), np.asarray(Ninv_J), optimize=True)
 
     # Linear ridge
-    ridge = 1e-6 * scale[:n_core] ** 2
+    ridge = linear_ridge * scale[:n_core] ** 2
     H[:n_core, :n_core] += np.diag(ridge)
 
     # Fourier regularization
-    reg = 0.01**2
+    reg = fourier_penalty**2
 
     H[n_linear + 1 : n_linear + n_ang, n_linear + 1 : n_linear + n_ang] += reg * np.eye(
         n_ang - 1
@@ -1519,12 +1695,14 @@ def compute_full_covariance(
         weights = np.zeros_like(model_no_offset)
         weights[active] = negative[active] * w[active] ** 2
 
-        dpenalty = -10.0 / neg_norm * (weights[:, None] * dmodel).sum(axis=0)
+        dpenalty = (
+            -negative_penalty / neg_norm * (weights[:, None] * dmodel).sum(axis=0)
+        )
         H += np.outer(dpenalty, dpenalty)
 
     H = 0.5 * (H + H.T)  # Stupid floats
-    H_inv = cast(NDArray[np.floating], scipy.linalg.pinvh(H, check_finite=False))
-    lam = 1e-8 * np.median(np.diag(H))
+    # H_inv = cast(NDArray[np.floating], scipy.linalg.pinvh(H, check_finite=False))
+    lam = hessian_ridge_fraction * np.median(np.diag(H))
     H_inv = np.linalg.inv(H + lam * np.eye(H.shape[0]))
     # We aready whittened
     if include_corr:
@@ -1534,93 +1712,130 @@ def compute_full_covariance(
 
 
 def build_model_jacobian_from_fit(
-    fit,
-    linear,
-    wing_params,
-    base_beams,
-    F_mat_T,
-    cos_m_theta,
-    sin_m_theta,
-    r_flat,
-):
-    """
-    Build dM/dp on the evaluation grid.
+    fit: AxisManager,
+    linear: Float[NDArray, "n_linear"],
+    wing_params: Float[NDArray, "n_wing_params"],
+    base_beams: Float[NDArray, "n_pixels n_pairs"],
+    F_mat_T: Float[NDArray, "n_pixels n_ang"],
+    cos_m_theta: Float[NDArray, "n_multipoles n_pixels"],
+    sin_m_theta: Float[NDArray, "n_multipoles n_pixels"],
+    r_flat: Float[NDArray, "n_pixels"],
+) -> Float[NDArray, "n_pixels n_params"]:
+    r"""
+    Construct the map-space Jacobian of the fitted beam model.
+
+    The returned matrix contains the derivatives of the beam model with
+    respect to every fitted parameter,
+
+    $$
+    J_{ij} = \frac{\partial M_i}{\partial p_j},
+    $$
+
+    evaluated on the supplied pixel grid.
+
+    The parameter ordering matches the ordering used by
+    `full_cov`:
+
+    $$
+    p =
+    \Big[
+        c_{\rm core},
+        {\rm off},
+        \log a,
+        \log r_0,
+        \log p
+    \Big].
+    $$
+
+    The linear Jacobian columns are reconstructed from the
+    stored Bessel index bookkeeping in `fit.bessel_idx`.
+    The nonlinear wing derivatives are evaluated using
+    `wing_model_derivatives`.
+
+    Parameters
+    ----------
+    fit : AxisManager
+        Output of `fit_bessel_map`.
+    linear : Float[NDArray, "n_linear"]
+        Linear fit parameters consisting of the
+        Bessel-core coefficients followed by the global offset.
+    wing_params : Float[NDArray, "n_wing_params"]
+        Nonlinear wing parameter vector.
+    base_beams : Float[NDArray, "n_pixels n_pairs"]
+        Pairwise Bessel basis functions evaluated on the supplied pixel grid.
+    F_mat_T : Float[NDArray, "n_pixels n_ang"]
+        Fourier design matrix.
+    cos_m_theta : Float[NDArray, "n_multipoles n_pixels"]
+        Cosine angular basis functions.
+    sin_m_theta : Float[NDArray, "n_multipoles n_pixels"]
+        Sine angular basis functions.
+    r_flat : Float[NDArray, "n_pixels"]
+        Pixel radii in radians.
 
     Returns
     -------
-    J_map : (n_pix, n_param)
-        Jacobian of the beam model wrt all fit parameters.
-
-    q : (n_pix,)
-        1 - wing_weight
-
-    pure_wing : (n_pix,)
-        Wing component
-
-    core : (n_pix,)
-        Core component
+    J_map : Float[NDArray, "n_pixels n_params"]
+        Jacobian of the beam model with respect to the full fit parameter vector.
     """
-
     idx = np.asarray(fit.bessel_idx)
     n_linear = len(linear)
     n_ang = (len(wing_params) - 1) // 2
     loga_coeff = wing_params[:n_ang]
     logr_coeff = wing_params[n_ang : 2 * n_ang]
     p_val = wing_params[-1]
-
-    pure_wing, wing_weight = fast_wing_transition(
-        r_flat,
-        loga_coeff,
-        logr_coeff,
-        p_val,
-        F_mat_T,
-    )
-    q = 1.0 - wing_weight
     n_pix = len(r_flat)
-    X = np.empty((n_pix, n_linear))
-    core = np.zeros(n_pix)
+
+    # Reconstruct the core model and linear Jacobian block
+    X = np.empty((n_pix, n_linear), dtype=float)
+    core = np.zeros(n_pix, dtype=float)
     n_bessel = fit.amps.shape[0]
     pair_lookup = {
         (n0, n1): i for i, (n0, n1) in enumerate(zip(*np.triu_indices(n_bessel)))
     }
 
+    # Temporary core reconstruction.
     for col, ((n0, n1, m, term), coeff) in enumerate(zip(idx, linear[:-1])):
         pair_idx = pair_lookup[(n0, n1)]
         basis = base_beams[:, pair_idx]
 
         if m == 0:
-            ang = 1.0
+            angular = 1.0
         elif term == 0:
-            ang = cos_m_theta[m - 1]
+            angular = cos_m_theta[m - 1]
         else:
-            ang = sin_m_theta[m - 1]
-        col_eval = basis * ang
-        core += coeff * col_eval
-        X[:, col] = q * col_eval
-    X[:, -1] = 1.0
-    logr = F_mat_T @ logr_coeff
-    r0 = np.exp(logr)
-    p = np.clip(np.exp(p_val), 0.5, 20.0)
-    rr = np.maximum(r_flat, 1e-5)
-    r0_safe = np.maximum(r0, 1e-4)
-    ratio = rr / r0_safe
-    u = 0.5 + (p / 0.3) * (ratio - 1.0)
-    inside = (u > 0.0) & (u < 1.0)
-    dsdu = np.zeros_like(u)
-    ui = u[inside]
-    dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
-    du_dlogr0 = -(p / 0.3) * ratio
-    du_dlogp = (p / 0.3) * (ratio - 1.0)
-    dw_dlogr0 = dsdu * du_dlogr0
-    dw_dlogp = dsdu * du_dlogp
-    dw_dlogr0[~inside] = 0.0
-    dw_dlogp[~inside] = 0.0
-    dwing_dloga = pure_wing[:, None] * F_mat_T
-    wing_minus_core = pure_wing - core
-    dmodel_a = wing_weight[:, None] * dwing_dloga
-    dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
-    dmodel_p = (wing_minus_core * dw_dlogp)[:, None]
+            angular = sin_m_theta[m - 1]
+        core += coeff * basis * angular
 
+    (
+        _,
+        _,
+        q,
+        dmodel_a,
+        dmodel_r0,
+        dmodel_p,
+    ) = wing_model_derivatives(
+        r_flat,
+        F_mat_T,
+        loga_coeff,
+        logr_coeff,
+        p_val,
+        core,
+    )
+
+    # Linear Jacobian columns
+    for col, (n0, n1, m, term) in enumerate(idx):
+        pair_idx = pair_lookup[(n0, n1)]
+        basis = base_beams[:, pair_idx]
+        if m == 0:
+            angular = 1.0
+        elif term == 0:
+            angular = cos_m_theta[m - 1]
+        else:
+            angular = sin_m_theta[m - 1]
+        X[:, col] = q * basis * angular
+
+    # Global offset derivative
+    X[:, -1] = 1.0
     J_map = np.column_stack(
         [
             X,
@@ -1629,12 +1844,7 @@ def build_model_jacobian_from_fit(
             dmodel_p,
         ]
     )
-
     return J_map
-
-
-def block_cov(J, C, sl):
-    return J[:, sl] @ C[sl, sl] @ J[:, sl].T
 
 
 def bessel_profile_covariance(
@@ -1830,17 +2040,6 @@ def bessel_profile_covariance(
         evecs_prof = evecs_prof[:, :n_modes]
     profile_modes = evecs_prof * np.sqrt(evals_prof)[None, :]  # *nmaps
     profile_sigma = np.sqrt(np.sum(profile_modes**2, axis=1))
-
-    for name, sl in [
-        ("core", slice(0, n_linear)),
-        ("loga", slice(n_linear, n_linear + n_ang)),
-        ("logr0", slice(n_linear + n_ang, n_linear + 2 * n_ang)),
-        ("p", slice(n_linear + 2 * n_ang, None)),
-    ]:
-        Cb = block_cov(J_r, full_cov, sl)
-        s = np.sqrt(np.diag(Cb))
-
-        print(name, np.max(s / profile))
 
     n_modes_actual = len(evals_prof)
     ell = np.arange(lmax + 1)
