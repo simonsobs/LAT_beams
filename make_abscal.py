@@ -134,15 +134,16 @@ def get_abscal(
         + aman.gauss.off.to(u.pW).value
         - aman[aman.final_model].off.to(u.pW).value
     )
-    prof /= init_norm
+    prof_norm = prof / init_norm
     res = np.mean(np.diff(r))
     r_msk = (r < ext_rad) * (r >= res)
     r_lim = r[r_msk]
 
     # Estimate scaling and offset in real space
     amp, off, _, _, r_lim, _, stack_prof = bu.norm_prof_to_ref(
-        r, prof, prof_interp, ext_rad, False
+        r, prof_norm, prof_interp, ext_rad, False
     )
+    amp *= init_norm
 
     # Optional window func refinement
     if cfg.abscal_lmin > 0:
