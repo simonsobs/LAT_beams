@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, cast
 
 import numpy as np
 from healpy.sphtfunc import beam2bl
@@ -315,12 +315,12 @@ def estimate_noise_ps2d(
     )
 
     # Remove the weighted mean to reduce DC contamination
-    # weights = np.asarray(window)
-    # z = np.asarray(whitened)
-    # if np.sum(weights) > 0:
-    #     z = z - np.sum(weights * z) / np.sum(weights)
-    #
-    # whitened = enmap.ndmap(z * weights, residual.wcs)
+    weights = np.asarray(window)
+    z = np.asarray(whitened)
+    if np.sum(weights) > 0:
+        z = z - np.sum(weights * z) / np.sum(weights)
+
+    whitened = enmap.ndmap(z * weights, residual.wcs)
 
     harm = enmap.map2harm(whitened)  # , normalize="phys")
     ps2d = enmap.calc_ps2d(harm)
@@ -352,6 +352,7 @@ def estimate_noise_ps2d(
 
     ps = np.nan_to_num(ps, nan=floor, posinf=floor, neginf=floor)
     ps = np.maximum(ps, floor)
+    ps /= np.median(ps)
 
     return enmap.ndmap(ps, residual.wcs)
 

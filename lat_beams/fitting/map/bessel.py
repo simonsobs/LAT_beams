@@ -1524,9 +1524,117 @@ def compute_full_covariance(
 
     H = 0.5 * (H + H.T)  # Stupid floats
     H_inv = cast(NDArray[np.floating], scipy.linalg.pinvh(H, check_finite=False))
-    # sigma2 = 1
+    lam = 1e-8 * np.median(np.diag(H))
+    H_inv = np.linalg.inv(H + lam * np.eye(H.shape[0]))
+    # We aready whittened
+    if include_corr:
+        sigma2 = 1
 
     return cast(NDArray[np.floating], sigma2 * H_inv)
+
+
+def build_model_jacobian_from_fit(
+    fit,
+    linear,
+    wing_params,
+    base_beams,
+    F_mat_T,
+    cos_m_theta,
+    sin_m_theta,
+    r_flat,
+):
+    """
+    Build dM/dp on the evaluation grid.
+
+    Returns
+    -------
+    J_map : (n_pix, n_param)
+        Jacobian of the beam model wrt all fit parameters.
+
+    q : (n_pix,)
+        1 - wing_weight
+
+    pure_wing : (n_pix,)
+        Wing component
+
+    core : (n_pix,)
+        Core component
+    """
+
+    idx = np.asarray(fit.bessel_idx)
+    n_linear = len(linear)
+    n_ang = (len(wing_params) - 1) // 2
+    loga_coeff = wing_params[:n_ang]
+    logr_coeff = wing_params[n_ang : 2 * n_ang]
+    p_val = wing_params[-1]
+
+    pure_wing, wing_weight = fast_wing_transition(
+        r_flat,
+        loga_coeff,
+        logr_coeff,
+        p_val,
+        F_mat_T,
+    )
+    q = 1.0 - wing_weight
+    n_pix = len(r_flat)
+    X = np.empty((n_pix, n_linear))
+    core = np.zeros(n_pix)
+    n_bessel = fit.amps.shape[0]
+    pair_lookup = {
+        (n0, n1): i for i, (n0, n1) in enumerate(zip(*np.triu_indices(n_bessel)))
+    }
+
+    for col, ((n0, n1, m, term), coeff) in enumerate(zip(idx, linear[:-1])):
+        pair_idx = pair_lookup[(n0, n1)]
+        basis = base_beams[:, pair_idx]
+
+        if m == 0:
+            ang = 1.0
+        elif term == 0:
+            ang = cos_m_theta[m - 1]
+        else:
+            ang = sin_m_theta[m - 1]
+        col_eval = basis * ang
+        core += coeff * col_eval
+        X[:, col] = q * col_eval
+    X[:, -1] = 1.0
+    logr = F_mat_T @ logr_coeff
+    r0 = np.exp(logr)
+    p = np.clip(np.exp(p_val), 0.5, 20.0)
+    rr = np.maximum(r_flat, 1e-5)
+    r0_safe = np.maximum(r0, 1e-4)
+    ratio = rr / r0_safe
+    u = 0.5 + (p / 0.3) * (ratio - 1.0)
+    inside = (u > 0.0) & (u < 1.0)
+    dsdu = np.zeros_like(u)
+    ui = u[inside]
+    dsdu[inside] = 30.0 * ui**2 * (1.0 - ui) ** 2
+    du_dlogr0 = -(p / 0.3) * ratio
+    du_dlogp = (p / 0.3) * (ratio - 1.0)
+    dw_dlogr0 = dsdu * du_dlogr0
+    dw_dlogp = dsdu * du_dlogp
+    dw_dlogr0[~inside] = 0.0
+    dw_dlogp[~inside] = 0.0
+    dwing_dloga = pure_wing[:, None] * F_mat_T
+    wing_minus_core = pure_wing - core
+    dmodel_a = wing_weight[:, None] * dwing_dloga
+    dmodel_r0 = wing_minus_core[:, None] * dw_dlogr0[:, None] * F_mat_T
+    dmodel_p = (wing_minus_core * dw_dlogp)[:, None]
+
+    J_map = np.column_stack(
+        [
+            X,
+            dmodel_a,
+            dmodel_r0,
+            dmodel_p,
+        ]
+    )
+
+    return J_map
+
+
+def block_cov(J, C, sl):
+    return J[:, sl] @ C[sl, sl] @ J[:, sl].T
 
 
 def bessel_profile_covariance(
@@ -1608,9 +1716,9 @@ def bessel_profile_covariance(
     else:
         full_cov = cov.copy()
 
-    n_core = int(cast(int, fit.n_core))
     wing_params = np.asarray(fit.wing_params.value)
     linear = np.asarray(fit.linear_coeffs.value)
+    n_linear = len(linear)
     amps = np.asarray(fit.amps.value)
     off = float(np.asarray(fit.off.value))
     p = np.concatenate([linear, wing_params])
@@ -1691,65 +1799,50 @@ def bessel_profile_covariance(
     profile_norm = model_flat[peak] - off
     profile = (profile - off) / profile_norm
 
-    n_pix = len(model_flat)
-    n_modes_actual = len(evals)
-    J_mode = np.empty((n_pix, n_modes_actual), dtype=float)
-    idx = np.asarray(fit.bessel_idx)
-
-    amps_plus, amps_minus = np.zeros_like(amps), np.zeros_like(amps)
-    for i, (direction, eval_i) in enumerate(zip(evecs.T, evals)):
-        sigma = np.sqrt(eval_i)
-        if sigma == 0:
-            J_mode[:, i] = 0.0
-            continue
-        p_plus, p_minus = p + sigma * direction, p - sigma * direction
-        for a, ind in zip(p_plus[:n_core], idx):
-            amps_plus[tuple(ind)] = a
-        for a, ind in zip(p_minus[:n_core], idx):
-            amps_minus[tuple(ind)] = a
-        model_plus = (
-            bessel_beam(
-                posmap,
-                xi0,
-                eta0,
-                ell_max,
-                amps_plus,
-                0.0,
-                p_plus[n_core + 1 :],
-                p_plus[n_core],
-                base_beams=base_beams,
-                f_basis=f_basis,
-            ).ravel()
-            - off
-        )
-        model_minus = (
-            bessel_beam(
-                posmap,
-                xi0,
-                eta0,
-                ell_max,
-                amps_minus,
-                0.0,
-                p_minus[n_core + 1 :],
-                p_minus[n_core],
-                base_beams=base_beams,
-                f_basis=f_basis,
-            ).ravel()
-            - off
-        )
-        # norm_plus = model_plus[peak] - off # p_plus[n_core]
-        # norm_minus = model_minus[peak] - off #p_minus[n_core]
-        # # p_plus = (model_plus - p_plus[n_core]) / norm_plus
-        # # p_minus = (model_minus - p_minus[n_core]) / norm_minus
-        # p_plus = (model_plus - off) / norm_plus
-        # p_minus = (model_minus - off) / norm_minus
-        # J_mode[:, i] = (p_plus - p_minus) / (2 * sigma)
-        J_mode[:, i] = (model_plus - model_minus) / (2 * sigma * profile_norm)
-
-    J_profile_mode = R @ J_mode
-    profile_modes = J_profile_mode * np.sqrt(evals)[None, :]
+    J_map = build_model_jacobian_from_fit(
+        fit,
+        linear,
+        wing_params,
+        base_beams,
+        F_mat_T,
+        cos_m_theta,
+        sin_m_theta,
+        r_flat,
+    )
+    J_r = R @ J_map
+    # offset_idx = n_core
+    # J_q = J_r.copy()
+    # J_q[:, offset_idx] -= 1.0
+    # J_n = J_map[peak].copy()
+    # J_n[offset_idx] -= 1.0
+    # q = profile * profile_norm
+    # J_profile = ( J_q / profile_norm - (q[:, None] / profile_norm**2) * J_n[None, :])
+    # C_profile = J_profile @ full_cov @ J_profile.T
+    C_profile = J_r @ full_cov @ J_r.T
+    evals_prof, evecs_prof = np.linalg.eigh(C_profile)
+    order = np.argsort(evals_prof)[::-1]
+    evals_prof = evals_prof[order]
+    evecs_prof = evecs_prof[:, order]
+    evals_prof = np.maximum(evals_prof, 0.0)
+    if n_modes > 0:
+        n_modes = min(n_modes, len(evals_prof))
+        evals_prof = evals_prof[:n_modes]
+        evecs_prof = evecs_prof[:, :n_modes]
+    profile_modes = evecs_prof * np.sqrt(evals_prof)[None, :]  # *nmaps
     profile_sigma = np.sqrt(np.sum(profile_modes**2, axis=1))
 
+    for name, sl in [
+        ("core", slice(0, n_linear)),
+        ("loga", slice(n_linear, n_linear + n_ang)),
+        ("logr0", slice(n_linear + n_ang, n_linear + 2 * n_ang)),
+        ("p", slice(n_linear + 2 * n_ang, None)),
+    ]:
+        Cb = block_cov(J_r, full_cov, sl)
+        s = np.sqrt(np.diag(Cb))
+
+        print(name, np.max(s / profile))
+
+    n_modes_actual = len(evals_prof)
     ell = np.arange(lmax + 1)
     bl = np.asarray(beam2bl(profile, radial_centers, lmax=lmax))
     bl_modes = np.empty((len(ell), n_modes_actual), dtype=float)
@@ -1774,7 +1867,6 @@ def bessel_profile_covariance(
     out.wrap("r", 3600 * np.rad2deg(radial_centers), [(0, "r")])
     out.wrap("profile", profile, [(0, "r")])
     out.wrap("profile_sigma", profile_sigma, [(0, "r")])
-    # out.wrap("profile_cov", profile_cov, [(0, "r"), (1, "r")])
     out.wrap("profile_modes", profile_modes, [(0, "r"), (1, "mode")])
     out.wrap("ell", ell, [(0, "ell")])
     out.wrap("bl", bl, [(0, "ell")])
@@ -1819,6 +1911,7 @@ def bessel_profile_covariance(
             prof = prof_i((r_use - r_off) / r_scale)
             profiles[i] = (prof - off) / amp
         out_empir = empirical_profile_covariance(profiles, r_use, lmax, n_modes)
-        out_empir.wrap("from_model", empir_from_model)
+        if out_empir is not None:
+            out_empir.wrap("from_model", empir_from_model)
 
     return out, cast(ndmap, model - off), out_empir
