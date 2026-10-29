@@ -1,11 +1,14 @@
 base: nersc_atm.yaml
+root_dir: '/global/cfs/cdirs/sobs/users/skh'
 abscal_source_list:
   - "mars"
   - "uranus"
 split_by:
   - "mainsrc+tube_slot+band"
   - "nojup+tube_slot+band"
+  - "tube_slot+lf_only+band"
 det_splits: []
-abscal_r_frac: .3
-abscal_lmin: 2500
+abscal_r_frac: .1
+abscal_r_fwhm: 1.0
+abscal_lmin: -1 #8000
 abscal_from_model: false
