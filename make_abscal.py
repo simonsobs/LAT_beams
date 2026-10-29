@@ -141,7 +141,7 @@ def get_abscal(
 
     # Estimate scaling and offset in real space
     amp, off, _, _, r_lim, _, stack_prof = bu.norm_prof_to_ref(
-        r, prof_norm, prof_interp, ext_rad, True
+        r, prof_norm, prof_interp, ext_rad, False
     )
     amp *= init_norm
 
