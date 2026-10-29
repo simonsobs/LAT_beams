@@ -98,6 +98,7 @@ import scipy.optimize
 from astropy import units as u
 from healpy.sphtfunc import beam2bl
 from jaxtyping import Float
+from np_cache import np_lru_cache
 from numpy.typing import NDArray
 from pixell import enmap
 from pixell.enmap import ndmap
@@ -191,7 +192,7 @@ def solve_linear_system(
         Wing component.
     wing_weight : Float[NDArray, "n_pixels"]
         Transition weight.
-    cho : tuple
+    cho : tuple[NDArray[np.floating], bool]
         Cholesky factorization of the normal matrix.
     """
     n_ang = (len(params) - 1) // 2
@@ -200,22 +201,10 @@ def solve_linear_system(
     logr_coeff = params[n_ang : 2 * n_ang]
     p_val = params[-1]
 
-    dummy_core = np.zeros(len(r))
-    (
-        pure_wing,
-        wing_weight,
-        q,
-        _,
-        _,
-        _,
-    ) = wing_model_derivatives(
-        r,
-        F_mat_T,
-        loga_coeff,
-        logr_coeff,
-        p_val,
-        dummy_core,
+    pure_wing, wing_weight = fast_wing_transition(
+        r, loga_coeff, logr_coeff, p_val, F_mat_T
     )
+    q = 1.0 - wing_weight
 
     X = np.column_stack([Bs[:, :-1] * q[:, None], Bs[:, -1]])
     wing_weighted = pure_wing * wing_weight * w
@@ -1241,11 +1230,9 @@ def fit_bessel_map(
     lower[-1] = np.log(0.5)
     upper[-1] = np.log(20.0)
 
-    def jacobian(params):
-        """
-        Calculate the analytic Jacobian.
-        """
-        _, _, pure_core, pure_wing, wing_weight, _ = solve_linear_system(
+    @np_lru_cache(maxsize=4)
+    def solve_linear_opt(params):
+        return solve_linear_system(
             params,
             r_opt,
             y_opt,
@@ -1257,6 +1244,12 @@ def fit_bessel_map(
             n_core,
             linear_ridge,
         )
+
+    def jacobian(params):
+        """
+        Calculate the analytic Jacobian.
+        """
+        _, _, pure_core, pure_wing, wing_weight, _ = solve_linear_opt(params)
 
         loga_coeff = params[:n_ang]
         logr_coeff = params[n_ang : 2 * n_ang]
@@ -1324,17 +1317,8 @@ def fit_bessel_map(
         """
         Evaluate the nonlinear least-squares residual.
         """
-        _, model_weighted, pure_core, pure_wing, wing_weight, _ = solve_linear_system(
-            params,
-            r_opt,
-            y_opt,
-            w_opt,
-            B_core_opt,
-            Bs_opt,
-            F_mat_T_opt,
-            scale,
-            n_core,
-            linear_ridge,
+        _, model_weighted, pure_core, pure_wing, wing_weight, _ = solve_linear_opt(
+            params
         )
         res = model_weighted - y_opt
         loga_coeff = params[:n_ang]
