@@ -1837,7 +1837,7 @@ def bessel_profile_covariance(
     cov: Optional[Float[np.ndarray, "npar npar"]] = None,
     fits: Optional[list[AxisManager]] = None,
     ext_rad: float = np.inf,
-    empir_from_model=True,
+    empir_from_model: bool = True,
 ) -> tuple[AxisManager, Float[ndmap, "nx ny"], Optional[AxisManager]]:
     r"""
     Propagate the full fit and covariance into a radial beam profile and b_l and their covariances.
@@ -1885,7 +1885,7 @@ def bessel_profile_covariance(
         If provided will be used to compute an empirical covariance.
     ext_rad : float, default: np.inf
         Radius in radians of the mapmaker filter.
-    empir_from_model, default: bool
+    empir_from_model : bool, default: True
         If True compute the empirical covariance from the per-obs models.
         If False use the data profiles instead.
 
