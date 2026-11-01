@@ -97,6 +97,7 @@ def make_cuts(
         msg = f"Not enough detectors after source flag cuts!"
         fail(job, ErrCode.MIN_DETS, msg, logger)
         return None
+    cuts += aman.flags.glitch_flags
     return cuts
 
 

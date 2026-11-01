@@ -19,7 +19,7 @@ from sotodlib.site_pipeline.jobdb import Job
 
 import lat_beams.mapmaking as lbm
 from lat_beams.beam_utils import estimate_cent
-from lat_beams.plotting import plot_map_complete
+from lat_beams.plotting import plot_map_tqu
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -96,15 +96,25 @@ def get_jobit(
             logger.info("Using ManifestDb at %s", dbs[0])
             db = metadata.ManifestDb(dbs[0])
             obs_ids = np.array([entry["obs:obs_id"] for entry in db.inspect()])
+            ws_list = [
+                ws for ws, obs in zip(ws_list, obslist) if obs["obs_id"] in obs_ids
+            ]
+            ba_list = [
+                ba for ba, obs in zip(ba_list, obslist) if obs["obs_id"] in obs_ids
+            ]
             obslist = [obs for obs in obslist if obs["obs_id"] in obs_ids]
             logger.info("Only %s observations with pointing metadata", len(obslist))
 
         obslist = np.array_split(obslist, nproc)[myrank]
+        ws_list = np.array_split(np.asarray(ws_list), nproc)[myrank]
+        ba_list = np.array_split(np.asarray(ba_list), nproc)[myrank]
         obsit = []
         for obs, wsl, bal in zip(obslist, ws_list, ba_list):
             try:
                 det_info = ctx.get_det_info(obs["obs_id"])
             except:
+                continue
+            if cfg.tube_slots and obs["tube_slot"] not in cfg.tube_slots:
                 continue
             obs = ctx.obsdb.get(obs["obs_id"], tags=True)
             wafers = np.unique(
@@ -200,10 +210,11 @@ def load_det_splits(split_dir):
 def make_det_splits(aman, split_dir, min_dets, det_split_cfg, single_det=False):
     det_splits = {"full": RangesMatrix.zeros(aman.signal.shape)}
     if single_det:
+        det_splits = {}
         for i, det_id in enumerate(aman.det_info.det_id):
             rmat = RangesMatrix.ones(aman.signal.shape)
             rmat.ranges[i] = rmat.ranges[i].complement()
-            det_splits = {det_id: rmat}
+            det_splits[det_id] = rmat
         return det_splits
     if "det_id" not in aman.det_info:
         return det_splits
@@ -400,7 +411,7 @@ for i, j in enumerate(joblist):
         posmap = np.rad2deg(posmap) * 3600
         if solved.wcs is None:
             raise ValueError("WCS is None")
-        plot_map_complete(
+        plot_map_tqu(
             solved,
             posmap,
             solved.wcs.wcs.cdelt[1] * (60 * 60),
@@ -510,7 +521,7 @@ for i, j in enumerate(joblist):
             res=cfg.res,
             max_pix=4e8,
             wrap=None,
-            unroll=False,
+            unroll=True,
         )
 
     # Do an aggressive filter and flag dets without the source
@@ -569,7 +580,7 @@ for i, j in enumerate(joblist):
             res=cfg.res,
             max_pix=4e8,
             wrap=None,
-            unroll=False,
+            unroll=True,
         )
 
     # Make splits
@@ -599,6 +610,7 @@ for i, j in enumerate(joblist):
     set_tag(job, "X", X)
     if out is None or cent is None:
         continue
+    logger.log(25, f"{aman.obs_info.roll_center}")
 
     # Add paths to job
     for name, fname, ext in [
@@ -624,7 +636,7 @@ for i, j in enumerate(joblist):
             os.makedirs(os.path.join(obs_plot_dir, ufm, spl), exist_ok=True)
             posmap = omap.posmap()
             posmap = np.rad2deg(posmap) * 3600
-            plot_map_complete(
+            plot_map_tqu(
                 omap,
                 posmap,
                 omap.wcs.wcs.cdelt[1] * (60 * 60),
@@ -683,14 +695,15 @@ for i, j in enumerate(joblist):
             raise ValueError("WCS is None")
         posmap = outmap.posmap()
         posmap = np.rad2deg(posmap) * 3600
-        plot_map_complete(
+        plot_map_tqu(
             outmap,
-            posmap,
+            posmap,  # type: ignore
             outmap.wcs.wcs.cdelt[1] * (60 * 60),
             cfg.extent,
             (posmap[1][cent], posmap[0][cent]),
             os.path.join(obs_plot_dir, ufm),
             f"{obs_id} {ufm} {band} MLmap",
+            comps=job.tags["comps"],
             log_thresh=cfg.log_thresh,
             lognorm=float(1.0 / outmap[0][cent]),
         )

@@ -1,0 +1,22 @@
+map_source_list:
+  - "mars"
+  - "saturn"
+  - "neptune"
+  - "uranus"
+fit_source_list:
+  - "mars"
+  - "neptune"
+  - "uranus"
+  - "saturn"
+base: nersc_atm.yaml
+append: "i4_split"
+epochs:
+    - [1756699200, 1767243600]
+det_splits:
+  - i4_bad
+n_modes: 100 
+split_by:
+  - "band"
+  - "array+band"
+tube_slots:
+  - i4

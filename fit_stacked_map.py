@@ -31,7 +31,7 @@ from lat_beams.beam_utils import (
     radial_profile_lin,
 )
 from lat_beams.fitting.map.base import make_guess
-from lat_beams.plotting import auto_relplot, plot_map_complete
+from lat_beams.plotting import auto_relplot, plot_map
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -149,6 +149,7 @@ def plot_model_maps(
     job,
     log_thresh,
     n_multipoles,
+    cfg,
 ):
     plot_dir_spl = os.path.join(
         plot_dir,
@@ -171,7 +172,7 @@ def plot_model_maps(
     y0 = float(ypix[0])
     x0 = float(xpix[0])
 
-    maps = [(model - off, "model"), (imap - model, "model_resid"), (imap - off, "")]
+    maps = [(imap - off, "data"), (model - off, "model"), (imap - model, "resid")]
     for omap, name in maps:
         if "resid" not in name:
             modes = sb.beam_modes(omap, mmax=n_multipoles + 2, center=(y0, x0))  # type: ignore
@@ -221,31 +222,22 @@ def plot_model_maps(
                 bbox_inches="tight",
             )
             plt.close()
-        if name == "":
-            continue
-        plot_map_complete(
-            omap,
+
+    for log in (False, True):
+        plot_map(
+            [m[0] for m in maps],
             posmap,
             pixsize,
             extent,
             (0, 0),
             plot_dir_spl,
-            f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']}",
-            comps="T",
+            f"{job.tags['split_str']} {job.tags['det_split']} {job.tags['epoch_start']} {job.tags['epoch_end']} T fit",
+            [m[1] for m in maps],
+            log=log,
             log_thresh=log_thresh,
-            append="stack_" + name,
+            append="",
             units='"',
-            lognorm=1,
         )
-
-
-def jackknife_cov(X, jk_mean=None):
-    n = X.shape[0]
-    jk = (X.sum(axis=0) - X) / (n - 1)
-    if jk_mean is None:
-        jk_mean = jk.mean(axis=0)
-    cov = (n - 1) / n * (jk - jk_mean).T @ (jk - jk_mean)
-    return cov
 
 
 def fit_job(
@@ -289,7 +281,7 @@ def fit_job(
         fail(job, ErrCode.MAP_MISSING, msg, logger)
         return None, None
     imap = enmap.read_map(map_path)[0]
-    ivar = enmap.read_map(ivar_path)[0] / len(fjobs)
+    ivar = enmap.read_map(ivar_path)[0]  # / len(fjobs)
     imap = enmap.unapply_window(imap, order=0)
     imap = cast(enmap.ndmap, imap)
     ivar = cast(enmap.ndmap, ivar)
@@ -424,21 +416,23 @@ def fit_job(
     # High-resolution profile
     prof_dir = os.path.join(data_dir, f"stack_profiles{cfg.test_append}", split, spl)
     os.makedirs(prof_dir, exist_ok=True)
-    prof_cov, _, jk_prof_cov = fb.bessel_profile_covariance(
+    prof_cov, _, empir_prof_cov = fb.bessel_profile_covariance(
         aman.bessel,
         posmap_highres,
         cfg.lmax,
         cfg.cov_modes,
         pix_extent // 2,
         fits=fits,
+        ext_rad=band_mask_size,
+        empir_from_model=cfg.empir_from_model,
     )
     prof_cov_full = AxisManager()
     prof_cov_full.wrap("prof_cov", prof_cov)
     logger.log(25, "Bessel cov complete")
 
     # Add empirical cov if we have it
-    if jk_prof_cov is not None:
-        prof_cov_full.wrap("jk_prof_cov", jk_prof_cov)
+    if empir_prof_cov is not None:
+        prof_cov_full.wrap("empir_prof_cov", empir_prof_cov)
 
     # Save model profile
     mr = np.asarray(prof_cov.r)
@@ -450,14 +444,20 @@ def fit_job(
     )
     np.savetxt(path, mprofile)
     set_tag(job, "model_profile", path)
-    if jk_prof_cov is not None:
-        jk_profile_modes = np.asarray(jk_prof_cov.profile_modes)
-        jk_mprofile = np.column_stack((mr, mprof, jk_profile_modes))
+    if empir_prof_cov is not None:
+        empir_profile_modes = np.asarray(empir_prof_cov.profile_modes)
+        empir_mprofile = np.column_stack(
+            (
+                mr[: len(empir_profile_modes)],
+                mprof[: len(empir_profile_modes)],
+                empir_profile_modes,
+            )
+        )
         path = os.path.join(
             prof_dir,
-            f"model_profile_{spl}_{det_split}_{epoch_start}_{epoch_end}_jk.txt",
+            f"model_profile_{spl}_{det_split}_{epoch_start}_{epoch_end}_empir.txt",
         )
-        np.savetxt(path, jk_mprofile)
+        np.savetxt(path, empir_mprofile)
 
     # Save model window
     ells = np.asarray(prof_cov.ell)
@@ -475,15 +475,16 @@ def fit_job(
         ),
     )
     set_tag(job, "model_window", path)
-    if jk_prof_cov is not None:
-        jk_bl_modes = np.asarray(jk_prof_cov.bl_modes)
-        jk_mwindow = np.column_stack((ells, mbl, jk_bl_modes))
+    if empir_prof_cov is not None:
+        empir_bl_modes = np.asarray(empir_prof_cov.bl_modes)
+        empir_mwindow = np.column_stack((ells, mbl, empir_bl_modes))
         path = os.path.join(
-            prof_dir, f"model_window_{spl}_{det_split}_{epoch_start}_{epoch_end}_jk.txt"
+            prof_dir,
+            f"model_window_{spl}_{det_split}_{epoch_start}_{epoch_end}_empir.txt",
         )
         np.savetxt(
             path,
-            jk_mwindow,
+            empir_mwindow,
             header=(
                 "ell bl "
                 + " ".join(f"error_mode_{i}" for i in range(bl_modes.shape[1]))
@@ -575,6 +576,7 @@ def fit_job(
         job,
         cfg.log_thresh,
         cfg.n_multipoles,
+        cfg,
     )
 
     logger.log(25, "Saved %s", jobstr)
@@ -635,6 +637,7 @@ def replot_job(
         job,
         cfg.log_thresh,
         cfg.n_multipoles,
+        cfg,
     )
 
 
@@ -645,7 +648,7 @@ def make_summary_plots(
     cfg,
     logger,
     out_file,
-    plot_jk=False,
+    plot_empir=False,
 ):
     _ = out_file
     # Reconstruct grouping only for summary plotting.
@@ -713,13 +716,13 @@ def make_summary_plots(
 
                     prof_full = AxisManager.load(h5_file)
                     prof = prof_full.prof_cov
-                    if plot_jk:
-                        if "jk_prof_cov" not in prof_full:
+                    if plot_empir:
+                        if "empir_prof_cov" not in prof_full:
                             logger.warning(
                                 "Missing jackknife cov in %s. Skipping.", h5_file
                             )
                             continue
-                        prof = prof_full.jk_prof_cov
+                        prof = prof_full.empir_prof_cov
                     data_prof = prof_full.data_prof_cov
 
                     r = np.asarray(data_prof.r)
@@ -814,7 +817,8 @@ def make_summary_plots(
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
                 os.path.join(
-                    prof_plot_dir, f"profile_{split}_{det_split}{plot_jk*'_jk'}.png"
+                    prof_plot_dir,
+                    f"profile_{split}_{det_split}{plot_empir*'_empir'}.png",
                 ),
                 bbox_inches="tight",
             )
@@ -853,7 +857,8 @@ def make_summary_plots(
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
                 os.path.join(
-                    prof_plot_dir, f"profile_err_{split}_{det_split}{plot_jk*'_jk'}.png"
+                    prof_plot_dir,
+                    f"profile_err_{split}_{det_split}{plot_empir*'_empir'}.png",
                 ),
                 bbox_inches="tight",
             )
@@ -890,7 +895,8 @@ def make_summary_plots(
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
                 os.path.join(
-                    prof_plot_dir, f"window_{split}_{det_split}{plot_jk*'_jk'}.png"
+                    prof_plot_dir,
+                    f"window_{split}_{det_split}{plot_empir*'_empir'}.png",
                 ),
                 bbox_inches="tight",
             )
@@ -929,7 +935,8 @@ def make_summary_plots(
             plt.subplots_adjust(top=(1 - 0.25 / len(plot.axes)))
             plt.savefig(
                 os.path.join(
-                    prof_plot_dir, f"window_err_{split}_{det_split}{plot_jk*'_jk'}.png"
+                    prof_plot_dir,
+                    f"window_err_{split}_{det_split}{plot_empir*'_empir'}.png",
                 ),
                 bbox_inches="tight",
             )
@@ -1165,7 +1172,6 @@ def main():
 
             pending_save = (aman, aman_path)
             pending_job = job
-
         except Exception as e:
             msg = f"Fit failed with error {str(e)}"
             fail(job, ErrCode.FIT_FAILED, msg, logger)

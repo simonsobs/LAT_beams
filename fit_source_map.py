@@ -25,7 +25,7 @@ from lat_beams.beam_utils import (
     radial_profile,
 )
 from lat_beams.fitting.map.base import make_guess
-from lat_beams.plotting import plot_map_complete
+from lat_beams.plotting import plot_map
 from lat_beams.utils import (
     ErrCode,
     fail,
@@ -76,6 +76,10 @@ def get_jobit(jdb, det_splits, obs_ids, start_time, stop_time):
 
     to_ret = []
     for info, wsl, bal in zip(maplist, ws_list, ba_list):
+        if cfg.tube_slots and not any(
+            ot in info.tags["obs_id"] for ot in cfg.tube_slots
+        ):
+            continue
         if wsl is not None and info.tags["wafer_slot"] not in wsl:
             continue
         if bal is not None and info.tags["band"] not in bal:
@@ -142,7 +146,7 @@ outfile = None
 if myrank == 0:
     of_path = os.path.join(data_dir, f"beam_pars{cfg.test_append}.h5")
     of_path_noa = os.path.join(data_dir, f"beam_pars.h5")
-    if os.path.isfile(of_path_noa) and cfg.copy_fits_test:
+    if os.path.isfile(of_path_noa) and cfg.copy_fits_test and of_path != of_path_noa:
         shutil.copyfile(of_path_noa, of_path)
     outfile = h5py.File(of_path, "a")
 
@@ -214,11 +218,10 @@ for i, j in enumerate(joblist):
         outfile.flush()
     comm.barrier()
 
-    logger.debug("Writing to db")
-    if job is None:
+    if job is not None:
         to_save = (None, None)
-        continue
-    update_jobs_retry(jdb, [job], nproc * 10, logger)
+        logger.debug("Writing to db")
+        update_jobs_retry(jdb, [job], nproc * 10, logger)
     job = None
     if j is not None:
         with jdb.session_scope() as session:
@@ -498,21 +501,23 @@ for i, j in enumerate(joblist):
     )
     plt_cent = (aman.xi0.to(u.arcsec).value, aman.eta0.to(u.arcsec).value)
     norm = float(1.0 / aman.amp.value)
-    posmap = np.rad2deg(posmap) * 3600
-    for dat, label in [(model - off, "model"), (resid, "resid")]:
-        plot_map_complete(
-            dat,
+    posmap = cast(enmap.ndmap, np.rad2deg(posmap) * 3600)
+    maps = [(solved, "data"), (model - off, "model"), (resid, "resid")]
+    for log in (False, True):
+        _norm = norm if log else 1
+        plot_map(
+            [m[0] * _norm for m in maps],
             posmap,
             pixsize,
             cfg.extent,
             plt_cent,
             ufm_plot_dir,
-            f"{obs_id} {ufm} {band} {split}",
-            comps="T",
+            f"{obs_id} {ufm} {band} {split} T fit",
+            [m[1] for m in maps],
             log_thresh=cfg.log_thresh,
-            append=label,
+            append="",
             units='"',
-            lognorm=norm,
+            log=log,
         )
 
     # Save

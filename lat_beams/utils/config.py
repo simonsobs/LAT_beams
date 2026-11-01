@@ -75,6 +75,10 @@ Module for handling all configuration of scripts.
 ??? info "cfg.min_dets"
     Minimum number of detectors required after cuts.
 
+??? info "cfg.tube_slots"
+    List of tube slots to run on. Pass an empty list to run on all.
+    This currently has no effect on stacking.
+
 ### Mapmaking
 
 ??? info "cfg.extent"
@@ -352,9 +356,13 @@ Module for handling all configuration of scripts.
 
 ??? info "cfg.empir_cov"
     Whether to calculate empirical covariance information from the
-    individual beam fits. In the fitting stage, empirical covariance is
+    individual beams. In the fitting stage, empirical covariance is
     loaded when more than five contributing fits are available. It also
     controls whether empirical scatter based summary plots are generated.
+
+??? info "cfg.empir_from_model"
+    Whether to calculate empirical covariance information from the
+    individual beam models or data profiles.
 
 ??? info "cfg.lmax"
     Maximum multipole used when calculating the beam window function and
@@ -652,6 +660,9 @@ def setup_cfg(
     )
     cfg["min_samps"] = cfg.get("min_samps", 1000)
     cfg["min_dets"] = cfg.get("min_dets", 30)
+    cfg["tube_slots"] = cfg.get("tube_slots", [])
+    cfg["fwhm_tol_map"] = cfg.get("fwhm_tol_map", 1)
+    cfg["fwhm_tol_tod"] = cfg.get("fwhm_tol_tol", 1)
 
     # Mapmaking
     cfg["extent"] = cfg.get("extent", 600)
@@ -743,6 +754,7 @@ def setup_cfg(
     cfg["n_lmax"] = cfg.get("n_lmax", 60000)
     cfg["log_thresh"] = cfg.get("log_thresh", 1e-3)
     cfg["empir_cov"] = cfg.get("empir_cov", False)
+    cfg["empir_from_model"] = cfg.get("empir_from_model", True)
     cfg["lmax"] = cfg.get("lmax", 20000)
     cfg["cov_modes"] = cfg.get("cov_modes", 20)
 
