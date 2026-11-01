@@ -1,3 +1,24 @@
+## 6.5.0 (2026-11-01)
+
+### Feat
+
+- dont compute derivs in linear solve and cache linear solve for reuse in jacobian
+- switch to invscale
+- improved empirical cov and start of correlated cov
+- fit plot onlymode
+- add OT selector and streamline plotting
+- add profile normalization func
+- add option to limit by ot and add bad i4 dets
+- streamline plots
+
+### Fix
+
+- many cove fixes
+- bugfixes and LF only
+- use actual var names
+- small bugfixes
+- remove nonscanning periods
+
 ## 6.4.0 (2026-10-20)
 
 ### Feat
