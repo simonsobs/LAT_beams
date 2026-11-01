@@ -1,3 +1,14 @@
+## 6.4.0 (2026-10-20)
+
+### Feat
+
+- abscal stub
+
+### Fix
+
+- only compute for splits with a stack
+- add abscal source list and test cfg
+
 ## 6.3.0 (2026-10-05)
 
 ### Feat

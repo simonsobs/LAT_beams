@@ -1,7 +1,7 @@
 site_name: LAT_beams 
 site_url: https://simonsobs.github.io/LAT_beams/
 theme: 
-  name: material 
+  name: materialx
   palette:
     # Palette toggle for automatic mode
     - media: "(prefers-color-scheme)"
