@@ -45,9 +45,9 @@ from sotodlib.tod_ops.filters import (
     fourier_filter,
     high_pass_sine2,
     identity_filter,
+    low_pass_sine2,
 )
 from sotodlib.tod_ops.filters import logger as flog
-from sotodlib.tod_ops.filters import low_pass_sine2
 from tqdm.auto import tqdm
 from typing_extensions import Optional, cast
 
