@@ -421,6 +421,14 @@ Module for handling all configuration of scripts.
     If the rsm error between the normalized profile and the
     stack core is above this then we discard
     that map from the abscal dataset.
+
+??? info "cfg.abscal_ratio_core_frac"
+    The profile ratio cuts only use radii where the stack profile is above
+    this fraction of its peak, so faint radii don't blow up the ratio.
+
+??? info "cfg.abscal_rms_drop_edge"
+    If ture, leave the outermost fit radius out of the profile difference rms cut,
+    since the fit constrains it the least. 
 """
 
 import argparse
@@ -784,6 +792,8 @@ def setup_cfg(
     cfg["abscal_max_avg_prat"] = cfg.get("abscal_max_avg_prat", 1.5)
     cfg["abscal_max_pdiff"] = cfg.get("abscal_max_pdiff", 0.05)
     cfg["abscal_max_perr"] = cfg.get("abscal_max_perr", 0.02)
+    cfg["abscal_ratio_core_frac"] = cfg.get("abscal_ratio_core_frac", 0.2)
+    cfg["abscal_rms_drop_edge"] = cfg.get("abscal_rms_drop_edge", True)
 
     # Rename for our scope
     for old_name, new_name in replace.items():

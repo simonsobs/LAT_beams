@@ -141,7 +141,7 @@ def get_abscal(
 
     # Estimate scaling and offset in real space
     amp, off, _, _, r_lim, _, stack_prof = bu.norm_prof_to_ref(
-        r, prof_norm, prof_interp, ext_rad, True
+        r, prof_norm, prof_interp, ext_rad, include_off=False
     )
     amp *= init_norm
     off *= init_norm
@@ -168,7 +168,7 @@ def get_abscal(
         solid_angle=solid_angle,
         pwv_obs=pwv,
     )
-    if abscal_res is None:
+    if abscal_res[0] is None:
         return None, None, None, None, None
     abscal, abscal_cmb, opt_eff, raw_abscal, raw_abscal_cmb, raw_opt_eff = abscal_res
     return (
@@ -331,14 +331,18 @@ def abscal_job(
                         skips["no pwv /planet temp / el"] += 1
                         continue
 
-                    core = prof_stack > 0.2 * np.max(
-                        prof_stack
-                    )  # only compare profile in core
-                    prof_ratio = (
-                        prof_norm / prof_stack
-                    )  # Keep full ratio for plotting, but only use core for error calculation
+                    # Only compare the profile ratio in the core
+                    core = prof_stack > cfg.abscal_ratio_core_frac * np.max(prof_stack)
+                    # Keep full ratio for plotting, but only use core for the cuts
+                    prof_ratio = prof_norm / prof_stack
                     prof_diff = prof_norm - prof_stack
-                    prof_err = np.std(prof_diff)
+                    # The fit constrains the outermost radius leas, so optionally skip it
+                    rms_diff = (
+                        prof_diff[:-1]
+                        if cfg.abscal_rms_drop_edge and len(prof_diff) > 1
+                        else prof_diff
+                    )
+                    prof_err = np.std(rms_diff)
                     if np.abs(np.mean(prof_ratio[core])) > cfg.abscal_max_avg_prat:
                         skips["avg prof ratio too far from 1"] += 1
                         continue
@@ -579,8 +583,13 @@ split_dict = {
     for split in all_splits
 }
 
+if len(all_jobs) == 0:
+    logger.info("No jobs to process, exiting")
+    joblist = [None]
+    fits, fjobs_local = all_fits, fjobs
+
 # Work out which maps each job needs.
-if nproc > 1:
+elif nproc > 1:
     assignments = None
     job_maps = None
     if myrank == 0:
@@ -637,11 +646,17 @@ for i, j in enumerate(joblist):
 
 comm.barrier()
 if myrank == 0:
+    LF_BANDS = ("f030", "f040")
     jobs = [
         job
         for job in jdb.get_jobs(jclass="make_abscal", jstate="done")
-        if job.tags["split"] == "mainsrc+tube_slot+band"
-        and job.tags["det_split"] == "full"  # TODO: make split used here configurable
+        if job.tags["det_split"] == "full"
+        and job.tags["split"]
+        == (
+            "tube_slot+lf_only+band"
+            if job.tags["split_str"].split("+")[-1] in LF_BANDS
+            else "mainsrc+tube_slot+band"
+        )
     ]
     if not jobs:
         logger.info("No abscal jobs found, skipping db creation")
