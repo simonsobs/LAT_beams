@@ -428,10 +428,10 @@ Module for handling all configuration of scripts.
 
 ??? info "cfg.abscal_rms_drop_edge"
     If true, leave the outermost fit radius out of the profile difference rms cut,
-    since the fit constrains it the least. 
+    since the fit constrains it the least.
 
 ??? info "cfg.abscal_rings_per_fwhm"
-    The number of radial rings per FWHM to use when downsampling the profile for abscal. 
+    The number of radial rings per FWHM to use when downsampling the profile for abscal.
     This is to avoid noise dominating in the LF rings.
 
 ??? info "cfg.abscal_r_fwhm"
