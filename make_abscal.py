@@ -17,7 +17,6 @@ from healpy.sphtfunc import beam2bl
 from latcom.utils.common import date_str, save_pickle
 from mpi4py import MPI
 from scipy.interpolate import PchipInterpolator
-from scipy.optimize import minimize
 from sotodlib.core import AxisManager, Context, metadata
 from sotodlib.io.metadata import read_dataset, write_dataset
 from sotodlib.site_pipeline import jobdb
@@ -248,6 +247,13 @@ def abscal_job(
     pwvs = bu.get_split_vec(sfits, "pwv_mean", ctx)
     pwvs = [None if p == "None" else float(p) for p in pwvs]
     els = np.asarray(bu.get_split_vec(sfits, "el_center", ctx, round_to=6), dtype=float)
+
+    # Cut ln4 results due to very poor yield
+    keep = np.array([fj.tags["array"] != "ln4" for fj in sfjobs], dtype=bool)
+    skips["excluded band/array"] += int(np.sum(~keep))
+    sfits, sfjobs, els = sfits[keep], sfjobs[keep], els[keep]
+    pwvs = [p for p, k in zip(pwvs, keep) if k]
+
     if len(els):
         logger.log(25, "el range %1.f-%1.f deg", np.min(els), np.max(els))
     logger.log(
@@ -331,8 +337,23 @@ def abscal_job(
                         skips["no pwv /planet temp / el"] += 1
                         continue
 
+                    k = max(
+                        1,
+                        round(
+                            len(prof_stack)
+                            / cfg.abscal_r_fwhm
+                            / cfg.abscal_rings_per_fwhm
+                        ),
+                    )
+                    n = len(prof_stack) // k * k
+                    r_lim, prof_norm, prof_stack = (
+                        x[:n].reshape(-1, k).mean(axis=1)
+                        for x in (r_lim, prof_norm, prof_stack)
+                    )
+
                     # Only compare the profile ratio in the core
                     core = prof_stack > cfg.abscal_ratio_core_frac * np.max(prof_stack)
+
                     # Keep full ratio for plotting, but only use core for the cuts
                     prof_ratio = prof_norm / prof_stack
                     prof_diff = prof_norm - prof_stack
@@ -343,6 +364,7 @@ def abscal_job(
                         else prof_diff
                     )
                     prof_err = np.std(rms_diff)
+
                     if np.abs(np.mean(prof_ratio[core])) > cfg.abscal_max_avg_prat:
                         skips["avg prof ratio too far from 1"] += 1
                         continue
