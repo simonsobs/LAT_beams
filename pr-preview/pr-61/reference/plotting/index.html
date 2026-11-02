@@ -544,6 +544,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../fitting/map/cov/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cov
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../fitting/map/gauss/" class="md-nav__link">
         
   
@@ -783,10 +811,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lat_beams.plotting.plot_map_complete" class="md-nav__link">
+  <a href="#lat_beams.plotting.plot_map_tqu" class="md-nav__link">
     <span class="md-ellipsis">
       
-        plot_map_complete
+        plot_map_tqu
       
     </span>
   </a>
@@ -1067,10 +1095,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lat_beams.plotting.plot_map_complete" class="md-nav__link">
+  <a href="#lat_beams.plotting.plot_map_tqu" class="md-nav__link">
     <span class="md-ellipsis">
       
-        plot_map_complete
+        plot_map_tqu
       
     </span>
   </a>
@@ -1353,80 +1381,7 @@ manually.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/plotting.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
-<span class="normal">483</span>
-<span class="normal">484</span>
-<span class="normal">485</span>
-<span class="normal">486</span>
-<span class="normal">487</span>
-<span class="normal">488</span>
-<span class="normal">489</span>
-<span class="normal">490</span>
-<span class="normal">491</span>
-<span class="normal">492</span>
-<span class="normal">493</span>
-<span class="normal">494</span>
-<span class="normal">495</span>
-<span class="normal">496</span>
-<span class="normal">497</span>
-<span class="normal">498</span>
-<span class="normal">499</span>
-<span class="normal">500</span>
-<span class="normal">501</span>
-<span class="normal">502</span>
-<span class="normal">503</span>
-<span class="normal">504</span>
-<span class="normal">505</span>
-<span class="normal">506</span>
-<span class="normal">507</span>
-<span class="normal">508</span>
-<span class="normal">509</span>
-<span class="normal">510</span>
-<span class="normal">511</span>
-<span class="normal">512</span>
-<span class="normal">513</span>
-<span class="normal">514</span>
-<span class="normal">515</span>
-<span class="normal">516</span>
-<span class="normal">517</span>
-<span class="normal">518</span>
-<span class="normal">519</span>
-<span class="normal">520</span>
-<span class="normal">521</span>
-<span class="normal">522</span>
-<span class="normal">523</span>
-<span class="normal">524</span>
-<span class="normal">525</span>
-<span class="normal">526</span>
-<span class="normal">527</span>
-<span class="normal">528</span>
-<span class="normal">529</span>
-<span class="normal">530</span>
-<span class="normal">531</span>
-<span class="normal">532</span>
-<span class="normal">533</span>
-<span class="normal">534</span>
-<span class="normal">535</span>
-<span class="normal">536</span>
-<span class="normal">537</span>
-<span class="normal">538</span>
-<span class="normal">539</span>
-<span class="normal">540</span>
-<span class="normal">541</span>
-<span class="normal">542</span>
-<span class="normal">543</span>
-<span class="normal">544</span>
-<span class="normal">545</span>
-<span class="normal">546</span>
-<span class="normal">547</span>
-<span class="normal">548</span>
-<span class="normal">549</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">549</span>
 <span class="normal">550</span>
 <span class="normal">551</span>
 <span class="normal">552</span>
@@ -1589,7 +1544,80 @@ manually.</p>
 <span class="normal">709</span>
 <span class="normal">710</span>
 <span class="normal">711</span>
-<span class="normal">712</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">auto_relplot</span><span class="p">(</span>
+<span class="normal">712</span>
+<span class="normal">713</span>
+<span class="normal">714</span>
+<span class="normal">715</span>
+<span class="normal">716</span>
+<span class="normal">717</span>
+<span class="normal">718</span>
+<span class="normal">719</span>
+<span class="normal">720</span>
+<span class="normal">721</span>
+<span class="normal">722</span>
+<span class="normal">723</span>
+<span class="normal">724</span>
+<span class="normal">725</span>
+<span class="normal">726</span>
+<span class="normal">727</span>
+<span class="normal">728</span>
+<span class="normal">729</span>
+<span class="normal">730</span>
+<span class="normal">731</span>
+<span class="normal">732</span>
+<span class="normal">733</span>
+<span class="normal">734</span>
+<span class="normal">735</span>
+<span class="normal">736</span>
+<span class="normal">737</span>
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">auto_relplot</span><span class="p">(</span>
     <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">NDArray</span><span class="p">],</span>
     <span class="n">x</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">y</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -2352,80 +2380,7 @@ Used to determine filenames (see above).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/plotting.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">386</span>
-<span class="normal">387</span>
-<span class="normal">388</span>
-<span class="normal">389</span>
-<span class="normal">390</span>
-<span class="normal">391</span>
-<span class="normal">392</span>
-<span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
-<span class="normal">404</span>
-<span class="normal">405</span>
-<span class="normal">406</span>
-<span class="normal">407</span>
-<span class="normal">408</span>
-<span class="normal">409</span>
-<span class="normal">410</span>
-<span class="normal">411</span>
-<span class="normal">412</span>
-<span class="normal">413</span>
-<span class="normal">414</span>
-<span class="normal">415</span>
-<span class="normal">416</span>
-<span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span>
-<span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
-<span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span>
-<span class="normal">431</span>
-<span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span>
-<span class="normal">454</span>
-<span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">459</span>
 <span class="normal">460</span>
 <span class="normal">461</span>
 <span class="normal">462</span>
@@ -2439,7 +2394,80 @@ Used to determine filenames (see above).</p>
 <span class="normal">470</span>
 <span class="normal">471</span>
 <span class="normal">472</span>
-<span class="normal">473</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_focal_plane</span><span class="p">(</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span>
+<span class="normal">511</span>
+<span class="normal">512</span>
+<span class="normal">513</span>
+<span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span>
+<span class="normal">518</span>
+<span class="normal">519</span>
+<span class="normal">520</span>
+<span class="normal">521</span>
+<span class="normal">522</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span>
+<span class="normal">538</span>
+<span class="normal">539</span>
+<span class="normal">540</span>
+<span class="normal">541</span>
+<span class="normal">542</span>
+<span class="normal">543</span>
+<span class="normal">544</span>
+<span class="normal">545</span>
+<span class="normal">546</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_focal_plane</span><span class="p">(</span>
     <span class="n">focal_plane</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span> <span class="n">fit_plot_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ufm</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">obs_id</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
@@ -2537,15 +2565,16 @@ Used to determine filenames (see above).</p>
 
 
 <h2 id="lat_beams.plotting.plot_map" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">plot_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">posmap</span><span class="p">,</span> <span class="n">pixsize</span><span class="p">,</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">,</span> <span class="n">plot_dir</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">comp</span><span class="o">=</span><span class="s1">'T'</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">log_thresh</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s1">'"'</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">plot_map</span><span class="p">(</span><span class="n">data_list</span><span class="p">,</span> <span class="n">posmap</span><span class="p">,</span> <span class="n">pixsize</span><span class="p">,</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">,</span> <span class="n">plot_dir</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">titles</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">log_thresh</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s1">'"'</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents ">
 
-        <p>Plot a beam map using <code>imshow</code> using the <code>coolwarm</code> colormap.
-This also plots the profile of the map.</p>
+        <p>Plot multiple beam maps and their radial profiles in a single figure.</p>
+<p>Each column corresponds to one map. The top row contains the map image,
+and the bottom row contains its radial profile.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2561,14 +2590,14 @@ This also plots the profile of the map.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>data</code>
+                <code>data_list</code>
             </td>
             <td>
-                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.ndarray">ndarray</span>, &#39;nx ny&#39;] | <span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="list">list</span>[<span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;nx ny&#39;]]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The beam map to plot.</p>
+                <p>List of beam maps, all with the same geometry.</p>
               </div>
             </td>
             <td>
@@ -2580,12 +2609,27 @@ This also plots the profile of the map.</p>
                 <code>posmap</code>
             </td>
             <td>
-                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.ndarray">ndarray</span>, &#39;2 nx ny&#39;] | <span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The position map for the beam map.
-Should be generated by <code>enmap.posmap</code>.</p>
+                <p>Position map generated by enmap.posmap, with shape (2, nx, ny).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pixsize</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pixel size in the same units as posmap.</p>
               </div>
             </td>
             <td>
@@ -2601,7 +2645,7 @@ Should be generated by <code>enmap.posmap</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The radius of the plot to make in the same units as <code>posmap</code>.</p>
+                <p>Radius of the plot in the same units as posmap.</p>
               </div>
             </td>
             <td>
@@ -2617,7 +2661,7 @@ Should be generated by <code>enmap.posmap</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The center of the beam map in the same units as <code>posmap</code>.</p>
+                <p>Center of the maps, in (Xi, Eta) coordinates.</p>
               </div>
             </td>
             <td>
@@ -2633,7 +2677,7 @@ Should be generated by <code>enmap.posmap</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The directory to save plots to.</p>
+                <p>Directory in which to save the figure.</p>
               </div>
             </td>
             <td>
@@ -2649,10 +2693,7 @@ Should be generated by <code>enmap.posmap</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The base title of the plot.
-The full title will have the format "{title} {comp} {append} {'log10'*log}".
-The output file will use the full title as the filename but with whitespace replaced by '_'
-and 'map' or 'prof' inserted between "{title}" and "{comp}" depending on which plot it is.</p>
+                <p>Title for the figure. Also used to determint filename.</p>
               </div>
             </td>
             <td>
@@ -2661,19 +2702,18 @@ and 'map' or 'prof' inserted between "{title}" and "{comp}" depending on which p
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>comp</code>
+                <code>titles</code>
             </td>
             <td>
-                  <code><span title="str">str</span></code>
+                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The comp of the map we are plotting.
-Should be "T", "Q", "U", "Qr", or "Ur".</p>
+                <p>Title for each map, one per column.</p>
               </div>
             </td>
             <td>
-                  <code>&#34;T&#34;</code>
+                <em>required</em>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -2685,12 +2725,12 @@ Should be "T", "Q", "U", "Qr", or "Ur".</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If True then plot the log10 of the beam instead.
-This uses a symetric log norm, or signs are preserved.</p>
+                <p>If True, use a symmetric logarithmic color normalization and
+plot the signed log10 of the radial profiles.</p>
               </div>
             </td>
             <td>
-                  <code>True</code>
+                  <code>False</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -2702,7 +2742,7 @@ This uses a symetric log norm, or signs are preserved.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The threshold at which the log plot transitions to linear to avoid issues near values of 0.</p>
+                <p>Linear threshold for the symmetric logarithmic color normalization.</p>
               </div>
             </td>
             <td>
@@ -2718,8 +2758,7 @@ This uses a symetric log norm, or signs are preserved.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>String to append ti title and filename.
-See <code>title</code> for details.</p>
+                <p>Optional string appended to the plot title and filename.</p>
               </div>
             </td>
             <td>
@@ -2735,7 +2774,7 @@ See <code>title</code> for details.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The units of <code>posmap</code> to appear in axes labels.</p>
+                <p>Units used in the position and radius axis labels.</p>
               </div>
             </td>
             <td>
@@ -2857,116 +2896,262 @@ See <code>title</code> for details.</p>
 <span class="normal">231</span>
 <span class="normal">232</span>
 <span class="normal">233</span>
-<span class="normal">234</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_map</span><span class="p">(</span>
-    <span class="n">data</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]</span> <span class="o">|</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">]</span> <span class="o">|</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_map</span><span class="p">(</span>
+    <span class="n">data_list</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]],</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">],</span>
     <span class="n">pixsize</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="n">extent</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="n">cent</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span>
     <span class="n">plot_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">comp</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"T"</span><span class="p">,</span>
+    <span class="n">titles</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
     <span class="n">log</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">log_thresh</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">,</span>
     <span class="n">append</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
     <span class="n">units</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'"'</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Plot a beam map using `imshow` using the `coolwarm` colormap.</span>
-<span class="sd">    This also plots the profile of the map.</span>
+<span class="sd">    Plot multiple beam maps and their radial profiles in a single figure.</span>
+
+<span class="sd">    Each column corresponds to one map. The top row contains the map image,</span>
+<span class="sd">    and the bottom row contains its radial profile.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    data : Float[np.ndarray, "nx ny"] | enmap.ndmap</span>
-<span class="sd">        The beam map to plot.</span>
-<span class="sd">    posmap : Float[np.ndarray, "2 nx ny"] | enmap.ndmap</span>
-<span class="sd">        The position map for the beam map.</span>
-<span class="sd">        Should be generated by `enmap.posmap`.</span>
+<span class="sd">    data_list : list[Float[enmap.ndmap, "nx ny"]]</span>
+<span class="sd">        List of beam maps, all with the same geometry.</span>
+<span class="sd">    posmap : Float[enmap.ndmap, "2 nx ny"]</span>
+<span class="sd">        Position map generated by enmap.posmap, with shape (2, nx, ny).</span>
+<span class="sd">    pixsize : float</span>
+<span class="sd">        Pixel size in the same units as posmap.</span>
 <span class="sd">    extent : float</span>
-<span class="sd">        The radius of the plot to make in the same units as `posmap`.</span>
+<span class="sd">        Radius of the plot in the same units as posmap.</span>
 <span class="sd">    cent : tuple[float, float]</span>
-<span class="sd">        The center of the beam map in the same units as `posmap`.</span>
+<span class="sd">        Center of the maps, in (Xi, Eta) coordinates.</span>
 <span class="sd">    plot_dir : str</span>
-<span class="sd">        The directory to save plots to.</span>
+<span class="sd">        Directory in which to save the figure.</span>
 <span class="sd">    title : str</span>
-<span class="sd">        The base title of the plot.</span>
-<span class="sd">        The full title will have the format "{title} {comp} {append} {'log10'*log}".</span>
-<span class="sd">        The output file will use the full title as the filename but with whitespace replaced by '_'</span>
-<span class="sd">        and 'map' or 'prof' inserted between "{title}" and "{comp}" depending on which plot it is.</span>
-<span class="sd">    comp : str, default: "T"</span>
-<span class="sd">        The comp of the map we are plotting.</span>
-<span class="sd">        Should be "T", "Q", "U", "Qr", or "Ur".</span>
-<span class="sd">    log : bool, default: True</span>
-<span class="sd">        If True then plot the log10 of the beam instead.</span>
-<span class="sd">        This uses a symetric log norm, or signs are preserved.</span>
-<span class="sd">    log_thresh : float, default: 1e-3</span>
-<span class="sd">        The threshold at which the log plot transitions to linear to avoid issues near values of 0.</span>
-<span class="sd">    append : str, default: ""</span>
-<span class="sd">        String to append ti title and filename.</span>
-<span class="sd">        See `title` for details.</span>
-<span class="sd">    units : str, default: '"'</span>
-<span class="sd">        The units of `posmap` to appear in axes labels.</span>
+<span class="sd">        Title for the figure. Also used to determint filename.</span>
+<span class="sd">    titles : list[str]</span>
+<span class="sd">        Title for each map, one per column.</span>
+<span class="sd">    log : bool, default=False</span>
+<span class="sd">        If True, use a symmetric logarithmic color normalization and</span>
+<span class="sd">        plot the signed log10 of the radial profiles.</span>
+<span class="sd">    log_thresh : float, default=1e-3</span>
+<span class="sd">        Linear threshold for the symmetric logarithmic color normalization.</span>
+<span class="sd">    append : str, default=""</span>
+<span class="sd">        Optional string appended to the plot title and filename.</span>
+<span class="sd">    units : str, default='"'</span>
+<span class="sd">        Units used in the position and radius axis labels.</span>
 <span class="sd">    """</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-    <span class="c1"># Restrict to our local patch (oversample by 2)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_list</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">titles</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"data_list and titles must have the same length."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"data_list must contain at least one map."</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">plot_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Restrict all maps to the same local patch.</span>
     <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">posmap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
     <span class="n">ext_msk</span> <span class="o">=</span> <span class="n">r</span> <span class="o">&lt;=</span> <span class="n">extent</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
     <span class="n">w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ext_msk</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The requested extent does not overlap the position map."</span><span class="p">)</span>
     <span class="n">ext_sl</span> <span class="o">=</span> <span class="p">(</span>
         <span class="nb">slice</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
         <span class="nb">slice</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
     <span class="p">)</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">ext_sl</span><span class="p">]</span>
-    <span class="n">posmap</span> <span class="o">=</span> <span class="p">(</span><span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">ext_sl</span><span class="p">],</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">ext_sl</span><span class="p">])</span>
-
-    <span class="c1"># Use posmap to setup coordinates</span>
-    <span class="c1"># posmap, pixsize, extent, and cent must all be in the same units</span>
-    <span class="c1"># We are assuming square pixels here</span>
-    <span class="n">plt_extent</span> <span class="o">=</span> <span class="p">(</span><span class="n">posmap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
-
-    <span class="c1"># Get radial profile and plot map with appropriate norm</span>
-    <span class="n">_norm</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"_</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">"</span>
-    <span class="k">if</span> <span class="n">append</span> <span class="o">!=</span> <span class="s2">""</span><span class="p">:</span>
-        <span class="n">label</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"_</span><span class="si">{</span><span class="n">append</span><span class="si">}</span><span class="s2">"</span>
-    <span class="n">rsq</span> <span class="o">=</span> <span class="p">(</span><span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">posmap</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
-    <span class="n">rcent</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unravel_index</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">rsq</span><span class="p">),</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-    <span class="n">rprof</span> <span class="o">=</span> <span class="n">radial_profile</span><span class="p">(</span>
-        <span class="n">data</span><span class="p">,</span>
-        <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">rcent</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">rcent</span><span class="p">[</span><span class="mi">1</span><span class="p">])),</span>
-    <span class="p">)[:</span> <span class="nb">int</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="nb">min</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))]</span>
-    <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
-        <span class="n">_norm</span> <span class="o">=</span> <span class="n">SymLogNorm</span><span class="p">(</span><span class="n">linthresh</span><span class="o">=</span><span class="n">log_thresh</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-        <span class="n">label</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"_log10"</span>
-        <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">"ignore"</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">"ignore"</span><span class="p">):</span>
-            <span class="n">rprof</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">rprof</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">rprof</span><span class="p">))</span>
-        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s2">"lower"</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="n">plt_extent</span><span class="p">,</span> <span class="n">norm</span><span class="o">=</span><span class="n">_norm</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">vminmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">data</span><span class="p">)[</span><span class="n">rsq</span> <span class="o">&lt;</span> <span class="n">extent</span><span class="o">**</span><span class="mi">2</span><span class="p">])</span>
-        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span>
-            <span class="n">data</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s2">"lower"</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="n">plt_extent</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1</span> <span class="o">*</span> <span class="n">vminmax</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">vminmax</span>
-        <span class="p">)</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Xi (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Eta (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">textwrap</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="si">}{</span><span class="n">label</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'_'</span><span class="p">,</span><span class="w"> </span><span class="s1">' '</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="mi">50</span><span class="p">)))</span>
-
-    <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">((</span><span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">extent</span><span class="p">))</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">((</span><span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">extent</span><span class="p">))</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">plot_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">' '</span><span class="p">,</span><span class="w"> </span><span class="s1">'_'</span><span class="p">)</span><span class="si">}</span><span class="s2">_map</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">.png"</span><span class="p">))</span>
-
-    <span class="c1"># Profile</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pixsize</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">rprof</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">rprof</span><span class="p">))</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">rprof</span><span class="p">)</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Radius (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">textwrap</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="si">}{</span><span class="n">label</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'_'</span><span class="p">,</span><span class="w"> </span><span class="s1">' '</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="mi">50</span><span class="p">)))</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="n">extent</span><span class="p">))</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">plot_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">' '</span><span class="p">,</span><span class="w"> </span><span class="s1">'_'</span><span class="p">)</span><span class="si">}</span><span class="s2">_prof</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">.png"</span><span class="p">),</span>
-        <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">"tight"</span><span class="p">,</span>
+    <span class="n">pos_xi</span> <span class="o">=</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">ext_sl</span><span class="p">]</span>
+    <span class="n">pos_eta</span> <span class="o">=</span> <span class="n">posmap</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">ext_sl</span><span class="p">]</span>
+    <span class="c1"># posmap_crop = (pos_eta, pos_xi)</span>
+    <span class="c1"># Coordinates for imshow.</span>
+    <span class="n">plt_extent</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">pos_xi</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
+        <span class="n">pos_xi</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span>
+        <span class="n">pos_eta</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span>
+        <span class="n">pos_eta</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
     <span class="p">)</span>
+    <span class="n">rsq</span> <span class="o">=</span> <span class="p">(</span><span class="n">pos_eta</span> <span class="o">-</span> <span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">pos_xi</span> <span class="o">-</span> <span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">rcent</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unravel_index</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">rsq</span><span class="p">),</span> <span class="n">rsq</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># Radial profiles and cropped maps.</span>
+    <span class="n">maps</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="n">ext_sl</span><span class="p">]</span> <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">data_list</span><span class="p">]</span>
+    <span class="n">profiles</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">:</span>
+        <span class="n">rprof</span> <span class="o">=</span> <span class="n">radial_profile</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">rcent</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">rcent</span><span class="p">[</span><span class="mi">0</span><span class="p">])))[</span>
+            <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="nb">min</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="s2">"ignore"</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="s2">"ignore"</span><span class="p">):</span>
+                <span class="n">rprof</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">rprof</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">rprof</span><span class="p">))</span>
+        <span class="n">profiles</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rprof</span><span class="p">)</span>
+    <span class="n">radii</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pixsize</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">profile</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">profile</span><span class="p">))</span> <span class="k">for</span> <span class="n">profile</span> <span class="ow">in</span> <span class="n">profiles</span>
+    <span class="p">]</span>
+
+    <span class="n">n_maps</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_list</span><span class="p">)</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span> <span class="o">*</span> <span class="n">n_maps</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">constrained_layout</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">gs</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_gridspec</span><span class="p">(</span>
+        <span class="mi">2</span><span class="p">,</span>
+        <span class="mi">2</span> <span class="o">*</span> <span class="n">n_maps</span><span class="p">,</span>
+        <span class="n">height_ratios</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+        <span class="n">width_ratios</span><span class="o">=</span><span class="p">[</span><span class="n">width</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_maps</span><span class="p">)</span> <span class="k">for</span> <span class="n">width</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">)],</span>
+    <span class="p">)</span>
+
+    <span class="n">axes_map</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">axes_prof</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_maps</span><span class="p">):</span>
+        <span class="n">map_col</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">i</span>
+        <span class="n">cbar_col</span> <span class="o">=</span> <span class="n">map_col</span> <span class="o">+</span> <span class="mi">1</span>
+
+        <span class="n">ax_map</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">map_col</span><span class="p">])</span>
+        <span class="n">ax_cbar</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">cbar_col</span><span class="p">])</span>
+        <span class="n">ax_prof</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">map_col</span><span class="p">])</span>
+
+        <span class="c1"># Reserve the colorbar column in the profile row too.</span>
+        <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">cbar_col</span><span class="p">])</span><span class="o">.</span><span class="n">set_axis_off</span><span class="p">()</span>
+
+        <span class="n">axes_map</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">ax_map</span><span class="p">,</span> <span class="n">ax_cbar</span><span class="p">))</span>
+        <span class="n">axes_prof</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ax_prof</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rprof</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">tit</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">maps</span><span class="p">,</span> <span class="n">profiles</span><span class="p">,</span> <span class="n">radii</span><span class="p">,</span> <span class="n">titles</span><span class="p">)):</span>
+        <span class="n">ax_map</span><span class="p">,</span> <span class="n">ax_cbar</span> <span class="o">=</span> <span class="n">axes_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">ax_prof</span> <span class="o">=</span> <span class="n">axes_prof</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
+            <span class="n">norm</span> <span class="o">=</span> <span class="n">SymLogNorm</span><span class="p">(</span>
+                <span class="n">linthresh</span><span class="o">=</span><span class="n">log_thresh</span><span class="p">,</span>
+                <span class="n">clip</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">vmin</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+                <span class="n">vmax</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">ax_map</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span>
+                <span class="n">data</span><span class="p">,</span>
+                <span class="n">origin</span><span class="o">=</span><span class="s2">"lower"</span><span class="p">,</span>
+                <span class="n">extent</span><span class="o">=</span><span class="n">plt_extent</span><span class="p">,</span>
+                <span class="n">norm</span><span class="o">=</span><span class="n">norm</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">"coolwarm"</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">vminmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">data</span><span class="p">)[</span><span class="n">rsq</span> <span class="o">&lt;</span> <span class="n">extent</span><span class="o">**</span><span class="mi">2</span><span class="p">])</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">ax_map</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span>
+                <span class="n">data</span><span class="p">,</span>
+                <span class="n">origin</span><span class="o">=</span><span class="s2">"lower"</span><span class="p">,</span>
+                <span class="n">extent</span><span class="o">=</span><span class="n">plt_extent</span><span class="p">,</span>
+                <span class="n">vmin</span><span class="o">=-</span><span class="n">vminmax</span><span class="p">,</span>
+                <span class="n">vmax</span><span class="o">=</span><span class="n">vminmax</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">"coolwarm"</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="n">fig</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">ax_cbar</span><span class="p">)</span>
+        <span class="n">ax_map</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+        <span class="n">ax_map</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Xi (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+        <span class="n">ax_map</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Eta (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+        <span class="n">ax_map</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">tit</span><span class="si">}</span><span class="s2"> map"</span><span class="p">)</span>
+        <span class="n">ax_map</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">extent</span><span class="p">)</span>
+        <span class="n">ax_map</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">extent</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
+            <span class="n">pos_prof</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ma</span><span class="o">.</span><span class="n">masked_where</span><span class="p">(</span><span class="n">rprof</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">rprof</span><span class="p">)</span>
+            <span class="n">neg_prof</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ma</span><span class="o">.</span><span class="n">masked_where</span><span class="p">(</span><span class="n">rprof</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">rprof</span><span class="p">)</span>
+            <span class="n">ax_prof</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">rprof</span><span class="p">),</span> <span class="n">color</span><span class="o">=</span><span class="s2">"grey"</span><span class="p">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s2">"--"</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">ax_prof</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span> <span class="o">*</span> <span class="n">pos_prof</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"b"</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s2">"."</span><span class="p">)</span>
+            <span class="n">ax_prof</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">neg_prof</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"r"</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s2">"."</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ax_prof</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">rprof</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"grey"</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+            <span class="n">ax_prof</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">rprof</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"grey"</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s2">"."</span><span class="p">)</span>
+        <span class="n">ax_prof</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Radius (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+        <span class="n">ax_prof</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"log10(Profile)"</span> <span class="k">if</span> <span class="n">log</span> <span class="k">else</span> <span class="s2">"Profile"</span><span class="p">)</span>
+        <span class="n">ax_prof</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">tit</span><span class="si">}</span><span class="s2"> profile"</span><span class="p">)</span>
+        <span class="n">ax_prof</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">extent</span><span class="p">)</span>
+        <span class="n">ax_prof</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">append</span><span class="p">:</span>
+        <span class="n">title</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">" </span><span class="si">{</span><span class="n">append</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">if</span> <span class="n">log</span><span class="p">:</span>
+        <span class="n">title</span> <span class="o">+=</span> <span class="s2">" log10"</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">textwrap</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="mi">50</span><span class="p">)))</span>
+
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">title</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="s2">"_"</span><span class="p">)</span> <span class="o">+</span> <span class="s2">".png"</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">plot_dir</span><span class="p">,</span> <span class="n">filename</span><span class="p">),</span>
+        <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">"tight"</span><span class="p">,</span>
+        <span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2976,8 +3161,8 @@ See <code>title</code> for details.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="lat_beams.plotting.plot_map_complete" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">plot_map_complete</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">posmap</span><span class="p">,</span> <span class="n">pixsize</span><span class="p">,</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">,</span> <span class="n">plot_dir</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">comps</span><span class="o">=</span><span class="s1">'TQU'</span><span class="p">,</span> <span class="n">log_thresh</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s1">'"'</span><span class="p">,</span> <span class="n">lognorm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">qrur</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+<h2 id="lat_beams.plotting.plot_map_tqu" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">plot_map_tqu</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">posmap</span><span class="p">,</span> <span class="n">pixsize</span><span class="p">,</span> <span class="n">extent</span><span class="p">,</span> <span class="n">cent</span><span class="p">,</span> <span class="n">plot_dir</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">comps</span><span class="o">=</span><span class="s1">'TQU'</span><span class="p">,</span> <span class="n">log_thresh</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="s1">'"'</span><span class="p">,</span> <span class="n">lognorm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">qrur</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h2>
 
@@ -3003,7 +3188,7 @@ See <code>title</code> for details.</p>
                 <code>data</code>
             </td>
             <td>
-                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.ndarray">ndarray</span>, &#39;nx ny&#39;] | <span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ncomp nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3019,7 +3204,7 @@ See <code>title</code> for details.</p>
                 <code>posmap</code>
             </td>
             <td>
-                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.ndarray">ndarray</span>, &#39;2 nx ny&#39;] | <span title="pixell.enmap.ndmap">ndmap</span></code>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;2 nx ny&#39;]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3089,9 +3274,8 @@ Should be generated by <code>enmap.posmap</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>The base title of the plot.
-The full title will have the format "{title} {comp} {append} {'log10'*log}".
-The output file will use the full title as the filename but with whitespace replaced by '_'
-and 'map' or 'prof' inserted between "{title}" and "{comp}" depending on which plot it is.</p>
+The full title will have the format "{title} {append} {'log10'*log}".
+The output file will use the full title as the filename but with whitespace replaced by '_'</p>
               </div>
             </td>
             <td>
@@ -3206,80 +3390,7 @@ This will raise an error if Q and U are not in <code>comps</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/plotting.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span>
-<span class="normal">244</span>
-<span class="normal">245</span>
-<span class="normal">246</span>
-<span class="normal">247</span>
-<span class="normal">248</span>
-<span class="normal">249</span>
-<span class="normal">250</span>
-<span class="normal">251</span>
-<span class="normal">252</span>
-<span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span>
-<span class="normal">260</span>
-<span class="normal">261</span>
-<span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span>
-<span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span>
-<span class="normal">269</span>
-<span class="normal">270</span>
-<span class="normal">271</span>
-<span class="normal">272</span>
-<span class="normal">273</span>
-<span class="normal">274</span>
-<span class="normal">275</span>
-<span class="normal">276</span>
-<span class="normal">277</span>
-<span class="normal">278</span>
-<span class="normal">279</span>
-<span class="normal">280</span>
-<span class="normal">281</span>
-<span class="normal">282</span>
-<span class="normal">283</span>
-<span class="normal">284</span>
-<span class="normal">285</span>
-<span class="normal">286</span>
-<span class="normal">287</span>
-<span class="normal">288</span>
-<span class="normal">289</span>
-<span class="normal">290</span>
-<span class="normal">291</span>
-<span class="normal">292</span>
-<span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span>
-<span class="normal">299</span>
-<span class="normal">300</span>
-<span class="normal">301</span>
-<span class="normal">302</span>
-<span class="normal">303</span>
-<span class="normal">304</span>
-<span class="normal">305</span>
-<span class="normal">306</span>
-<span class="normal">307</span>
-<span class="normal">308</span>
-<span class="normal">309</span>
-<span class="normal">310</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">310</span>
 <span class="normal">311</span>
 <span class="normal">312</span>
 <span class="normal">313</span>
@@ -3304,9 +3415,82 @@ This will raise an error if Q and U are not in <code>comps</code>.</p>
 <span class="normal">332</span>
 <span class="normal">333</span>
 <span class="normal">334</span>
-<span class="normal">335</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_map_complete</span><span class="p">(</span>
-    <span class="n">data</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">"nx ny"</span><span class="p">]</span> <span class="o">|</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span>
-    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">]</span> <span class="o">|</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_map_tqu</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ncomp nx ny"</span><span class="p">],</span>
+    <span class="n">posmap</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"2 nx ny"</span><span class="p">],</span>
     <span class="n">pixsize</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="n">extent</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="n">cent</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span>
@@ -3324,9 +3508,9 @@ This will raise an error if Q and U are not in <code>comps</code>.</p>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    data : Float[np.ndarray, "nx ny"] | enmap.ndmap</span>
+<span class="sd">    data : Float[enmap.ndmap, "ncomp nx ny"]</span>
 <span class="sd">        The beam map to plot.</span>
-<span class="sd">    posmap : Float[np.ndarray, "2 nx ny"] | enmap.ndmap</span>
+<span class="sd">    posmap : Float[enmap.ndmap, "2 nx ny"]</span>
 <span class="sd">        The position map for the beam map.</span>
 <span class="sd">        Should be generated by `enmap.posmap`.</span>
 <span class="sd">    extent : float</span>
@@ -3337,9 +3521,8 @@ This will raise an error if Q and U are not in <code>comps</code>.</p>
 <span class="sd">        The directory to save plots to.</span>
 <span class="sd">    title : str</span>
 <span class="sd">        The base title of the plot.</span>
-<span class="sd">        The full title will have the format "{title} {comp} {append} {'log10'*log}".</span>
+<span class="sd">        The full title will have the format "{title} {append} {'log10'*log}".</span>
 <span class="sd">        The output file will use the full title as the filename but with whitespace replaced by '_'</span>
-<span class="sd">        and 'map' or 'prof' inserted between "{title}" and "{comp}" depending on which plot it is.</span>
 <span class="sd">    comps : str, default: "TQU"</span>
 <span class="sd">        The comps of the map we are plotting.</span>
 <span class="sd">        Should be "T" or "TQU".</span>
@@ -3360,49 +3543,50 @@ This will raise an error if Q and U are not in <code>comps</code>.</p>
 <span class="sd">        This will raise an error if Q and U are not in `comps`.</span>
 <span class="sd">    """</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
-    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">comp</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">comps</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">log</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-            <span class="n">plot_map</span><span class="p">(</span>
-                <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">lognorm</span> <span class="o">*</span> <span class="n">log</span> <span class="o">+</span> <span class="p">(</span><span class="ow">not</span> <span class="n">log</span><span class="p">)),</span>
-                <span class="n">posmap</span><span class="p">,</span>
-                <span class="n">pixsize</span><span class="p">,</span>
-                <span class="n">extent</span><span class="p">,</span>
-                <span class="n">cent</span><span class="p">,</span>
-                <span class="n">plot_dir</span><span class="p">,</span>
-                <span class="n">title</span><span class="p">,</span>
-                <span class="n">comp</span><span class="o">=</span><span class="n">comp</span><span class="p">,</span>
-                <span class="n">log</span><span class="o">=</span><span class="n">log</span><span class="p">,</span>
-                <span class="n">log_thresh</span><span class="o">=</span><span class="n">log_thresh</span><span class="p">,</span>
-                <span class="n">append</span><span class="o">=</span><span class="n">append</span><span class="p">,</span>
-                <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span>
-            <span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">qrur</span><span class="p">:</span>
-        <span class="k">return</span>
-    <span class="k">if</span> <span class="s2">"Q"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">comps</span> <span class="ow">or</span> <span class="s2">"U"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">comps</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Cannot plot Qr and Ur without Q and U"</span><span class="p">)</span>
-    <span class="n">Q</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">comps</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"Q"</span><span class="p">)]</span>
-    <span class="n">U</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">comps</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"U"</span><span class="p">)]</span>
-    <span class="n">eta</span><span class="p">,</span> <span class="n">xi</span> <span class="o">=</span> <span class="n">posmap</span>
-    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">eta</span><span class="p">,</span> <span class="n">xi</span><span class="p">)</span>
-    <span class="n">Q_r</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span> <span class="o">+</span> <span class="n">U</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span>
-    <span class="n">U_r</span> <span class="o">=</span> <span class="n">U</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span> <span class="o">-</span> <span class="n">Q</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">dat</span><span class="p">,</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">[(</span><span class="n">Q_r</span><span class="p">,</span> <span class="s2">"Qr"</span><span class="p">),</span> <span class="p">(</span><span class="n">U_r</span><span class="p">,</span> <span class="s2">"Ur"</span><span class="p">)]:</span>
-        <span class="k">for</span> <span class="n">log</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-            <span class="n">plot_map</span><span class="p">(</span>
-                <span class="n">dat</span> <span class="o">*</span> <span class="p">(</span><span class="n">lognorm</span> <span class="o">*</span> <span class="n">log</span> <span class="o">+</span> <span class="p">(</span><span class="ow">not</span> <span class="n">log</span><span class="p">)),</span>
-                <span class="n">posmap</span><span class="p">,</span>
-                <span class="n">pixsize</span><span class="p">,</span>
-                <span class="n">extent</span><span class="p">,</span>
-                <span class="n">cent</span><span class="p">,</span>
-                <span class="n">plot_dir</span><span class="p">,</span>
-                <span class="n">title</span><span class="p">,</span>
-                <span class="n">comp</span><span class="o">=</span><span class="n">comp</span><span class="p">,</span>
-                <span class="n">log</span><span class="o">=</span><span class="n">log</span><span class="p">,</span>
-                <span class="n">log_thresh</span><span class="o">=</span><span class="n">log_thresh</span><span class="p">,</span>
-                <span class="n">append</span><span class="o">=</span><span class="n">append</span><span class="p">,</span>
-                <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span>
-            <span class="p">)</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">))]</span>
+    <span class="n">Q_r</span><span class="p">,</span> <span class="n">U_r</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">qrur</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s2">"Q"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">comps</span> <span class="ow">or</span> <span class="s2">"U"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">comps</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Cannot plot Qr and Ur without Q and U"</span><span class="p">)</span>
+        <span class="n">Q</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">comps</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"Q"</span><span class="p">)]</span>
+        <span class="n">U</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">comps</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"U"</span><span class="p">)]</span>
+        <span class="n">eta</span><span class="p">,</span> <span class="n">xi</span> <span class="o">=</span> <span class="n">posmap</span>
+        <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">eta</span><span class="p">,</span> <span class="n">xi</span><span class="p">)</span>
+        <span class="n">Q_r</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span> <span class="o">+</span> <span class="n">U</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span>
+        <span class="n">U_r</span> <span class="o">=</span> <span class="n">U</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span> <span class="o">-</span> <span class="n">Q</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">theta</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">log</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+        <span class="n">plot_map</span><span class="p">(</span>
+            <span class="n">maps</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">log</span> <span class="k">else</span> <span class="p">[</span><span class="n">m</span> <span class="o">*</span> <span class="n">lognorm</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">maps</span><span class="p">],</span>  <span class="c1"># type: ignore</span>
+            <span class="n">posmap</span><span class="p">,</span>
+            <span class="n">pixsize</span><span class="p">,</span>
+            <span class="n">extent</span><span class="p">,</span>
+            <span class="n">cent</span><span class="p">,</span>
+            <span class="n">plot_dir</span><span class="p">,</span>
+            <span class="n">title</span><span class="p">,</span>
+            <span class="p">[</span><span class="n">comps</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">comps</span><span class="p">))],</span>
+            <span class="n">log</span><span class="o">=</span><span class="n">log</span><span class="p">,</span>
+            <span class="n">log_thresh</span><span class="o">=</span><span class="n">log_thresh</span><span class="p">,</span>
+            <span class="n">append</span><span class="o">=</span><span class="n">append</span><span class="p">,</span>
+            <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">qrur</span> <span class="ow">or</span> <span class="n">Q_r</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">U_r</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">plot_map</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">Q_r</span><span class="p">,</span> <span class="n">U_r</span><span class="p">]</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">log</span> <span class="k">else</span> <span class="p">[</span><span class="n">Q_r</span> <span class="o">*</span> <span class="n">lognorm</span><span class="p">,</span> <span class="n">U_r</span> <span class="o">*</span> <span class="n">lognorm</span><span class="p">],</span>
+            <span class="n">posmap</span><span class="p">,</span>
+            <span class="n">pixsize</span><span class="p">,</span>
+            <span class="n">extent</span><span class="p">,</span>
+            <span class="n">cent</span><span class="p">,</span>
+            <span class="n">plot_dir</span><span class="p">,</span>
+            <span class="n">title</span> <span class="o">+</span> <span class="s2">" QrUr"</span><span class="p">,</span>
+            <span class="p">[</span><span class="s2">"Q_r"</span><span class="p">,</span> <span class="s2">"U_r"</span><span class="p">],</span>
+            <span class="n">log</span><span class="o">=</span><span class="n">log</span><span class="p">,</span>
+            <span class="n">log_thresh</span><span class="o">=</span><span class="n">log_thresh</span><span class="p">,</span>
+            <span class="n">append</span><span class="o">=</span><span class="n">append</span><span class="p">,</span>
+            <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">,</span>
+        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3524,52 +3708,52 @@ detectors are plotted.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/plotting.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">338</span>
-<span class="normal">339</span>
-<span class="normal">340</span>
-<span class="normal">341</span>
-<span class="normal">342</span>
-<span class="normal">343</span>
-<span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span>
-<span class="normal">349</span>
-<span class="normal">350</span>
-<span class="normal">351</span>
-<span class="normal">352</span>
-<span class="normal">353</span>
-<span class="normal">354</span>
-<span class="normal">355</span>
-<span class="normal">356</span>
-<span class="normal">357</span>
-<span class="normal">358</span>
-<span class="normal">359</span>
-<span class="normal">360</span>
-<span class="normal">361</span>
-<span class="normal">362</span>
-<span class="normal">363</span>
-<span class="normal">364</span>
-<span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
-<span class="normal">380</span>
-<span class="normal">381</span>
-<span class="normal">382</span>
-<span class="normal">383</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_tod</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span>
+<span class="normal">444</span>
+<span class="normal">445</span>
+<span class="normal">446</span>
+<span class="normal">447</span>
+<span class="normal">448</span>
+<span class="normal">449</span>
+<span class="normal">450</span>
+<span class="normal">451</span>
+<span class="normal">452</span>
+<span class="normal">453</span>
+<span class="normal">454</span>
+<span class="normal">455</span>
+<span class="normal">456</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">plot_tod</span><span class="p">(</span>
     <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">sig_filt</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">"ndet nsamp"</span><span class="p">],</span>
     <span class="n">tod_plot_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
