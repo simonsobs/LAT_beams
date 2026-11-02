@@ -428,7 +428,7 @@ Module for handling all configuration of scripts.
 
 ??? info "cfg.abscal_rms_drop_edge"
     If ture, leave the outermost fit radius out of the profile difference rms cut,
-    since the fit constrains it the least. 
+    since the fit constrains it the least.
 """
 
 import argparse
