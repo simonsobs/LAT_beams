@@ -1,0 +1,3102 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://simonsobs.github.io/LAT_beams/reference/fitting/map/cov/">
+      
+      
+        <link rel="prev" href="../bessel_scratch/">
+      
+      
+        <link rel="next" href="../gauss/">
+      
+      
+        
+      
+      
+      
+      
+        
+        
+        
+          <link rel="icon" href="../../../../assets/images/favicon.png">
+        
+      
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-materialx-10.2.1">
+    
+    
+      
+        <title>cov - LAT_beams</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.f07c159f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.a45159b5.min.css">
+      
+    
+    
+
+    
+
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo" data-mx-topbar="glass">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="toc" type="checkbox" id="__toc" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <label class="md-overlay" for="__toc"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#lat_beams.fitting.map.cov" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../.." title="LAT_beams" class="md-header__button md-logo" aria-label="LAT_beams" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LAT_beams
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              cov
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10.25 2a8.25 8.25 0 0 1 6.34 13.53l5.69 5.69a.749.749 0 0 1-.326 1.275.75.75 0 0 1-.734-.215l-5.69-5.69A8.25 8.25 0 1 1 10.25 2M3.5 10.25a6.75 6.75 0 1 0 13.5 0 6.75 6.75 0 0 0-13.5 0"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10.25 2a8.25 8.25 0 0 1 6.34 13.53l5.69 5.69a.749.749 0 0 1-.326 1.275.75.75 0 0 1-.734-.215l-5.69-5.69A8.25 8.25 0 1 1 10.25 2M3.5 10.25a6.75 6.75 0 1 0 13.5 0 6.75 6.75 0 0 0-13.5 0"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0">
+        <div class="md-search-result md-search-result--pagefind" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../.." title="LAT_beams" class="md-nav__button md-logo" aria-label="LAT_beams" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LAT_beams
+  </label>
+  
+  <ul class="md-nav__list">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../beam_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    beam_utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    fitting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    fitting
+  
+
+          </label>
+          <ul class="md-nav__list">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_2_2" id="__nav_2_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    map
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_2_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    map
+  
+
+          </label>
+          <ul class="md-nav__list">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../base/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bessel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bessel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bessel_scratch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bessel_scratch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cov
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cov
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc">
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cov
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.apply_harm_noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_harm_noise
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.empirical_profile_covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        empirical_profile_covariance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.estimate_noise_autocov" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        estimate_noise_autocov
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.estimate_noise_ps2d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        estimate_noise_ps2d
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.invsafe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        invsafe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.invscale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        invscale
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gauss/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    gauss
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tod/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tod
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mapmaking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mapmaking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utils
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    utils
+  
+
+          </label>
+          <ul class="md-nav__list">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../utils/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../utils/io/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    io
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../utils/jobs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    jobs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../utils/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc">
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cov
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.apply_harm_noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_harm_noise
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.empirical_profile_covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        empirical_profile_covariance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.estimate_noise_autocov" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        estimate_noise_autocov
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.estimate_noise_ps2d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        estimate_noise_ps2d
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.invsafe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        invsafe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lat_beams.fitting.map.cov.invscale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        invscale
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              
+              
+              <article class="md-content__inner md-typeset" data-pagefind-body>
+                
+                  
+
+  <h1>cov</h1>
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="lat_beams.fitting.map.cov"></a>
+    <div class="doc doc-contents first">
+
+        <p>Utilities for computing covariances.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.cov.apply_harm_noise" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">apply_harm_noise</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ivar</span><span class="p">,</span> <span class="n">ps2d</span><span class="p">,</span> <span class="n">include_corr</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Apply the inverse covariance for the approximate noise model</p>
+<div class="arithmatex">\[
+N = D N_{\mathrm{harm}} D,
+\]</div>
+<p>where <span class="arithmatex">\(D\)</span> is the diagonal map-domain noise-amplitude operator and
+<span class="arithmatex">\(N_{\mathrm{harm}}\)</span> is the harmonic-space covariance represented by
+<code>ps2d</code>.</p>
+<p>The inverse covariance is applied by scaling the input map using the
+per-pixel inverse noise amplitude, optionally filtering it in harmonic
+space, and applying the map-domain scaling a second time.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>x</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx ncomp&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Input map with spatial dimensions <code>ny</code> and <code>nx</code> and a trailing
+component dimension <code>ncomp</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ivar</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Per-pixel inverse variance, in inverse squared map units. Pixels
+with non-finite or non-positive inverse variance receive zero
+weight.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ps2d</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Two-dimensional noise power spectrum. Non-finite and non-positive
+values are excluded when constructing the inverse spectrum. Its
+shape and WCS must be compatible with the harmonic representation
+of <code>x</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>include_corr</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>True</code>, apply the harmonic-space inverse power spectrum. If
+<code>False</code>, omit harmonic filtering and apply only the map-domain
+inverse-variance weighting.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>Ninv_x</code></td>            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx ncomp&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Map obtained by applying the approximate inverse noise covariance to <code>x</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/cov.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_harm_noise</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">ivar</span><span class="p">,</span> <span class="n">ps2d</span><span class="p">,</span> <span class="n">include_corr</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Apply the inverse covariance for the approximate noise model</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    N = D N_{\mathrm{harm}} D,</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    where $D$ is the diagonal map-domain noise-amplitude operator and</span>
+<span class="sd">    $N_{\mathrm{harm}}$ is the harmonic-space covariance represented by</span>
+<span class="sd">    `ps2d`.</span>
+
+<span class="sd">    The inverse covariance is applied by scaling the input map using the</span>
+<span class="sd">    per-pixel inverse noise amplitude, optionally filtering it in harmonic</span>
+<span class="sd">    space, and applying the map-domain scaling a second time.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    x : Float[ndmap, "ny nx ncomp"]</span>
+<span class="sd">        Input map with spatial dimensions `ny` and `nx` and a trailing</span>
+<span class="sd">        component dimension `ncomp`.</span>
+<span class="sd">    ivar : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Per-pixel inverse variance, in inverse squared map units. Pixels</span>
+<span class="sd">        with non-finite or non-positive inverse variance receive zero</span>
+<span class="sd">        weight.</span>
+<span class="sd">    ps2d : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Two-dimensional noise power spectrum. Non-finite and non-positive</span>
+<span class="sd">        values are excluded when constructing the inverse spectrum. Its</span>
+<span class="sd">        shape and WCS must be compatible with the harmonic representation</span>
+<span class="sd">        of `x`.</span>
+<span class="sd">    include_corr : bool</span>
+<span class="sd">        If `True`, apply the harmonic-space inverse power spectrum. If</span>
+<span class="sd">        `False`, omit harmonic filtering and apply only the map-domain</span>
+<span class="sd">        inverse-variance weighting.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Ninv_x : Float[ndmap, "ny nx ncomp"]</span>
+<span class="sd">        Map obtained by applying the approximate inverse noise covariance to `x`.</span>
+<span class="sd">    """</span>
+    <span class="c1"># Inverse harmonic covariance</span>
+    <span class="n">inv_ps2d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">ps2d</span><span class="p">)</span>
+    <span class="n">valid_ps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">ps2d</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">ps2d</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">inv_ps2d</span><span class="p">[</span><span class="n">valid_ps</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">ps2d</span><span class="p">[</span><span class="n">valid_ps</span><span class="p">]</span>
+
+    <span class="c1"># D = sqrt(1/ivar)</span>
+    <span class="n">D_inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">ivar</span><span class="p">)</span>
+    <span class="n">valid_noise</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">ivar</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">ivar</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">D_inv</span><span class="p">[</span><span class="n">valid_noise</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">ivar</span><span class="p">[</span><span class="n">valid_noise</span><span class="p">])</span>
+
+    <span class="n">x_scaled</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="n">D_inv</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+
+    <span class="c1"># Apply the inverse harmonic noise covariance</span>
+    <span class="k">if</span> <span class="n">include_corr</span><span class="p">:</span>
+        <span class="n">x_harm</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">map2harm</span><span class="p">(</span><span class="n">x_scaled</span><span class="p">)</span>  <span class="c1"># , normalize="phys")</span>
+        <span class="n">x_filtered_harm</span> <span class="o">=</span> <span class="n">x_harm</span> <span class="o">*</span> <span class="n">inv_ps2d</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="n">x_filtered</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">harm2map</span><span class="p">(</span><span class="n">x_filtered_harm</span><span class="p">)</span>  <span class="c1"># , normalize="phys")</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">x_filtered</span> <span class="o">=</span> <span class="n">x_scaled</span>
+
+    <span class="c1"># Apply the second D^{-1}</span>
+    <span class="n">Ninv_x</span> <span class="o">=</span> <span class="n">x_filtered</span> <span class="o">*</span> <span class="n">D_inv</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">Ninv_x</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.cov.empirical_profile_covariance" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">empirical_profile_covariance</span><span class="p">(</span><span class="n">all_prof</span><span class="p">,</span> <span class="n">radial_centers</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">n_modes</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Estimate profile and beam-window covariance directly from an ensemble
+of normalized radial profiles.</p>
+<p>This is the sample-space analogue of <code>bessel_profile_covariance</code>.
+Rather than estimating a covariance in the potentially degenerate
+parameter space, the covariance is estimated directly from the
+ensemble of model profiles.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>all_prof</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n_samp n_radial&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Ensemble of normalized radial profile realizations. Each row is
+one realization and each column corresponds to <code>radial_centers</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>radial_centers</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, <span title="n_radial">n_radial</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Radial coordinates corresponding to the profile bins, in radians.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>lmax</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Maximum multipole for the beam window function.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_modes</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of covariance modes to retain in <code>profile_modes</code> and
+<code>bl_modes</code>. If &lt;= 0, all modes are retained.</p>
+              </div>
+            </td>
+            <td>
+                  <code>-1</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>out</code></td>            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="sotodlib.core.AxisManager">AxisManager</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>AxisManager with a structure matching <code>bessel_profile_covariance</code>
+as closely as possible.</p>
+<p>Fields include:</p>
+<ul>
+<li><code>r</code>: radial bin centers.</li>
+<li><code>profile</code>: mean normalized profile.</li>
+<li><code>profile_sigma</code>: empirical 1-sigma profile uncertainty.</li>
+<li><code>profile_cov</code>: empirical profile covariance.</li>
+<li><code>profile_modes</code>: covariance modes including their 1-sigma
+  amplitudes.</li>
+<li><code>ell</code>: multipoles from 0 through <code>lmax</code>.</li>
+<li><code>bl</code>: beam window function of the mean profile.</li>
+<li><code>bl_sigma</code>: empirical 1-sigma window-function uncertainty.</li>
+<li><code>bl_modes</code>: covariance modes of the window function including
+  their 1-sigma amplitudes.</li>
+<li><code>cov_eigenvalues</code>: profile covariance eigenvalues.</li>
+<li><code>n_modes</code>: number of retained covariance modes.</li>
+<li><code>n_samp</code>: number of profile realizations.</li>
+</ul>
+<p>The eigenvalues/eigenvectors correspond to the profile-space
+covariance, rather than the original parameter-space covariance.
+If <code>len(all_prof) == 1</code> then <code>None</code> is returned.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/cov.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">empirical_profile_covariance</span><span class="p">(</span>
+    <span class="n">all_prof</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_samp n_radial"</span><span class="p">],</span>
+    <span class="n">radial_centers</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n_radial"</span><span class="p">],</span>
+    <span class="n">lmax</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n_modes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Estimate profile and beam-window covariance directly from an ensemble</span>
+<span class="sd">    of normalized radial profiles.</span>
+
+<span class="sd">    This is the sample-space analogue of `bessel_profile_covariance`.</span>
+<span class="sd">    Rather than estimating a covariance in the potentially degenerate</span>
+<span class="sd">    parameter space, the covariance is estimated directly from the</span>
+<span class="sd">    ensemble of model profiles.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    all_prof : Float[NDArray, "n_samp n_radial"]</span>
+<span class="sd">        Ensemble of normalized radial profile realizations. Each row is</span>
+<span class="sd">        one realization and each column corresponds to `radial_centers`.</span>
+<span class="sd">    radial_centers : Float[NDArray, "n_radial"]</span>
+<span class="sd">        Radial coordinates corresponding to the profile bins, in radians.</span>
+<span class="sd">    lmax : int</span>
+<span class="sd">        Maximum multipole for the beam window function.</span>
+<span class="sd">    n_modes : int, optional</span>
+<span class="sd">        Number of covariance modes to retain in `profile_modes` and</span>
+<span class="sd">        `bl_modes`. If &lt;= 0, all modes are retained.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    out : Optional[AxisManager]</span>
+<span class="sd">        AxisManager with a structure matching `bessel_profile_covariance`</span>
+<span class="sd">        as closely as possible.</span>
+
+<span class="sd">        Fields include:</span>
+
+<span class="sd">        - `r`: radial bin centers.</span>
+<span class="sd">        - `profile`: mean normalized profile.</span>
+<span class="sd">        - `profile_sigma`: empirical 1-sigma profile uncertainty.</span>
+<span class="sd">        - `profile_cov`: empirical profile covariance.</span>
+<span class="sd">        - `profile_modes`: covariance modes including their 1-sigma</span>
+<span class="sd">          amplitudes.</span>
+<span class="sd">        - `ell`: multipoles from 0 through `lmax`.</span>
+<span class="sd">        - `bl`: beam window function of the mean profile.</span>
+<span class="sd">        - `bl_sigma`: empirical 1-sigma window-function uncertainty.</span>
+<span class="sd">        - `bl_modes`: covariance modes of the window function including</span>
+<span class="sd">          their 1-sigma amplitudes.</span>
+<span class="sd">        - `cov_eigenvalues`: profile covariance eigenvalues.</span>
+<span class="sd">        - `n_modes`: number of retained covariance modes.</span>
+<span class="sd">        - `n_samp`: number of profile realizations.</span>
+
+<span class="sd">        The eigenvalues/eigenvectors correspond to the profile-space</span>
+<span class="sd">        covariance, rather than the original parameter-space covariance.</span>
+<span class="sd">        If `len(all_prof) == 1` then `None` is returned.</span>
+<span class="sd">    """</span>
+    <span class="n">all_prof</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">all_prof</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">radial_centers</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">radial_centers</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">n_samp</span><span class="p">,</span> <span class="n">n_radial</span> <span class="o">=</span> <span class="n">all_prof</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="k">if</span> <span class="n">n_samp</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">radial_centers</span><span class="p">)</span> <span class="o">!=</span> <span class="n">n_radial</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"all_prof and radial_centers have incompatible shapes: "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">n_radial</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">radial_centers</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+        <span class="p">)</span>
+    <span class="n">profile_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">all_prof</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">centered</span> <span class="o">=</span> <span class="n">all_prof</span> <span class="o">-</span> <span class="n">profile_mean</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">Vt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">svd</span><span class="p">(</span><span class="n">centered</span><span class="p">,</span> <span class="n">full_matrices</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">evals_full</span> <span class="o">=</span> <span class="n">s</span><span class="o">**</span><span class="mi">2</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_samp</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">evecs_full</span> <span class="o">=</span> <span class="n">Vt</span><span class="o">.</span><span class="n">T</span>
+
+    <span class="k">if</span> <span class="n">n_modes</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">n_modes_actual</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">evals_full</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">n_modes_actual</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_modes</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">evals_full</span><span class="p">))</span>
+
+    <span class="n">evals</span> <span class="o">=</span> <span class="n">evals_full</span><span class="p">[:</span><span class="n">n_modes_actual</span><span class="p">]</span>
+    <span class="n">evecs</span> <span class="o">=</span> <span class="n">evecs_full</span><span class="p">[:,</span> <span class="p">:</span><span class="n">n_modes_actual</span><span class="p">]</span>
+    <span class="n">profile_modes</span> <span class="o">=</span> <span class="n">evecs</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">evals</span><span class="p">)[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">profile_sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">profile_modes</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="n">ell</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">bl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">beam2bl</span><span class="p">(</span><span class="n">profile_mean</span><span class="p">,</span> <span class="n">radial_centers</span><span class="p">,</span> <span class="n">lmax</span><span class="o">=</span><span class="n">lmax</span><span class="p">))</span>
+    <span class="n">bl_modes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ell</span><span class="p">),</span> <span class="n">n_modes_actual</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_modes_actual</span><span class="p">):</span>
+        <span class="n">bl_modes</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span>
+            <span class="n">beam2bl</span><span class="p">(</span>
+                <span class="n">profile_modes</span><span class="p">[:,</span> <span class="n">i</span><span class="p">],</span>
+                <span class="n">radial_centers</span><span class="p">,</span>
+                <span class="n">lmax</span><span class="o">=</span><span class="n">lmax</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    <span class="n">bl_sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">bl_modes</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="n">r_ax</span> <span class="o">=</span> <span class="n">IndexAxis</span><span class="p">(</span><span class="s2">"r"</span><span class="p">,</span> <span class="n">n_radial</span><span class="p">)</span>
+    <span class="n">ell_ax</span> <span class="o">=</span> <span class="n">IndexAxis</span><span class="p">(</span><span class="s2">"ell"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">ell</span><span class="p">))</span>
+    <span class="n">mode_ax</span> <span class="o">=</span> <span class="n">IndexAxis</span><span class="p">(</span><span class="s2">"mode"</span><span class="p">,</span> <span class="n">n_modes_actual</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">AxisManager</span><span class="p">(</span><span class="n">r_ax</span><span class="p">,</span> <span class="n">ell_ax</span><span class="p">,</span> <span class="n">mode_ax</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"r"</span><span class="p">,</span> <span class="mi">3600</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">radial_centers</span><span class="p">),</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"r"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"profile"</span><span class="p">,</span> <span class="n">profile_mean</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"r"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"profile_sigma"</span><span class="p">,</span> <span class="n">profile_sigma</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"r"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"profile_modes"</span><span class="p">,</span> <span class="n">profile_modes</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"r"</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">"mode"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"ell"</span><span class="p">,</span> <span class="n">ell</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"ell"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"bl"</span><span class="p">,</span> <span class="n">bl</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"ell"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"bl_sigma"</span><span class="p">,</span> <span class="n">bl_sigma</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"ell"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"bl_modes"</span><span class="p">,</span> <span class="n">bl_modes</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"ell"</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">"mode"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"cov_eigenvalues"</span><span class="p">,</span> <span class="n">evals</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"mode"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"cov_eigenvectors"</span><span class="p">,</span> <span class="n">evecs</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">"r"</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">"mode"</span><span class="p">)])</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"n_modes"</span><span class="p">,</span> <span class="n">n_modes_actual</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"n_samp"</span><span class="p">,</span> <span class="n">n_samp</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">wrap</span><span class="p">(</span><span class="s2">"lmax"</span><span class="p">,</span> <span class="n">lmax</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">out</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.cov.estimate_noise_autocov" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">estimate_noise_autocov</span><span class="p">(</span><span class="n">noise_cutouts</span><span class="p">,</span> <span class="n">max_lag</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Estimate the spatial noise autocovariance from noise-only image cutouts.</p>
+<p>Each cutout is mean-subtracted, and its spatial autocorrelation is
+computed using the 2D Fourier transform. The autocorrelations are
+averaged across cutouts and normalized by the number of overlapping
+pixel pairs at each lag.</p>
+<p>Assuming spatially stationary noise, the autocovariance at lag
+(dy, dx) is estimated as</p>
+<div class="arithmatex">\[
+\widehat{C}(dy, dx) =
+\frac{1}{K\,n_{\mathrm{pairs}}(dy, dx)}
+\sum_{k=1}^{K}
+\sum_{(y,x)\in P(dy,dx)}
+X_k(y,x) X_k(y+dy,x+dx),
+\]</div>
+<p>where <span class="arithmatex">\(X_k\)</span> is the mean-subtracted noise in cutout <span class="arithmatex">\(k\)</span>, <span class="arithmatex">\(P(dy,dx)\)</span>
+contains pixel positions where both pixels lie within the cutout, and
+<span class="arithmatex">\(n_{\mathrm{pairs}}\)</span> is the number of such pairs per cutout. For
+rectangular cutouts,</p>
+<div class="arithmatex">\[
+n_{\mathrm{pairs}}(dy, dx) =
+(n_y-|dy|)(n_x-|dx|).
+\]</div>
+<p>The FFT calculation uses zero-padding to avoid periodic wraparound
+correlations. The estimate assumes that the cutouts share a common
+autocovariance function and contain no significant residual sources
+or spatially varying background structure.</p>
+<p>Subtracting each cutout's sample mean can introduce bias because the
+estimated mean is itself noisy. Let <span class="arithmatex">\(M=n_y n_x\)</span> be the number of
+pixels in a cutout, <span class="arithmatex">\(N_i\)</span> the noise at pixel <span class="arithmatex">\(i\)</span>, and</p>
+<div class="arithmatex">\[
+X_i = N_i - \overline{N},
+\qquad
+\overline{N} = \frac{1}{M}\sum_{i=1}^{M} N_i.
+\]</div>
+<p>If the true noise covariance is <span class="arithmatex">\(C_{ij}=\\mathbb{E}[N_iN_j]\)</span> and
+the noise has zero mean, then the covariance after mean subtraction is</p>
+<div class="arithmatex">\[
+\mathbb{E}[X_iX_j]
+=
+C_{ij}
+-\frac{1}{M}\sum_a C_{ia}
+-\frac{1}{M}\sum_b C_{bj}
++\frac{1}{M^2}\sum_{a,b} C_{ab}.
+\]</div>
+<p>Thus, the estimated covariance can differ from the true covariance,
+particularly for small cutouts or noise with long-range correlations.
+For independent, identically distributed noise with variance
+<span class="arithmatex">\(\sigma^2\)</span>, mean subtraction reduces the expected variance to
+<span class="arithmatex">\(\sigma^2(1-1/M)\)</span> and introduces an expected covariance of
+<span class="arithmatex">\(-\sigma^2/M\)</span> between distinct pixels.</p>
+<p>The FFT-based estimate does not correct for this bias. For large
+cutouts with short-range correlations, the effect is often small.
+Correcting it for correlated noise generally requires a model of the
+underlying covariance.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>noise_cutouts</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ncutouts ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Noise-only image cutouts, should be the same geometry as my map.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_lag</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Maximum absolute pixel lag along each axis. The output includes
+lags from <code>-max_lag</code> to <code>+max_lag</code> in both directions.</p>
+              </div>
+            </td>
+            <td>
+                  <code>30</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>cov</code></td>            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.ndarray">ndarray</span>, &#39;{2 * max_lag + 1} {2 * max_lag + 1}&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Estimated spatial autocovariance. The central element,
+<code>cov[max_lag, max_lag]</code>, is the noise variance. Nonzero lags
+describe covariance between pixels at the corresponding offsets.
+<code>max_lag</code> sets the maximum displacement measured, not the noise
+correlation length.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/cov.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 16</span>
+<span class="normal"> 17</span>
+<span class="normal"> 18</span>
+<span class="normal"> 19</span>
+<span class="normal"> 20</span>
+<span class="normal"> 21</span>
+<span class="normal"> 22</span>
+<span class="normal"> 23</span>
+<span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">estimate_noise_autocov</span><span class="p">(</span>
+    <span class="n">noise_cutouts</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ncutouts ny nx"</span><span class="p">],</span>
+    <span class="n">max_lag</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">"</span><span class="si">{max_lag}</span><span class="s2">*2+1 </span><span class="si">{max_lag}</span><span class="s2">*2+1"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Estimate the spatial noise autocovariance from noise-only image cutouts.</span>
+
+<span class="sd">    Each cutout is mean-subtracted, and its spatial autocorrelation is</span>
+<span class="sd">    computed using the 2D Fourier transform. The autocorrelations are</span>
+<span class="sd">    averaged across cutouts and normalized by the number of overlapping</span>
+<span class="sd">    pixel pairs at each lag.</span>
+
+<span class="sd">    Assuming spatially stationary noise, the autocovariance at lag</span>
+<span class="sd">    (dy, dx) is estimated as</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    \widehat{C}(dy, dx) =</span>
+<span class="sd">    \frac{1}{K\,n_{\mathrm{pairs}}(dy, dx)}</span>
+<span class="sd">    \sum_{k=1}^{K}</span>
+<span class="sd">    \sum_{(y,x)\in P(dy,dx)}</span>
+<span class="sd">    X_k(y,x) X_k(y+dy,x+dx),</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    where $X_k$ is the mean-subtracted noise in cutout $k$, $P(dy,dx)$</span>
+<span class="sd">    contains pixel positions where both pixels lie within the cutout, and</span>
+<span class="sd">    $n_{\mathrm{pairs}}$ is the number of such pairs per cutout. For</span>
+<span class="sd">    rectangular cutouts,</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    n_{\mathrm{pairs}}(dy, dx) =</span>
+<span class="sd">    (n_y-|dy|)(n_x-|dx|).</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    The FFT calculation uses zero-padding to avoid periodic wraparound</span>
+<span class="sd">    correlations. The estimate assumes that the cutouts share a common</span>
+<span class="sd">    autocovariance function and contain no significant residual sources</span>
+<span class="sd">    or spatially varying background structure.</span>
+
+<span class="sd">    Subtracting each cutout's sample mean can introduce bias because the</span>
+<span class="sd">    estimated mean is itself noisy. Let $M=n_y n_x$ be the number of</span>
+<span class="sd">    pixels in a cutout, $N_i$ the noise at pixel $i$, and</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    X_i = N_i - \overline{N},</span>
+<span class="sd">    \qquad</span>
+<span class="sd">    \overline{N} = \frac{1}{M}\sum_{i=1}^{M} N_i.</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    If the true noise covariance is $C_{ij}=\\mathbb{E}[N_iN_j]$ and</span>
+<span class="sd">    the noise has zero mean, then the covariance after mean subtraction is</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    \mathbb{E}[X_iX_j]</span>
+<span class="sd">    =</span>
+<span class="sd">    C_{ij}</span>
+<span class="sd">    -\frac{1}{M}\sum_a C_{ia}</span>
+<span class="sd">    -\frac{1}{M}\sum_b C_{bj}</span>
+<span class="sd">    +\frac{1}{M^2}\sum_{a,b} C_{ab}.</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    Thus, the estimated covariance can differ from the true covariance,</span>
+<span class="sd">    particularly for small cutouts or noise with long-range correlations.</span>
+<span class="sd">    For independent, identically distributed noise with variance</span>
+<span class="sd">    $\sigma^2$, mean subtraction reduces the expected variance to</span>
+<span class="sd">    $\sigma^2(1-1/M)$ and introduces an expected covariance of</span>
+<span class="sd">    $-\sigma^2/M$ between distinct pixels.</span>
+
+<span class="sd">    The FFT-based estimate does not correct for this bias. For large</span>
+<span class="sd">    cutouts with short-range correlations, the effect is often small.</span>
+<span class="sd">    Correcting it for correlated noise generally requires a model of the</span>
+<span class="sd">    underlying covariance.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    noise_cutouts: Float[ndmap, "ncutouts ny nx"]</span>
+<span class="sd">        Noise-only image cutouts, should be the same geometry as my map.</span>
+<span class="sd">    max_lag : int, default=30</span>
+<span class="sd">        Maximum absolute pixel lag along each axis. The output includes</span>
+<span class="sd">        lags from `-max_lag` to `+max_lag` in both directions.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    cov : Float[np.ndarray, "{2 * max_lag + 1} {2 * max_lag + 1}"]</span>
+<span class="sd">        Estimated spatial autocovariance. The central element,</span>
+<span class="sd">        `cov[max_lag, max_lag]`, is the noise variance. Nonzero lags</span>
+<span class="sd">        describe covariance between pixels at the corresponding offsets.</span>
+<span class="sd">        `max_lag` sets the maximum displacement measured, not the noise</span>
+<span class="sd">        correlation length.</span>
+<span class="sd">    """</span>
+    <span class="n">cutouts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">noise_cutouts</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">K</span><span class="p">,</span> <span class="n">ny</span><span class="p">,</span> <span class="n">nx</span> <span class="o">=</span> <span class="n">cutouts</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1"># Remove each cutout's mean.</span>
+    <span class="n">cutouts</span> <span class="o">=</span> <span class="n">cutouts</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">cutouts</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Zero-pad to avoid periodic wraparound correlations.</span>
+    <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">ny</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">nx</span><span class="p">)</span>
+    <span class="n">power</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">im</span> <span class="ow">in</span> <span class="n">cutouts</span><span class="p">:</span>
+        <span class="n">ft</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fft2</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">shape</span><span class="p">)</span>
+        <span class="n">power</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">ifft2</span><span class="p">(</span><span class="n">ft</span> <span class="o">*</span> <span class="n">ft</span><span class="o">.</span><span class="n">conj</span><span class="p">())</span><span class="o">.</span><span class="n">real</span>
+
+    <span class="c1"># Number of overlapping pixel pairs at each lag.</span>
+    <span class="n">overlap</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">overlap</span><span class="p">[:</span><span class="n">ny</span><span class="p">,</span> <span class="p">:</span><span class="n">nx</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">overlap</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">ifft2</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fft2</span><span class="p">(</span><span class="n">overlap</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fft2</span><span class="p">(</span><span class="n">overlap</span><span class="p">))</span><span class="o">.</span><span class="n">real</span>
+
+    <span class="c1"># The overlap array above is for a rectangular support.</span>
+    <span class="c1"># Compute the lag normalization directly for clarity.</span>
+    <span class="n">corr</span> <span class="o">=</span> <span class="n">power</span> <span class="o">/</span> <span class="n">K</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="n">max_lag</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">max_lag</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">dy</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="n">max_lag</span><span class="p">,</span> <span class="n">max_lag</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">dx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="n">max_lag</span><span class="p">,</span> <span class="n">max_lag</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="c1"># FFT correlation at positive/negative lags.</span>
+            <span class="n">iy</span> <span class="o">=</span> <span class="n">dy</span> <span class="k">if</span> <span class="n">dy</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dy</span>
+            <span class="n">ix</span> <span class="o">=</span> <span class="n">dx</span> <span class="k">if</span> <span class="n">dx</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">dx</span>
+
+            <span class="n">n_pairs</span> <span class="o">=</span> <span class="p">(</span><span class="n">ny</span> <span class="o">-</span> <span class="nb">abs</span><span class="p">(</span><span class="n">dy</span><span class="p">))</span> <span class="o">*</span> <span class="p">(</span><span class="n">nx</span> <span class="o">-</span> <span class="nb">abs</span><span class="p">(</span><span class="n">dx</span><span class="p">))</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">dy</span> <span class="o">+</span> <span class="n">max_lag</span><span class="p">,</span> <span class="n">dx</span> <span class="o">+</span> <span class="n">max_lag</span><span class="p">]</span> <span class="o">=</span> <span class="n">corr</span><span class="p">[</span><span class="n">iy</span><span class="p">,</span> <span class="n">ix</span><span class="p">]</span> <span class="o">/</span> <span class="n">n_pairs</span>
+
+    <span class="k">return</span> <span class="n">out</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.cov.estimate_noise_ps2d" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">estimate_noise_ps2d</span><span class="p">(</span><span class="n">residual</span><span class="p">,</span> <span class="n">ivar</span><span class="p">,</span> <span class="n">guess</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">smooth_scale</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">floor_fraction</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Estimate a regularized two-dimensional noise power spectrum.</p>
+<p>Whiten the map residual using the per-pixel inverse variance, estimate
+its two-dimensional power spectrum, and smooth the spectrum using a
+scale derived from the nominal beam width. Non-finite and non-positive
+spectral values are replaced by a positive floor defined relative to
+the estimated white-noise reference level.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>residual</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Full-map data minus the fitted model, in map units.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ivar</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Per-pixel inverse variance, in inverse squared map units. Pixels
+with non-finite or non-positive inverse variance are excluded from
+the noise estimate.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>guess</code>
+            </td>
+            <td>
+                  <code><span title="sotodlib.core.AxisManager">AxisManager</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Beam estimate containing <code>fwhm_xi</code> and <code>fwhm_eta</code>. Both quantities
+must support conversion to radians using <code>to_value("rad")</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>window</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional apodization window. If <code>None</code>, a binary validity window
+is constructed from <code>residual</code> and <code>ivar</code>. Otherwise, the supplied
+window is multiplied by the validity mask.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>smooth_scale</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dimensionless multiplier for the beam-derived spectral smoothing
+width.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>floor_fraction</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Minimum spectral power as a fraction of the estimated white-noise
+reference level. Must be positive.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-3</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>corr_noise</code></td>            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="pixell.enmap.ndmap">ndmap</span>, &#39;ny nx&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Regularized two-dimensional noise power spectrum, represented as
+an <code>ndmap</code> with the WCS of <code>residual</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>floor_fraction</code> is not positive or no positive finite power
+is found in the residual spectrum.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/cov.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">estimate_noise_ps2d</span><span class="p">(</span>
+    <span class="n">residual</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">ivar</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">],</span>
+    <span class="n">guess</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
+    <span class="n">window</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">smooth_scale</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">floor_fraction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndmap</span><span class="p">,</span> <span class="s2">"ny nx"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Estimate a regularized two-dimensional noise power spectrum.</span>
+
+<span class="sd">    Whiten the map residual using the per-pixel inverse variance, estimate</span>
+<span class="sd">    its two-dimensional power spectrum, and smooth the spectrum using a</span>
+<span class="sd">    scale derived from the nominal beam width. Non-finite and non-positive</span>
+<span class="sd">    spectral values are replaced by a positive floor defined relative to</span>
+<span class="sd">    the estimated white-noise reference level.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    residual : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Full-map data minus the fitted model, in map units.</span>
+<span class="sd">    ivar : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Per-pixel inverse variance, in inverse squared map units. Pixels</span>
+<span class="sd">        with non-finite or non-positive inverse variance are excluded from</span>
+<span class="sd">        the noise estimate.</span>
+<span class="sd">    guess : AxisManager</span>
+<span class="sd">        Beam estimate containing `fwhm_xi` and `fwhm_eta`. Both quantities</span>
+<span class="sd">        must support conversion to radians using `to_value("rad")`.</span>
+<span class="sd">    window : Optional[Float[ndmap, "ny nx"]], default=None</span>
+<span class="sd">        Optional apodization window. If `None`, a binary validity window</span>
+<span class="sd">        is constructed from `residual` and `ivar`. Otherwise, the supplied</span>
+<span class="sd">        window is multiplied by the validity mask.</span>
+<span class="sd">    smooth_scale : float, default=1.0</span>
+<span class="sd">        Dimensionless multiplier for the beam-derived spectral smoothing</span>
+<span class="sd">        width.</span>
+<span class="sd">    floor_fraction : float, default=1e-3</span>
+<span class="sd">        Minimum spectral power as a fraction of the estimated white-noise</span>
+<span class="sd">        reference level. Must be positive.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    corr_noise : Float[ndmap, "ny nx"]</span>
+<span class="sd">        Regularized two-dimensional noise power spectrum, represented as</span>
+<span class="sd">        an `ndmap` with the WCS of `residual`.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        If `floor_fraction` is not positive or no positive finite power</span>
+<span class="sd">        is found in the residual spectrum.</span>
+<span class="sd">    """</span>
+    <span class="n">valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">residual</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">ivar</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">ivar</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">window</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">window</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">(</span><span class="n">valid</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">),</span> <span class="n">residual</span><span class="o">.</span><span class="n">wcs</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">window</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">,</span> <span class="n">window</span> <span class="o">*</span> <span class="n">valid</span><span class="p">)</span>
+
+    <span class="c1"># Whiten the residual using the per-pixel noise amplitude</span>
+    <span class="n">whitened</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">valid</span><span class="p">,</span> <span class="n">residual</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">ivar</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span> <span class="mi">0</span><span class="p">),</span> <span class="n">residual</span><span class="o">.</span><span class="n">wcs</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Remove the weighted mean to reduce DC contamination</span>
+    <span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">window</span><span class="p">)</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">whitened</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="n">z</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">weights</span> <span class="o">*</span> <span class="n">z</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+
+    <span class="n">whitened</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">(</span><span class="n">z</span> <span class="o">*</span> <span class="n">weights</span><span class="p">,</span> <span class="n">residual</span><span class="o">.</span><span class="n">wcs</span><span class="p">)</span>
+
+    <span class="n">harm</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">map2harm</span><span class="p">(</span><span class="n">whitened</span><span class="p">)</span>  <span class="c1"># , normalize="phys")</span>
+    <span class="n">ps2d</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">calc_ps2d</span><span class="p">(</span><span class="n">harm</span><span class="p">)</span>
+
+    <span class="c1"># Estimate a smoothing scale from the nominal beam FWHM</span>
+    <span class="n">fwhm_xi</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">guess</span><span class="o">.</span><span class="n">fwhm_xi</span><span class="o">.</span><span class="n">to_value</span><span class="p">(</span><span class="s2">"rad"</span><span class="p">))</span>
+    <span class="n">fwhm_eta</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">guess</span><span class="o">.</span><span class="n">fwhm_eta</span><span class="o">.</span><span class="n">to_value</span><span class="p">(</span><span class="s2">"rad"</span><span class="p">))</span>
+    <span class="n">fwhm</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">fwhm_xi</span> <span class="o">+</span> <span class="n">fwhm_eta</span><span class="p">)</span>
+
+    <span class="n">ly</span><span class="p">,</span> <span class="n">lx</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">laxes</span><span class="p">(</span><span class="n">residual</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">residual</span><span class="o">.</span><span class="n">wcs</span><span class="p">)</span>
+    <span class="n">dly</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">ly</span><span class="p">))))</span>
+    <span class="n">dlx</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">lx</span><span class="p">))))</span>
+
+    <span class="n">sigma_beam</span> <span class="o">=</span> <span class="n">fwhm</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">8</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">sigma_y</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">sigma_beam</span> <span class="o">*</span> <span class="n">dly</span><span class="p">,</span> <span class="mf">1e-12</span><span class="p">)</span>
+    <span class="n">sigma_x</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">sigma_beam</span> <span class="o">*</span> <span class="n">dlx</span><span class="p">,</span> <span class="mf">1e-12</span><span class="p">)</span>
+    <span class="n">smooth_width</span> <span class="o">=</span> <span class="n">smooth_scale</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sigma_x</span> <span class="o">*</span> <span class="n">sigma_y</span><span class="p">)</span>
+
+    <span class="n">ps2d</span> <span class="o">=</span> <span class="n">enmap</span><span class="o">.</span><span class="n">smooth_spectrum</span><span class="p">(</span><span class="n">ps2d</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="n">smooth_width</span><span class="p">)</span>
+
+    <span class="n">ps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ps2d</span><span class="p">)</span>
+    <span class="n">good</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">ps</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">ps</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">good</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"No positive finite power found in residual spectrum."</span><span class="p">)</span>
+
+    <span class="c1"># Whitened residuals have unit white-noise variance</span>
+    <span class="n">white_level</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">ps</span><span class="p">[</span><span class="n">good</span><span class="p">])</span>
+    <span class="n">floor</span> <span class="o">=</span> <span class="n">floor_fraction</span> <span class="o">*</span> <span class="n">white_level</span>
+
+    <span class="n">ps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">nan</span><span class="o">=</span><span class="n">floor</span><span class="p">,</span> <span class="n">posinf</span><span class="o">=</span><span class="n">floor</span><span class="p">,</span> <span class="n">neginf</span><span class="o">=</span><span class="n">floor</span><span class="p">)</span>
+    <span class="n">ps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">floor</span><span class="p">)</span>
+    <span class="n">ps</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">ps</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">enmap</span><span class="o">.</span><span class="n">ndmap</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">residual</span><span class="o">.</span><span class="n">wcs</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.cov.invsafe" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">invsafe</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">thresh</span><span class="o">=</span><span class="mf">1e-14</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute a truncated SVD pseudoinverse.
+Singular values smaller than</p>
+<p>$$
+{\rm thresh} \times \max(s)
+$$
+are discarded.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>mat</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n n&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Matrix to invert.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>thresh</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Relative singular-value threshold.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-14</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n n&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Truncated pseudoinverse of <code>mat</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/cov.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span>
+<span class="normal">444</span>
+<span class="normal">445</span>
+<span class="normal">446</span>
+<span class="normal">447</span>
+<span class="normal">448</span>
+<span class="normal">449</span>
+<span class="normal">450</span>
+<span class="normal">451</span>
+<span class="normal">452</span>
+<span class="normal">453</span>
+<span class="normal">454</span>
+<span class="normal">455</span>
+<span class="normal">456</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">invsafe</span><span class="p">(</span><span class="n">mat</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n n"</span><span class="p">],</span> <span class="n">thresh</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-14</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n n"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Compute a truncated SVD pseudoinverse.</span>
+<span class="sd">    Singular values smaller than</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    {\rm thresh} \times \max(s)</span>
+<span class="sd">    $$</span>
+<span class="sd">    are discarded.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mat : Float[NDArray, "n n"]</span>
+<span class="sd">        Matrix to invert.</span>
+<span class="sd">    thresh : float, default: 1e-14</span>
+<span class="sd">        Relative singular-value threshold.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Float[NDArray, "n n"]</span>
+<span class="sd">        Truncated pseudoinverse of `mat`.</span>
+<span class="sd">    """</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">vh</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">svd</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">full_matrices</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">s_inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">good</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">thresh</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">s_inv</span><span class="p">[</span><span class="n">good</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">s</span><span class="p">[</span><span class="n">good</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="p">(</span><span class="n">vh</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">s_inv</span><span class="p">)</span> <span class="o">@</span> <span class="n">u</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="lat_beams.fitting.map.cov.invscale" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">invscale</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span> <span class="n">do_invsafe</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">thresh</span><span class="o">=</span><span class="mf">1e-14</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Invert a matrix after diagonal normalization.
+The matrix is first rescaled as</p>
+<div class="arithmatex">\[
+A' = D A D
+\]</div>
+<p>where</p>
+<div class="arithmatex">\[
+D_{ii} = \frac{1} {\sqrt{|A_{ii}|}}
+\]</div>
+<p>The scaled matrix is then inverted and transformed back.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>mat</code>
+            </td>
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n n&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Matrix to invert.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>do_invsafe</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Use <code>invsafe</code> rather than the standard inverse.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>thresh</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Relative singular-value threshold.
+Passed to <code>invsafe</code> if <code>do_invsafe</code> is <code>True</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-14</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jaxtyping.Float">Float</span>[<span title="numpy.typing.NDArray">NDArray</span>, &#39;n n&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Approximate inverse of <code>mat</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>lat_beams/fitting/map/cov.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">459</span>
+<span class="normal">460</span>
+<span class="normal">461</span>
+<span class="normal">462</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span>
+<span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">invscale</span><span class="p">(</span>
+    <span class="n">mat</span><span class="p">:</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n n"</span><span class="p">],</span> <span class="n">do_invsafe</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">thresh</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-14</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Float</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="s2">"n n"</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Invert a matrix after diagonal normalization.</span>
+<span class="sd">    The matrix is first rescaled as</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    A' = D A D</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    where</span>
+
+<span class="sd">    $$</span>
+<span class="sd">    D_{ii} = \frac{1} {\sqrt{|A_{ii}|}}</span>
+<span class="sd">    $$</span>
+
+<span class="sd">    The scaled matrix is then inverted and transformed back.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mat : Float[NDArray, "n n"]</span>
+<span class="sd">        Matrix to invert.</span>
+<span class="sd">    do_invsafe : bool, default: False</span>
+<span class="sd">        Use `invsafe` rather than the standard inverse.</span>
+<span class="sd">    thresh : float, default: 1e-14</span>
+<span class="sd">        Relative singular-value threshold.</span>
+<span class="sd">        Passed to `invsafe` if `do_invsafe` is `True`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Float[NDArray, "n n"]</span>
+<span class="sd">        Approximate inverse of `mat`.</span>
+<span class="sd">    """</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">mat</span><span class="p">)))</span>
+    <span class="n">scale</span><span class="p">[</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">scale</span><span class="p">)]</span> <span class="o">=</span> <span class="mf">1e-10</span>
+    <span class="n">norm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">scale</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">scaled</span> <span class="o">=</span> <span class="n">norm</span> <span class="o">*</span> <span class="n">mat</span>
+    <span class="k">if</span> <span class="n">do_invsafe</span><span class="p">:</span>
+        <span class="n">inv</span> <span class="o">=</span> <span class="n">invsafe</span><span class="p">(</span><span class="n">scaled</span><span class="p">,</span> <span class="n">thresh</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">scaled</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">LinAlgError</span><span class="p">:</span>
+            <span class="n">inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">pinv</span><span class="p">(</span><span class="n">scaled</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span> <span class="n">norm</span> <span class="o">*</span> <span class="n">inv</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+          <div class="md-top" data-md-component="top" hidden>
+  <div class="md-top__center">
+    <button type="button" class="md-top__button md-top__button--main" data-md-action="top">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+      <span>Back to top</span>
+    </button>
+    
+      
+      
+      <label class="md-top__button md-top__side md-top__side--nav" for="__drawer" >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-panel-left" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+      </label>
+    
+    
+      
+      
+      <label class="md-top__button md-top__side md-top__side--toc" for="__toc" >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-panel-right" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>
+      </label>
+    
+  </div>
+</div>
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://jaywhj.github.io/mkdocs-materialx/" target="_blank" rel="noopener">
+      MaterialX
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+          
+          
+        
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "code": null, "features": [], "search": {"options": {"baseUrl": "../../../..", "bundleUrl": "../../../../search/", "highlight": false, "searchOptions": {}}, "provider": "pagefind"}, "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "code.collapse": "Collapse", "code.download": "Download", "code.expand": "Expand remaining # lines", "code.select": "Toggle line selection", "search.offline": "Switch to Lunr for offline search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../../../../assets/javascripts/bundle.d66651fd.min.js"></script>
+      
+        <script src="../../../../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

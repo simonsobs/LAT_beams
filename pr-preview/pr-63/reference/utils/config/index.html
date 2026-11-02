@@ -572,6 +572,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../fitting/map/cov/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cov
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../fitting/map/gauss/" class="md-nav__link">
         
   
@@ -1433,6 +1461,11 @@ source-flagged samples to remain in the fit.</p>
 <summary>cfg.min_dets</summary>
 <p>Minimum number of detectors required after cuts.</p>
 </details>
+<details class="info">
+<summary>cfg.tube_slots</summary>
+<p>List of tube slots to run on. Pass an empty list to run on all.
+This currently has no effect on stacking.</p>
+</details>
 <h4 id="lat_beams.utils.config--mapmaking">Mapmaking</h4>
 <details class="info">
 <summary>cfg.extent</summary>
@@ -1770,9 +1803,14 @@ center and the expected center of the reprojected map.</p>
 <details class="info">
 <summary>cfg.empir_cov</summary>
 <p>Whether to calculate empirical covariance information from the
-individual beam fits. In the fitting stage, empirical covariance is
+individual beams. In the fitting stage, empirical covariance is
 loaded when more than five contributing fits are available. It also
 controls whether empirical scatter based summary plots are generated.</p>
+</details>
+<details class="info">
+<summary>cfg.empir_from_model</summary>
+<p>Whether to calculate empirical covariance information from the
+individual beam models or data profiles.</p>
 </details>
 <details class="info">
 <summary>cfg.lmax</summary>
@@ -1848,6 +1886,16 @@ that map from the abscal dataset.</p>
 <p>If the rsm error between the normalized profile and the
 stack core is above this then we discard
 that map from the abscal dataset.</p>
+</details>
+<details class="info">
+<summary>cfg.abscal_ratio_core_frac</summary>
+<p>The profile ratio cuts only use radii where the stack profile is above
+this fraction of its peak, so faint radii don't blow up the ratio.</p>
+</details>
+<details class="info">
+<summary>cfg.abscal_rms_drop_edge</summary>
+<p>If ture, leave the outermost fit radius out of the profile difference rms cut,
+since the fit constrains it the least.</p>
 </details>
 
 
@@ -1963,23 +2011,7 @@ input dictionary is modified.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/utils/config.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">452</span>
 <span class="normal">453</span>
 <span class="normal">454</span>
 <span class="normal">455</span>
@@ -1994,7 +2026,23 @@ input dictionary is modified.</p>
 <span class="normal">464</span>
 <span class="normal">465</span>
 <span class="normal">466</span>
-<span class="normal">467</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">deep_merge</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">deep_merge</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Recursively merge two dictionaries.</span>
 
@@ -2083,23 +2131,7 @@ This is loaded recursively, see <code>load_config</code> for details.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/utils/config.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">516</span>
-<span class="normal">517</span>
-<span class="normal">518</span>
-<span class="normal">519</span>
-<span class="normal">520</span>
-<span class="normal">521</span>
-<span class="normal">522</span>
-<span class="normal">523</span>
-<span class="normal">524</span>
-<span class="normal">525</span>
-<span class="normal">526</span>
-<span class="normal">527</span>
-<span class="normal">528</span>
-<span class="normal">529</span>
-<span class="normal">530</span>
-<span class="normal">531</span>
-<span class="normal">532</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">532</span>
 <span class="normal">533</span>
 <span class="normal">534</span>
 <span class="normal">535</span>
@@ -2162,7 +2194,23 @@ This is loaded recursively, see <code>load_config</code> for details.</p>
 <span class="normal">592</span>
 <span class="normal">593</span>
 <span class="normal">594</span>
-<span class="normal">595</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_args_cfg</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="normal">595</span>
+<span class="normal">596</span>
+<span class="normal">597</span>
+<span class="normal">598</span>
+<span class="normal">599</span>
+<span class="normal">600</span>
+<span class="normal">601</span>
+<span class="normal">602</span>
+<span class="normal">603</span>
+<span class="normal">604</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_args_cfg</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Parse command-line arguments and load the configuration file.</span>
 <span class="sd">    Run the script with `--help` for details.</span>
@@ -2374,23 +2422,7 @@ containing the configuration file that references them.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/utils/config.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">470</span>
-<span class="normal">471</span>
-<span class="normal">472</span>
-<span class="normal">473</span>
-<span class="normal">474</span>
-<span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
-<span class="normal">483</span>
-<span class="normal">484</span>
-<span class="normal">485</span>
-<span class="normal">486</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">486</span>
 <span class="normal">487</span>
 <span class="normal">488</span>
 <span class="normal">489</span>
@@ -2417,7 +2449,23 @@ containing the configuration file that references them.</p>
 <span class="normal">510</span>
 <span class="normal">511</span>
 <span class="normal">512</span>
-<span class="normal">513</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">load_config</span><span class="p">(</span><span class="n">start_cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">cfg_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal">513</span>
+<span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span>
+<span class="normal">518</span>
+<span class="normal">519</span>
+<span class="normal">520</span>
+<span class="normal">521</span>
+<span class="normal">522</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">load_config</span><span class="p">(</span><span class="n">start_cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">cfg_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Load a configuration file and recursively merge its base configuration.</span>
 
@@ -2600,23 +2648,7 @@ sample-dependent configuration values.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/utils/config.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">598</span>
-<span class="normal">599</span>
-<span class="normal">600</span>
-<span class="normal">601</span>
-<span class="normal">602</span>
-<span class="normal">603</span>
-<span class="normal">604</span>
-<span class="normal">605</span>
-<span class="normal">606</span>
-<span class="normal">607</span>
-<span class="normal">608</span>
-<span class="normal">609</span>
-<span class="normal">610</span>
-<span class="normal">611</span>
-<span class="normal">612</span>
-<span class="normal">613</span>
-<span class="normal">614</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">614</span>
 <span class="normal">615</span>
 <span class="normal">616</span>
 <span class="normal">617</span>
@@ -2799,7 +2831,29 @@ sample-dependent configuration values.</p>
 <span class="normal">794</span>
 <span class="normal">795</span>
 <span class="normal">796</span>
-<span class="normal">797</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">setup_cfg</span><span class="p">(</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span>
+<span class="normal">800</span>
+<span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span>
+<span class="normal">804</span>
+<span class="normal">805</span>
+<span class="normal">806</span>
+<span class="normal">807</span>
+<span class="normal">808</span>
+<span class="normal">809</span>
+<span class="normal">810</span>
+<span class="normal">811</span>
+<span class="normal">812</span>
+<span class="normal">813</span>
+<span class="normal">814</span>
+<span class="normal">815</span>
+<span class="normal">816</span>
+<span class="normal">817</span>
+<span class="normal">818</span>
+<span class="normal">819</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">setup_cfg</span><span class="p">(</span>
     <span class="n">args</span><span class="p">:</span> <span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">,</span>
     <span class="n">cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="n">replace</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2871,6 +2925,9 @@ sample-dependent configuration values.</p>
     <span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"min_samps"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"min_samps"</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"min_dets"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"min_dets"</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="s2">"tube_slots"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"tube_slots"</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="s2">"fwhm_tol_map"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"fwhm_tol_map"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="s2">"fwhm_tol_tod"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"fwhm_tol_tol"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="c1"># Mapmaking</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"extent"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"extent"</span><span class="p">,</span> <span class="mi">600</span><span class="p">)</span>
@@ -2962,6 +3019,7 @@ sample-dependent configuration values.</p>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"n_lmax"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"n_lmax"</span><span class="p">,</span> <span class="mi">60000</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"log_thresh"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"log_thresh"</span><span class="p">,</span> <span class="mf">1e-3</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"empir_cov"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"empir_cov"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="s2">"empir_from_model"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"empir_from_model"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"lmax"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"lmax"</span><span class="p">,</span> <span class="mi">20000</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"cov_modes"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"cov_modes"</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
 
@@ -2988,6 +3046,8 @@ sample-dependent configuration values.</p>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"abscal_max_avg_prat"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"abscal_max_avg_prat"</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"abscal_max_pdiff"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"abscal_max_pdiff"</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">)</span>
     <span class="n">cfg</span><span class="p">[</span><span class="s2">"abscal_max_perr"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"abscal_max_perr"</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">)</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="s2">"abscal_ratio_core_frac"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"abscal_ratio_core_frac"</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">)</span>
+    <span class="n">cfg</span><span class="p">[</span><span class="s2">"abscal_rms_drop_edge"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"abscal_rms_drop_edge"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 
     <span class="c1"># Rename for our scope</span>
     <span class="k">for</span> <span class="n">old_name</span><span class="p">,</span> <span class="n">new_name</span> <span class="ow">in</span> <span class="n">replace</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -3133,29 +3193,7 @@ sample-dependent configuration values.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/utils/config.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">800</span>
-<span class="normal">801</span>
-<span class="normal">802</span>
-<span class="normal">803</span>
-<span class="normal">804</span>
-<span class="normal">805</span>
-<span class="normal">806</span>
-<span class="normal">807</span>
-<span class="normal">808</span>
-<span class="normal">809</span>
-<span class="normal">810</span>
-<span class="normal">811</span>
-<span class="normal">812</span>
-<span class="normal">813</span>
-<span class="normal">814</span>
-<span class="normal">815</span>
-<span class="normal">816</span>
-<span class="normal">817</span>
-<span class="normal">818</span>
-<span class="normal">819</span>
-<span class="normal">820</span>
-<span class="normal">821</span>
-<span class="normal">822</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">822</span>
 <span class="normal">823</span>
 <span class="normal">824</span>
 <span class="normal">825</span>
@@ -3165,7 +3203,29 @@ sample-dependent configuration values.</p>
 <span class="normal">829</span>
 <span class="normal">830</span>
 <span class="normal">831</span>
-<span class="normal">832</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">setup_paths</span><span class="p">(</span>
+<span class="normal">832</span>
+<span class="normal">833</span>
+<span class="normal">834</span>
+<span class="normal">835</span>
+<span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span>
+<span class="normal">840</span>
+<span class="normal">841</span>
+<span class="normal">842</span>
+<span class="normal">843</span>
+<span class="normal">844</span>
+<span class="normal">845</span>
+<span class="normal">846</span>
+<span class="normal">847</span>
+<span class="normal">848</span>
+<span class="normal">849</span>
+<span class="normal">850</span>
+<span class="normal">851</span>
+<span class="normal">852</span>
+<span class="normal">853</span>
+<span class="normal">854</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">setup_paths</span><span class="p">(</span>
     <span class="n">root_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">project</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">tel</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>

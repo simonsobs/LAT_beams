@@ -572,6 +572,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../fitting/map/cov/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cov
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../fitting/map/gauss/" class="md-nav__link">
         
   
@@ -1344,8 +1372,7 @@ then they ary used to estimate the signal when building the noise model.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">312</span>
-<span class="normal">313</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">313</span>
 <span class="normal">314</span>
 <span class="normal">315</span>
 <span class="normal">316</span>
@@ -1416,7 +1443,8 @@ then they ary used to estimate the signal when building the noise model.</p>
 <span class="normal">381</span>
 <span class="normal">382</span>
 <span class="normal">383</span>
-<span class="normal">384</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">add_obs_to_mapmaker</span><span class="p">(</span>
+<span class="normal">384</span>
+<span class="normal">385</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">add_obs_to_mapmaker</span><span class="p">(</span>
     <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">sub_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">mapmaker</span><span class="p">:</span> <span class="n">mapmaking</span><span class="o">.</span><span class="n">MLMapmaker</span><span class="p">,</span>
@@ -1571,8 +1599,7 @@ See this function's docstring for details on the contents.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">277</span>
-<span class="normal">278</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">278</span>
 <span class="normal">279</span>
 <span class="normal">280</span>
 <span class="normal">281</span>
@@ -1603,7 +1630,8 @@ See this function's docstring for details on the contents.</p>
 <span class="normal">306</span>
 <span class="normal">307</span>
 <span class="normal">308</span>
-<span class="normal">309</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_passes</span><span class="p">(</span><span class="n">cfg</span><span class="p">:</span> <span class="n">Namespace</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">bunch</span><span class="o">.</span><span class="n">Bunch</span><span class="p">]:</span>
+<span class="normal">309</span>
+<span class="normal">310</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_passes</span><span class="p">(</span><span class="n">cfg</span><span class="p">:</span> <span class="n">Namespace</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">bunch</span><span class="o">.</span><span class="n">Bunch</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Setup passes for making an ML mapmaker.</span>
 <span class="sd">    The output will have `cfg.mlpass` elements with all of them</span>
@@ -1868,7 +1896,8 @@ If the number of uncut detectors is less than <code>cfg.min_dets</code> then <co
 <span class="normal"> 97</span>
 <span class="normal"> 98</span>
 <span class="normal"> 99</span>
-<span class="normal">100</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_cuts</span><span class="p">(</span>
+<span class="normal">100</span>
+<span class="normal">101</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_cuts</span><span class="p">(</span>
     <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">source_flags</span><span class="p">:</span> <span class="n">RangesMatrix</span><span class="p">,</span>
     <span class="n">n_modes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -1939,6 +1968,7 @@ If the number of uncut detectors is less than <code>cfg.min_dets</code> then <co
         <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Not enough detectors after source flag cuts!"</span>
         <span class="n">fail</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="n">ErrCode</span><span class="o">.</span><span class="n">MIN_DETS</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">logger</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">cuts</span> <span class="o">+=</span> <span class="n">aman</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">glitch_flags</span>
     <span class="k">return</span> <span class="n">cuts</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -2305,8 +2335,7 @@ coordinate rotations used when mapmaking.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">103</span>
-<span class="normal">104</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">104</span>
 <span class="normal">105</span>
 <span class="normal">106</span>
 <span class="normal">107</span>
@@ -2476,7 +2505,8 @@ coordinate rotations used when mapmaking.</p>
 <span class="normal">271</span>
 <span class="normal">272</span>
 <span class="normal">273</span>
-<span class="normal">274</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_map</span><span class="p">(</span>
+<span class="normal">274</span>
+<span class="normal">275</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_map</span><span class="p">(</span>
     <span class="n">aman</span><span class="p">:</span> <span class="n">AxisManager</span><span class="p">,</span>
     <span class="n">src_to_map</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">res</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
@@ -2887,8 +2917,7 @@ Will be <code>None</code> if no passes are run.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>lat_beams/mapmaking.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">387</span>
-<span class="normal">388</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">388</span>
 <span class="normal">389</span>
 <span class="normal">390</span>
 <span class="normal">391</span>
@@ -3051,7 +3080,8 @@ Will be <code>None</code> if no passes are run.</p>
 <span class="normal">548</span>
 <span class="normal">549</span>
 <span class="normal">550</span>
-<span class="normal">551</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_ml_map</span><span class="p">(</span>
+<span class="normal">551</span>
+<span class="normal">552</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_ml_map</span><span class="p">(</span>
     <span class="n">amans</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AxisManager</span><span class="p">,</span> <span class="n">pmat</span><span class="o">.</span><span class="n">P</span><span class="p">]],</span>
     <span class="n">passes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">bunch</span><span class="o">.</span><span class="n">Bunch</span><span class="p">],</span>
     <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
