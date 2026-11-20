@@ -414,13 +414,43 @@ Module for handling all configuration of scripts.
 ??? info "cfg.abscal_from_model"
     If True use the model profile when estimating abscal.
     If False use the data profile instead.
+
+??? info "cfg.abscal_max_avg_prat"
+    If the mean ratio between the normalized profile and the
+    stack in the abscal radius is above this then we discard
+    that map from the abscal dataset.
+
+??? info "cfg.abscal_max_pdiff"
+    If the difference between the normalized profile and the
+    stack in the core is above this then we discard
+    that map from the abscal dataset.
+
+??? info "cfg.abscal_max_perr"
+    If the rsm error between the normalized profile and the
+    stack core is above this then we discard
+    that map from the abscal dataset.
+
+??? info "cfg.abscal_ratio_core_frac"
+    The profile ratio cuts only use radii where the stack profile is above
+    this fraction of its peak, so faint radii don't blow up the ratio.
+
+??? info "cfg.abscal_rms_drop_edge"
+    If true, leave the outermost fit radius out of the profile difference rms cut,
+    since the fit constrains it the least.
+
+??? info "cfg.abscal_rings_per_fwhm"
+    The number of radial rings per FWHM to use when downsampling the profile for abscal.
+    This is to avoid noise dominating in the LF rings.
+
+??? info "cfg.abscal_r_fwhm"
+    The radius in FWHM to to use for the template fit and cuts.
 """
 
 import argparse
 import os
 import time
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import yaml
@@ -591,7 +621,7 @@ def get_args_cfg() -> tuple[argparse.Namespace, dict[str, Any]]:
 def setup_cfg(
     args: argparse.Namespace,
     cfg: dict[str, Any],
-    replace: Optional[dict[str, str]] = None,
+    replace: dict[str, str] | None = None,
     apply_ds: bool = False,
 ) -> tuple[argparse.Namespace, str]:
     """
@@ -778,6 +808,13 @@ def setup_cfg(
     cfg["abscal_r_frac"] = cfg.get("abscal_r_frac", 0.3)
     cfg["abscal_lmin"] = cfg.get("abscal_lmin", -1)
     cfg["abscal_from_model"] = cfg.get("abscal_from_model", False)
+    cfg["abscal_max_avg_prat"] = cfg.get("abscal_max_avg_prat", 1.5)
+    cfg["abscal_max_pdiff"] = cfg.get("abscal_max_pdiff", 0.05)
+    cfg["abscal_max_perr"] = cfg.get("abscal_max_perr", 0.02)
+    cfg["abscal_ratio_core_frac"] = cfg.get("abscal_ratio_core_frac", 0.2)
+    cfg["abscal_rms_drop_edge"] = cfg.get("abscal_rms_drop_edge", True)
+    cfg["abscal_rings_per_fwhm"] = cfg.get("abscal_rings_per_fwhm", 12)
+    cfg["abscal_r_fwhm"] = cfg.get("abscal_r_fwhm", 1.0)
 
     # Rename for our scope
     for old_name, new_name in replace.items():

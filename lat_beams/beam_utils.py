@@ -1242,3 +1242,113 @@ def distribute_jobs(all_jobs, job_maps, nranks, logger):
         )
 
     return assignments
+
+
+def _amp_obj(x, prof_interp, prof, r):
+    amp, off, r_off, r_scale = x
+    stack_prof = prof_interp(r_scale * r + r_off)
+    prof_norm = (prof - off) / amp
+    return np.sum((prof_norm - stack_prof) ** 2)
+
+
+def norm_prof_to_ref(
+    r: Float[np.ndarray, "n_radial"],
+    prof: Float[np.ndarray, "n_radial"],
+    prof_interp: Callable[
+        [Float[np.ndarray, "n_radial"]], Float[np.ndarray, "n_radial"]
+    ],
+    ext_rad: float,
+    include_off: bool = True,
+) -> tuple[
+    float,
+    float,
+    float,
+    float,
+    Float[np.ndarray, "n_valid"],
+    Float[np.ndarray, "n_valid"],
+    Float[np.ndarray, "n_valid"],
+]:
+    r"""
+    Normalize a radial profile to a reference profile.
+
+    Fit the input profile to an interpolated reference profile over a
+    restricted radial range. First, estimate the amplitude and additive
+    offset using linear regression, then refine the fit by optimizing
+    the amplitude, offset, radial shift, and radial scale.
+
+    The fitted model is
+
+    $$
+    p(r) \approx a\,p_{\mathrm{ref}}(s r + \Delta r) + b,
+    $$
+
+    where $a$ is the amplitude, $b$ is the additive offset,
+    $\Delta r$ is the radial shift, and $s$ is the radial scale.
+
+    Only radii satisfying $0 < r < r_{\mathrm{ext}}$ are included in
+    the fit, where $r_{\mathrm{ext}}$ is `ext_rad` and the lower
+    bound is set by the mean radial sampling interval. $0$ is excluded
+    to avoid issues with some models blowing up at 0.
+
+    The initial amplitude and offset are estimated by linear regression
+    before the nonlinear optimization. The optimization bounds constrain
+    the amplitude, offset, radial shift, and radial scale around their
+    initial estimates.
+
+    Parameters
+    ----------
+    r : Float[NDArray, "n_radial"]
+        Radial coordinates of the input profile.
+    prof : Float[NDArray, "n_radial"]
+        Radial profile values corresponding to `r`.
+    prof_interp : Callable[[Float[NDArray, "n_radial"]], Float[NDArray, "n_radial"]]
+        Callable that evaluates the reference profile at arbitrary
+        radial coordinates.
+    ext_rad : float
+        Upper radial limit of the fitting region, in the same units
+        as `r`.
+    include_off : bool, default=True
+        If `True`, allow the additive offset to vary during optimization.
+        If `False`, constrain the offset to zero.
+
+    Returns
+    -------
+    amp : float
+        Best-fit multiplicative amplitude.
+    off : float
+        Best-fit additive offset.
+    r_off : float
+        Best-fit radial shift, in the same units as `r`.
+    r_scale : float
+        Best-fit dimensionless radial scale.
+    r_lim : Float[NDArray, "n_valid"]
+        Radial coordinates included in the fit.
+    prof_norm : Float[NDArray, "n_valid"]
+        Input profile over the fitting region, normalized as
+        `(prof[r_msk] - off) / amp`.
+    stack_prof : Float[NDArray, "n_valid"]
+        Reference profile evaluated at the optimized radial coordinates
+        `r_scale * r_lim + r_off`.
+    """
+    res = np.mean(np.diff(r))
+    r_msk = (r < ext_rad) * (r >= res)
+    r_lim = r[r_msk]
+    stack_prof = prof_interp(r_lim)
+
+    # Estimate scaling and offset in real space
+    lin = np.polyfit(stack_prof, prof[r_msk], 1)
+    amp = lin[0]
+    off = lin[1]
+    bounds = [
+        (0.5 * amp, 1.5 * amp),
+        (-1.5 * np.abs(off), 1.5 * np.abs(off)) if include_off else (0, 0),
+        (-1.5 * res, 1.5 * res),
+        (0.9, 1.1),
+    ]
+    res = minimize(
+        _amp_obj, (amp, off, 0, 1), (prof_interp, prof[r_msk], r_lim), bounds=bounds
+    )  # , method="Powell")
+    amp, off, r_off, r_scale = res.x
+    stack_prof = prof_interp(r_scale * r_lim + r_off)
+
+    return amp, off, r_off, r_scale, r_lim, ((prof[r_msk] - off) / amp), stack_prof
